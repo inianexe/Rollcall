@@ -1,0 +1,21 @@
+✔ reads dynamic course codes, names and exact counts (1.466084ms)
+✔ rejects incomplete, unrelated or inconsistent text (0.212431ms)
+✔ calculates safe absences and recovery at 75 percent (0.295807ms)
+✔ threshold calculation is correct for every count up to 150 periods (4.940583ms)
+✔ recursive chart-data extraction handles cycles and ignores getters (0.399814ms)
+✔ daily entries retain exact codes, times and date (3.794286ms)
+✔ ambiguous dates and invalid dates do not produce schedules (0.684063ms)
+✔ empty timetable is not a holiday and unread times are flagged (0.624533ms)
+✔ explicit holiday conflicts with class data are rejected (0.188956ms)
+✔ next class includes ongoing class and excludes ended classes (0.147112ms)
+✔ recording layout accepts spaced codes, room suffix and separate repeated periods (0.295366ms)
+✔ selected date is read from input value absent from innerText (0.378802ms)
+✔ ISO date input works; multiple dates are rejected (0.411061ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.469981

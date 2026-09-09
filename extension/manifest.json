@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rollcall \u2014 by iniexe",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "A minimal MyCamu attendance checker showing safe absence limits and recovery periods, by iniexe.",
   "content_scripts": [
     {
@@ -28,3 +28,4 @@
     "128": "assets/icon-128.png"
   }
 }
+

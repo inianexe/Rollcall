@@ -1,5 +1,25 @@
 # Rollcall 0.9.1 — by iniexe
 
+## Install in Chrome or Edge — select the folder
+
+**The Load unpacked window only selects folders. It is normal for `manifest.json` to be hidden there.**
+
+1. Download the **rollcall-v0.9.2-browser.zip** asset from the latest release.
+2. Extract the ZIP with your file manager. Do not open it as an archive inside Chrome.
+3. Open `chrome://extensions` (or `edge://extensions`) and enable Developer mode.
+4. Click **Load unpacked**, open the extracted folder, then select **rollcall-extension** and click **Select Folder / Open**. You do not select a JSON file in Chrome.
+5. Refresh MyCamu. The panel footer should say **0.9.2**.
+
+If you downloaded GitHub's **Source code (zip)** instead, select the **extension** folder inside the extracted repository. Selecting the outer repository folder causes “Manifest file is missing or unreadable”.
+
+| Download | Folder to select in Chrome / Edge |
+| --- | --- |
+| `rollcall-v0.9.2-browser.zip` | `rollcall-extension` |
+| GitHub Source code ZIP / cloned repository | `extension` |
+| Old project ZIP | Inner `extension` folder; prefer the latest browser ZIP |
+
+**Firefox is different:** Load Temporary Add-on selects the `manifest.json` **file** inside that folder.
+
 ## Installation
 
 Use a current desktop browser. No Node.js, terminal commands or account setup are needed to install Rollcall. This is an unpacked extension, not a browser-store release.
@@ -32,7 +52,7 @@ Use a current desktop browser. No Node.js, terminal commands or account setup ar
 1. Enter `about:debugging#/runtime/this-firefox` in the address bar.
 2. Click **Load Temporary Add-on**.
 3. Open the extension folder and select **manifest.json**.
-4. Refresh MyCamu. The footer should show **0.9.1**.
+4. Refresh MyCamu. The footer should show **0.9.2**.
 
 Firefox removes temporary add-ons when the browser restarts. Repeat these steps after a restart. This project does not yet include a signed package for permanent Firefox installation. [Official Firefox temporary-installation guide](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/).
 
@@ -97,4 +117,5 @@ To uninstall, remove Rollcall in the browser's extension manager. Refresh MyCamu
 | Timetable course has no attendance | Scan attendance in the same tab; verify that the course codes match. |
 | Wrong account or semester data | Refresh MyCamu after switching account or semester and capture again. |
 | Still failing | Include the Rollcall version, browser, diagnostics and a screenshot of the affected view in your report. |
+
 

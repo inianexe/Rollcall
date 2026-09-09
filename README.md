@@ -2,7 +2,7 @@
 
 ![Rollcall logo](extension/assets/rollcall-logo.svg)
 
-A browser extension for checking MyCamu attendance and reading the daily timetable. Version **0.9.1** adds a movable panel and a daily schedule view to the attendance checker.
+A browser extension for checking MyCamu attendance and reading the daily timetable. Version **0.9.2** clarifies Chrome installation and introduces validated browser-only packaging.
 
 ## Features
 
@@ -30,6 +30,26 @@ User-provided screenshots of **Rollcall 0.9.1** running on MyCamu. These demonst
 ![Two captured timetable entries matched to their course attendance](docs/screenshots/today-timetable.png)
 
 The timetable screenshot shows both scheduled entries for the displayed course, its 72% attendance, and the three-period recovery requirement. This is user-supplied live evidence; automated browser execution remains separately tracked below.
+
+## Install in Chrome or Edge — select the folder
+
+**The Load unpacked window only selects folders. It is normal for `manifest.json` to be hidden there.**
+
+1. Download the **rollcall-v0.9.2-browser.zip** asset from the latest release.
+2. Extract the ZIP with your file manager. Do not open it as an archive inside Chrome.
+3. Open `chrome://extensions` (or `edge://extensions`) and enable Developer mode.
+4. Click **Load unpacked**, open the extracted folder, then select **rollcall-extension** and click **Select Folder / Open**. You do not select a JSON file in Chrome.
+5. Refresh MyCamu. The panel footer should say **0.9.2**.
+
+If you downloaded GitHub's **Source code (zip)** instead, select the **extension** folder inside the extracted repository. Selecting the outer repository folder causes “Manifest file is missing or unreadable”.
+
+| Download | Folder to select in Chrome / Edge |
+| --- | --- |
+| `rollcall-v0.9.2-browser.zip` | `rollcall-extension` |
+| GitHub Source code ZIP / cloned repository | `extension` |
+| Old project ZIP | Inner `extension` folder; prefer the latest browser ZIP |
+
+**Firefox is different:** Load Temporary Add-on selects the `manifest.json` **file** inside that folder.
 
 ## Installation
 
@@ -63,7 +83,7 @@ Use a current desktop browser. No Node.js, terminal commands or account setup ar
 1. Enter `about:debugging#/runtime/this-firefox` in the address bar.
 2. Click **Load Temporary Add-on**.
 3. Open the extension folder and select **manifest.json**.
-4. Refresh MyCamu. The footer should show **0.9.1**.
+4. Refresh MyCamu. The footer should show **0.9.2**.
 
 Firefox removes temporary add-ons when the browser restarts. Repeat these steps after a restart. This project does not yet include a signed package for permanent Firefox installation. [Official Firefox temporary-installation guide](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/).
 
@@ -184,3 +204,10 @@ Extend timetable validation to other dates and layouts. Recovery dates, date-imp
 ## 0.9.1 fix
 The supplied recording showed a visible selected date while Rollcall reported Date unavailable. Added input-value date extraction and regression fixtures for the visible spaced-code/room-label layout. This addresses the observed format; a recording cannot confirm the live DOM. The subsequent user screenshot shows successful capture and matching for the displayed day. Android is excluded from this repository package.
 
+
+
+## Build a browser package
+
+Run `python3 scripts/package.py`. It creates `dist/rollcall-v0.9.2-browser.zip` and a SHA-256 checksum file. The archive contains one `rollcall-extension` folder, with its manifest and every declared script/icon checked before packaging. Tests, screenshots and Android source are not installed in the browser.
+
+Release automation runs the unit tests and package validation before publishing. Browser UI compatibility is a separate check; packaging validation does not prove live MyCamu compatibility.

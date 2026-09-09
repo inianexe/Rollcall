@@ -98,7 +98,7 @@
   }
 
   function downloadDiagnostics(){
-    const report={version:'0.9.1',page:active()?'attendance':'other',coursesRead:rows.size,canvasCount:document.querySelectorAll('canvas').length,chartInstances:charts().length,canvasHook:CanvasRenderingContext2D.prototype.fillText.toString().includes('capture'),sources:[...new Set([...rows.values()].map(row=>row.source))],status};
+    const report={version:'0.9.2',page:active()?'attendance':'other',coursesRead:rows.size,canvasCount:document.querySelectorAll('canvas').length,chartInstances:charts().length,canvasHook:CanvasRenderingContext2D.prototype.fillText.toString().includes('capture'),sources:[...new Set([...rows.values()].map(row=>row.source))],status};
     const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
     const link=document.createElement('a');link.href=url;link.download='rollcall-diagnostics.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
@@ -181,7 +181,7 @@
     const list=el('div');list.id='list';body.append(list);
     const tools=el('details',undefined,'tools');tools.append(el('summary','Troubleshooting'));
     const reset=el('button','Clear results');reset.onclick=()=>{timetable=null;tableAt=null;clear();};const diagnostics=el('button','Download diagnostics');diagnostics.onclick=downloadDiagnostics;tools.append(reset,diagnostics);body.append(tools);
-    const day=el('section');day.id='today-view';const read=el('button','Read day');read.onclick=readTimetable;day.append(read);const dayList=el('div');dayList.id='day-list';day.append(dayList);shell.append(body,day,el('footer','Rollcall 0.9.1 · by iniexe · Periods, not days.'));root.append(shell);render();
+    const day=el('section');day.id='today-view';const read=el('button','Read day');read.onclick=readTimetable;day.append(read);const dayList=el('div');dayList.id='day-list';day.append(dayList);shell.append(body,day,el('footer','Rollcall 0.9.2 · by iniexe · Periods, not days.'));root.append(shell);render();
     // Keep memory only while moving directly between attendance and timetable.
     document.addEventListener('change',e=>{if(e.target?.matches?.('select')){timetable=null;tableAt=null;clear('Selection changed. Capture current attendance and timetable again.');}},true);
     document.addEventListener('click',e=>{if(/^(log\s*out|sign\s*out)$/i.test(e.target?.textContent?.trim()||'')){timetable=null;tableAt=null;clear('Session ended.');}},true);
@@ -193,3 +193,4 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
+

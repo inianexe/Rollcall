@@ -1,0 +1,2 @@
+PASS: rollcall-v0.9.2-browser.zip: 14 files, manifest and all declared resources present
+SHA256: 49f2d8e77a49c196d5499f256bbf01d4fe3bcbd0fe76ee9d37df36a41dc1aa77
