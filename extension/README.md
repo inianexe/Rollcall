@@ -4,17 +4,17 @@
 
 **The Load unpacked window only selects folders. It is normal for `manifest.json` to be hidden there.**
 
-1. Download the **rollcall-v0.9.2-browser.zip** asset from the latest release.
+1. Download the **rollcall-v0.9.3-browser.zip** asset from the latest release.
 2. Extract the ZIP with your file manager. Do not open it as an archive inside Chrome.
 3. Open `chrome://extensions` (or `edge://extensions`) and enable Developer mode.
-4. Click **Load unpacked**, open the extracted folder, then select **rollcall-extension** and click **Select Folder / Open**. You do not select a JSON file in Chrome.
-5. Refresh MyCamu. The panel footer should say **0.9.2**.
+4. Click **Load unpacked**, open the extracted folder, then select the **extracted folder containing manifest.json** and click **Select Folder / Open**. You do not select a JSON file in Chrome.
+5. Refresh MyCamu. The panel footer should say **0.9.3**.
 
 If you downloaded GitHub's **Source code (zip)** instead, select the **extension** folder inside the extracted repository. Selecting the outer repository folder causes “Manifest file is missing or unreadable”.
 
 | Download | Folder to select in Chrome / Edge |
 | --- | --- |
-| `rollcall-v0.9.2-browser.zip` | `rollcall-extension` |
+| `rollcall-v0.9.3-browser.zip` | The folder you extracted the ZIP into |
 | GitHub Source code ZIP / cloned repository | `extension` |
 | Old project ZIP | Inner `extension` folder; prefer the latest browser ZIP |
 
@@ -25,7 +25,7 @@ If you downloaded GitHub's **Source code (zip)** instead, select the **extension
 Use a current desktop browser. No Node.js, terminal commands or account setup are needed to install Rollcall. This is an unpacked extension, not a browser-store release.
 
 1. Download and extract the project ZIP. From a GitHub repository, use **Code → Download ZIP**, then extract it.
-2. Locate the **extension** folder containing `manifest.json`. With the extension-only ZIP, this folder is named **rollcall-extension**.
+2. Locate the **extension** folder containing `manifest.json`. With the v0.9.3 browser ZIP, manifest.json is directly inside the folder you extract into.
 3. Keep that folder somewhere permanent. Select this inner folder, not the ZIP or the outer project folder.
 4. Follow the browser instructions below, then open MyCamu and refresh its page.
 
@@ -52,7 +52,7 @@ Use a current desktop browser. No Node.js, terminal commands or account setup ar
 1. Enter `about:debugging#/runtime/this-firefox` in the address bar.
 2. Click **Load Temporary Add-on**.
 3. Open the extension folder and select **manifest.json**.
-4. Refresh MyCamu. The footer should show **0.9.2**.
+4. Refresh MyCamu. The footer should show **0.9.3**.
 
 Firefox removes temporary add-ons when the browser restarts. Repeat these steps after a restart. This project does not yet include a signed package for permanent Firefox installation. [Official Firefox temporary-installation guide](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/).
 
@@ -119,3 +119,6 @@ To uninstall, remove Rollcall in the browser's extension manager. Refresh MyCamu
 | Still failing | Include the Rollcall version, browser, diagnostics and a screenshot of the affected view in your report. |
 
 
+
+### v0.9.3 installation check
+The release pipeline extracts the browser ZIP and loads it into Chromium as an unpacked extension. Publication requires the panel to mount on a synthetic MyCamu URL. This checks manifest loading, not live account behaviour or Edge compatibility.

@@ -2,7 +2,7 @@ name: Validate and release Rollcall
 on:
   push:
     branches: [main]
-    paths: ['extension/**', 'scripts/package.py', 'docs/release-v0.9.2.md', '.github/workflows/release.yml', 'package.json']
+    paths: ['extension/**', 'scripts/package.py', 'docs/release-*.md', '.github/workflows/release.yml', 'package.json']
   workflow_dispatch:
 permissions:
   contents: write
@@ -19,6 +19,13 @@ jobs:
           node-version: 22
       - run: npm test
       - run: python3 scripts/package.py
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Verify unpacked extension loading
+        run: |
+          mkdir -p /tmp/rollcall-install
+          unzip dist/*-browser.zip -d /tmp/rollcall-install
+          node scripts/test-install.cjs /tmp/rollcall-install
       - name: Publish validated package
         env:
           GH_TOKEN: ${{ github.token }}

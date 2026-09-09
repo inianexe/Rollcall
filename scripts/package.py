@@ -22,14 +22,23 @@ out.mkdir(exist_ok=True)
 archive = out / f'rollcall-v{version}-browser.zip'
 with ZipFile(archive, 'w', ZIP_DEFLATED) as z:
     for path in sorted(files):
-        z.write(path, 'rollcall-extension/' + path.relative_to(EXT).as_posix())
+        z.write(path, path.relative_to(EXT).as_posix())
 with ZipFile(archive) as z:
     names = z.namelist()
     assert z.testzip() is None
-    assert all('rollcall-extension/' + name in names for name in required)
-    assert sum(n.endswith('/manifest.json') for n in names) == 1
+    assert all(name in names for name in required)
+    assert 'manifest.json' in names and not any(n.endswith('/manifest.json') for n in names)
     assert not any('/tests/' in n or '/android/' in n for n in names)
 digest = hashlib.sha256(archive.read_bytes()).hexdigest()
 (out / 'SHA256SUMS.txt').write_text(f'{digest}  {archive.name}\n')
 print(f'PASS: {archive.name}: {len(files)} files, manifest and all declared resources present')
 print(f'SHA256: {digest}')
+
+import tempfile
+with tempfile.TemporaryDirectory() as tmp:
+    with ZipFile(archive) as z:
+        z.extractall(tmp)
+    extracted = Path(tmp)
+    assert json.loads((extracted / 'manifest.json').read_text()) == manifest
+    assert all((extracted / name).is_file() for name in required)
+print('PASS: fresh extraction has readable root manifest and every declared resource')
