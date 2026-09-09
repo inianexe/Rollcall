@@ -2,7 +2,7 @@
 
 ![Rollcall logo](extension/assets/rollcall-logo.svg)
 
-A compact geometric companion for MyCamu. Version **0.9.1** adds a movable panel and a daily schedule view to the attendance checker.
+A browser extension for checking MyCamu attendance and reading the daily timetable. Version **0.9.1** adds a movable panel and a daily schedule view to the attendance checker.
 
 ## Features
 
@@ -140,7 +140,7 @@ To uninstall, remove Rollcall in the browser's extension manager. Refresh MyCamu
 | Earlier attendance extraction | User reported working in prior versions | User report, not an independent v0.9 live test |
 | v0.9.1 live MyCamu timetable | Captured entries and attendance matching visible in supplied screenshot | [Live screenshot](docs/screenshots/today-timetable.png) |
 
-The three supplied screenshots are included with user authorization. No recordings are bundled. The CI workflow will produce a synthetic screenshot when its browser check runs successfully; it is not evidence of live MyCamu compatibility.
+The three supplied screenshots are included with user authorization. No recordings are bundled. The browser fixture produces synthetic evidence when run successfully; it is not evidence of live MyCamu compatibility.
 
 ## Run checks
 
@@ -153,7 +153,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-GitHub Actions runs tests on pushes and pull requests and uploads browser evidence. No hosted CI run is claimed yet.
+Run the checks locally before submitting changes. Historical evidence above records earlier runs; it is not a guarantee that every browser or MyCamu layout is supported.
 
 ## Calculations
 
@@ -171,15 +171,16 @@ The extension runs in the page's main JavaScript world to observe rendered chart
 
 - `extension/`: installable source, tests and branding assets; font licence included.
 - `docs/evidence/`: actual local verification outputs.
-- `.github/workflows/checks.yml`: repeatable CI checks.
+- `package.json`: repeatable test commands.
 
 ## Next steps
 
 Extend timetable validation to other dates and layouts. Recovery dates, date-impact previews, calendar export and assignment deadlines remain future work. No profile matching has been reintroduced.
 
-## GitHub setup
+## Contributing and support
 
-Repository creation is not available through the current connected integration. Create an empty repository named `rollcall` under your GitHub account and provide its URL; this project is ready for the initial upload. Future changes can then be committed there with updated evidence.
+[Report a bug](https://github.com/inianexe/Rollcall/issues) with your browser, extension version, affected MyCamu view and reproduction steps. Remove student details from screenshots. Run the regression tests before submitting parser or calculation changes.
 
 ## 0.9.1 fix
 The supplied recording showed a visible selected date while Rollcall reported Date unavailable. Added input-value date extraction and regression fixtures for the visible spaced-code/room-label layout. This addresses the observed format; a recording cannot confirm the live DOM. The subsequent user screenshot shows successful capture and matching for the displayed day. Android is excluded from this repository package.
+
