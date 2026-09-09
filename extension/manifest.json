@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Rollcall \u2014 by iniexe",
+  "version": "0.9.1",
+  "description": "A minimal MyCamu attendance checker showing safe absence limits and recovery periods, by iniexe.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.mycamu.co.in/*",
+        "https://mycamu.co.in/*"
+      ],
+      "js": [
+        "core.js",
+        "ui.js",
+        "branding.js",
+        "timetable.js",
+        "companion.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+  "author": "iniexe",
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  }
+}

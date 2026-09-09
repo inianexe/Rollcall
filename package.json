@@ -1,0 +1,1 @@
+{"name":"rollcall","version":"0.9.1","private":true,"scripts":{"test":"node --test extension/tests/*.test.js","test:browser":"node extension/tests/browser.cjs"},"devDependencies":{"playwright":"1.58.2"}}
