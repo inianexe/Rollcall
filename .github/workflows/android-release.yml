@@ -22,7 +22,7 @@ jobs:
         with:
           packages: 'platforms;android-35 build-tools;35.0.0'
       - name: Build debug APK
-        run: ./gradlew -p android assembleDebug
+        run: ./android/gradlew -p android assembleDebug
       - name: Add APK checksum
         run: sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/app-debug.apk.sha256
       - name: Create or update Android preview release
