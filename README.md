@@ -91,7 +91,9 @@ Firefox removes temporary add-ons when the browser restarts. Repeat these steps 
 
 Brave, Vivaldi and Opera are Chromium-based candidates, but Rollcall has not been verified in them. Open the browser's Extensions manager, look for **Developer mode → Load unpacked**, and select the same extension folder if those controls are available. Treat these as experimental installations, not confirmed support.
 
-Safari has no ready-to-install package in this project. Mobile browsers and the native MyCamu app are outside this release's scope. Android source is excluded.
+Safari has no ready-to-install package in this project. The native Android app is an early port; see [Android setup](android/README.md). It is not part of the browser package.
+
+The Android preview APK is available from the [v1.0.0 release](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0). It includes attendance guidance and a Today timetable overlay; see the [Android guide](android/README.md) for permissions and known limits.
 
 ## How to use Rollcall
 
@@ -202,7 +204,7 @@ Extend timetable validation to other dates and layouts. Recovery dates, date-imp
 [Report a bug](https://github.com/inianexe/Rollcall/issues) with your browser, extension version, affected MyCamu view and reproduction steps. Remove student details from screenshots. Run the regression tests before submitting parser or calculation changes.
 
 ## 0.9.1 fix
-The supplied recording showed a visible selected date while Rollcall reported Date unavailable. Added input-value date extraction and regression fixtures for the visible spaced-code/room-label layout. This addresses the observed format; a recording cannot confirm the live DOM. The subsequent user screenshot shows successful capture and matching for the displayed day. Android is excluded from this repository package.
+The supplied recording showed a visible selected date while Rollcall reported Date unavailable. Added input-value date extraction and regression fixtures for the visible spaced-code/room-label layout. This addresses the observed format; a recording cannot confirm the live DOM. The subsequent user screenshot shows successful capture and matching for the displayed day.
 
 
 

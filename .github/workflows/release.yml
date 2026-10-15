@@ -2,7 +2,7 @@ name: Validate and release Rollcall
 on:
   push:
     branches: [main]
-    paths: ['extension/**', 'scripts/package.py', 'docs/release-*.md', '.github/workflows/release.yml', 'package.json']
+    paths: ['extension/**', 'scripts/package.py', 'docs/release-v0.9*.md', '.github/workflows/release.yml', 'package.json']
   workflow_dispatch:
 permissions:
   contents: write
