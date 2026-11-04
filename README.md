@@ -6,7 +6,7 @@ I wanted a quick way to check my attendance and stop guessing. Then I added my t
 
 ## Getting started
 
-1. Download **[Rollcall V1.apk](Rollcall%20V1.apk)**.
+1. Download **[Rollcall V1 for Android](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0)** from the release assets.
 2. Open it and follow Android’s install prompts.
 3. Open Rollcall and tap **Continue with MyCamu**.
 4. Sign in with your usual account.
