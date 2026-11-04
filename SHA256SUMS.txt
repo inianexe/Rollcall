@@ -1,1 +1,1 @@
-fd7fdb962a1d34a408359bae436502277f82eb942496c922b4a033567cbb8173  release/android-v1/Rollcal V1.apk  Rollcal V1.apk
+fd7fdb962a1d34a408359bae436502277f82eb942496c922b4a033567cbb8173  release/android-v1/Rollcall V1.apk  Rollcall V1.apk
