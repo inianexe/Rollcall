@@ -37,9 +37,9 @@ Turn on **Class reminders** in Week if you want a nudge before class. Android ma
 
 Rollcall shows **Present**, **Absent**, or **Unable to confirm** based on records it can match to a course and class time. If a record is unclear, it stays unconfirmed instead of guessing. Compare important attendance decisions with your student portal.
 
-## Screenshots and a short demo
+## Screenshots
 
-These images and the demo show the app’s main screens. Student identity details are obscured.
+These compact screenshots show the app’s main screens. Student identity details are obscured.
 
 <img src="release/android-v1/screenshots/01-home.png" width="240" alt="Rollcall home in monochrome dark theme">
 
@@ -47,7 +47,6 @@ These images and the demo show the app’s main screens. Student identity detail
 
 <img src="release/android-v1/screenshots/03-courses.png" width="240" alt="Rollcall courses in monochrome dark theme">
 
-[Watch the short demo](release/android-v1/demo-public.mp4)
 
 If Play Protect shows a warning, check that you downloaded the APK from this Rollcall repository. On the warning screen, choose **More details** and then **Install anyway** if Android offers that option. You can also ask Play Protect to scan the app first. Keep Play Protect enabled; if Android does not offer an install option, stop and contact us rather than changing phone security settings.
 
