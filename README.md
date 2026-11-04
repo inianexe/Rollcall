@@ -68,7 +68,7 @@ Auto Blocker can stop apps installed outside Google Play or Galaxy Store. Check 
 - If an older Rollcall preview is already installed, Android may reject this APK if that copy was signed differently. Uninstalling the old copy can fix that, but it also deletes Rollcall’s saved data on that phone—only do this if you’re okay losing it.
 - If the message says the device is managed or installation is disabled by an administrator, only that administrator can change the policy. Don’t try to work around a school/work restriction.
 
-The release includes a SHA-256 checksum file beside the APK for anyone who wants to verify the downloaded file before installing.
+The release includes a SHA-256 checksum file beside the APK for anyone who wants to verify the downloaded file before installing.\n\nThe release signing certificate’s SHA-256 fingerprint is `19117b6b5320c6adb907834880f031d00040e0a3114a9a8d3633539349bf1bc6`. This identifies the signing key used for continuity; it is not a Google Play review or endorsement.
 
 ## A couple things to know
 
