@@ -44,4 +44,6 @@ Here’s what the main screens look like in monochrome mode:
 |:---:|:---:|:---:|:---:|
 | <img src="release/android-v1/screenshots/01-home.png" width="145" alt="Rollcall Home"> | <img src="release/android-v1/screenshots/02-week.png" width="145" alt="Rollcall Week"> | <img src="release/android-v1/screenshots/03-courses.png" width="145" alt="Rollcall Courses"> | <img src="release/android-v1/screenshots/04-lab.png" width="145" alt="Rollcall Lab"> |
 
+If Rollcall’s useful to you, a ⭐ on the repo would make my day — and help other students find it too!
+
 Rollcall is an independent project. It isn’t affiliated with MyCamu or any school.
