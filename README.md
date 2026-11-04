@@ -1,10 +1,10 @@
 # Rollcall for Android
 
-I made Rollcall because I wanted a simple answer to a familiar question: *how many classes can I miss before attendance becomes a problem?* I also wanted a nudge to show up and keep track of the week. It has grown into a small student dashboard for doing just that.
+Okay, real talk: I started Rollcall for a very student reason 😅 I kept wondering, “If I skip one more class, am I still safe?” So I made a tiny attendance calculator for myself. Then it got a timetable, a What If button, themes, reminders… and somehow became a whole app. I’m still building it for fun (and to help myself actually make it to class 😭). If it helps you too, that’s a win! 🎒✨
 
 ## Get started
 
-1. Download **Rollcall-Android-v1.0.0.apk** from this repository.
+1. Download **Rollcall V1.apk** from this repository.
 2. Open the download and follow Android’s install prompts.
 3. Open Rollcall and tap **Continue with MyCamu**.
 4. Sign in on the MyCamu page using your existing account.
