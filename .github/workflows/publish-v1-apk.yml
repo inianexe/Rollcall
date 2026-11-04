@@ -23,24 +23,27 @@ jobs:
         run: |
           set -euo pipefail
           apk="Rollcall V1.apk"
+          release_apk="Rollcall-V1.apk"
           test -s "$apk"
           size="$(stat -c %s "$apk")"
           test "$size" -gt 1000000
-          sha256sum "$apk" > "$apk.sha256"
+          cp "$apk" "$release_apk"
+          sha256sum "$release_apk" > "$release_apk.sha256"
 
-          gh release upload v1.0.0 "$apk" "$apk.sha256" --clobber
+          gh release upload v1.0.0 "$release_apk" "$release_apk.sha256" --clobber
 
-          uploaded_size="$(gh release view v1.0.0 --json assets --jq '.assets[] | select(.name == "Rollcall V1.apk") | .size')"
+          uploaded_size="$(gh api repos/inianexe/Rollcall/releases/tags/v1.0.0 --jq '.assets[] | select(.name == "Rollcall-V1.apk") | .size')"
           test "$uploaded_size" -eq "$size"
 
-          gh release delete-asset v1.0.0 app-debug.apk --yes || true
-          gh release delete-asset v1.0.0 app-debug.apk.sha256 --yes || true
+          for stale_asset in app-debug.apk app-debug.apk.sha256 Rollcall.V1.apk Rollcall.V1.apk.sha256; do
+            gh release delete-asset v1.0.0 "$stale_asset" --yes || true
+          done
 
           cat > /tmp/rollcall-release-notes.md <<'NOTES'
           # Rollcall V1
 
-          The Android preview APK is attached below as **Rollcall V1.apk**. It is a debug-signed build, so Android may show a Play Protect warning during installation. The README has the install steps and screenshots.
+          Download **Rollcall-V1.apk** below. It is a debug-signed Android preview, so Android may show a Play Protect warning during installation. Install steps and screenshots are in the README.
 
-          A SHA-256 checksum file is included alongside the APK.
+          The matching SHA-256 checksum is included alongside the APK.
           NOTES
           gh release edit v1.0.0 --title "Rollcall V1 — Android Preview" --notes-file /tmp/rollcall-release-notes.md
