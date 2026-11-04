@@ -28,13 +28,53 @@ If you close the app before finishing sign-in, just open it again and tap **Cont
 
 **Reminders** — turn on class reminders in Week if you want a heads-up before class. Android may ask to allow notifications.
 
+## If Chrome or Android blocks the install
+
+This is an APK downloaded outside Google Play, so Chrome or Android may show extra warnings. Only use the [Rollcall GitHub release](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0), check that the file is named **Rollcall-V1.apk**, and keep Chrome Safe Browsing and Play Protect turned on.
+
+### Chrome says the file may be dangerous or blocks the download
+
+Chrome’s Safe Browsing setting lives under **⋮ → Settings → Privacy and security → Safe Browsing**. It can warn about an APK because it is uncommon or not yet recognized. That warning is a real security check, not proof that a file is safe or unsafe. Google’s [Chrome download help](https://support.google.com/chrome/answer/6261569) explains the warning types.
+
+- First, make sure the address is the official GitHub release above. Don’t install an APK from an ad, mirror, message, or lookalike URL.
+- If Chrome offers a scan, choose **Scan**. If it only shows an unfamiliar-file warning and you’ve confirmed the release and filename, you can decide whether to keep the download.
+- If Chrome says the file is dangerous, the download is blocked by your school/work administrator, or there is no option to continue, stop. Don’t switch Safe Browsing off to force it. Try again later or ask your administrator if the device is managed.
+
+### Android says “For your security, your phone isn’t allowed to install unknown apps”
+
+Allow the app that downloaded the APK (usually Chrome or Files) to install it:
+
+1. Tap **Settings** on the warning, or open **Settings → Apps → Special app access → Install unknown apps**.
+2. Choose **Chrome** or **Files**—whichever you used to open the APK.
+3. Turn on **Allow from this source**, return to the APK, and tap **Install**.
+4. Afterward, turn **Allow from this source** off again.
+
+The menu names can vary a bit by phone. Google has [steps for installing apps from other sources](https://support.google.com/pixelphone/answer/7391672).
+
+### Play Protect says Rollcall is unknown, unverified, or potentially harmful
+
+Play Protect checks apps installed outside Google Play, and some phones may block an unverified app entirely. You can ask Play Protect to scan the APK first. If Android gives you an **Install anyway** option and you have verified that you downloaded this exact release, it’s your choice whether to proceed. Keep Play Protect on. If Android says installation is blocked and offers no supported continue option, stop; don’t turn Play Protect off or try to bypass the device’s block. See [Google’s Play Protect help](https://support.google.com/android/answer/2812853).
+
+Some devices and regions also enforce Android developer verification for sideloaded apps. If you see a separate **developer isn’t verified** block, follow only the official Android flow shown on your phone. If it offers no way to continue, this GitHub preview may not install on that device yet. [Android developer verification details](https://support.google.com/android/answer/17065026).
+
+### Samsung Galaxy says Auto Blocker stopped the install
+
+Auto Blocker can stop apps installed outside Google Play or Galaxy Store. Check **Settings → Security and privacy → Auto Blocker**. If you choose to install Rollcall, turn it off only long enough to install the APK from the official release, then turn it back on. Samsung’s [Auto Blocker guide](https://www.samsung.com/us/support/answer/ANS10003636/) has more detail.
+
+### It says “App not installed” or the download won’t open
+
+- Delete the incomplete download and download **Rollcall-V1.apk** again from the release page.
+- Check that your phone has free storage, then restart the phone and try again.
+- If an older Rollcall preview is already installed, Android may reject this APK if that copy was signed differently. Uninstalling the old copy can fix that, but it also deletes Rollcall’s saved data on that phone—only do this if you’re okay losing it.
+- If the message says the device is managed or installation is disabled by an administrator, only that administrator can change the policy. Don’t try to work around a school/work restriction.
+
+The release includes a SHA-256 checksum file beside the APK for anyone who wants to verify the downloaded file before installing.
+
 ## A couple things to know
 
 Sometimes the portal doesn’t give enough detail to match an attendance record to a specific class. Rollcall will show **Unable to confirm** instead of making something up. For anything important, double-check your student portal.
 
 Updates can take a while in the background, depending on Android. Open Rollcall and sync when you need the latest info.
-
-If Play Protect shows a warning, make sure the APK came from this Rollcall repository. You can choose **More details** and **Install anyway** if Android offers it, or ask Play Protect to scan it first. Keep Play Protect on. If there’s no install option, stop and ask for help.
 
 ## Screenshots
 
