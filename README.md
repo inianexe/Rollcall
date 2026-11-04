@@ -4,7 +4,7 @@ I made Rollcall because I wanted a simple answer to a familiar question: *how ma
 
 ## Get started
 
-1. Download [Rollcal V1.apk](Rollcall%20V1.apk).
+1. Download [Rollcall V1.apk](Rollcall%20V1.apk).
 2. Open the download and follow Android’s install prompts.
 3. Open Rollcall and tap **Continue with MyCamu**.
 4. Sign in on the MyCamu page using your existing account.
