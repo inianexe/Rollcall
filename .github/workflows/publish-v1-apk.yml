@@ -42,7 +42,7 @@ jobs:
           cat > /tmp/rollcall-release-notes.md <<'NOTES'
           # Rollcall V1
 
-          Download **Rollcall-V1.apk** below. It is a debug-signed Android preview, so Android may show a Play Protect warning during installation. Install steps and screenshots are in the README.
+          Download **Rollcall-V1.apk** below. It is signed with Rollcall’s release key and distributed outside Google Play, so Chrome or Android may still show security warnings. Install steps and screenshots are in the README.
 
           The matching SHA-256 checksum is included alongside the APK.
           NOTES

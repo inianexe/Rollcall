@@ -12,7 +12,7 @@ I wanted a quick way to check my attendance and stop guessing. Then I added my t
 4. Sign in with your usual account.
 5. Once you’re signed in, you’ll land on the dashboard. Pick a theme and make yourself at home 🎨
 
-If you close the app before finishing sign-in, just open it again and tap **Continue with MyCamu**.
+If you close the app before finishing sign-in, just open it again and tap **Continue with MyCamu**.\n\n**Already installed the earlier V1 preview?** The new release signature cannot update over that debug-signed copy. Uninstall the old preview, then install this one. Uninstalling clears Rollcall’s locally saved data, so you’ll need to sign in and sync again.
 
 ## What’s where?
 
@@ -30,7 +30,7 @@ If you close the app before finishing sign-in, just open it again and tap **Cont
 
 ## If Chrome or Android blocks the install
 
-This is an APK downloaded outside Google Play, so Chrome or Android may show extra warnings. Only use the [Rollcall GitHub release](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0), check that the file is named **Rollcall-V1.apk**, and keep Chrome Safe Browsing and Play Protect turned on.
+The APK is signed with Rollcall’s dedicated release key, but it is still distributed outside Google Play, so Chrome or Android may show extra warnings. Only use the [Rollcall GitHub release](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0), check that the file is named **Rollcall-V1.apk**, and keep Chrome Safe Browsing and Play Protect turned on.
 
 ### Chrome says the file may be dangerous or blocks the download
 
