@@ -41,9 +41,9 @@ Rollcall shows **Present**, **Absent**, or **Unable to confirm** based on record
 
 These compact screenshots show the app’s main screens. Student identity details are obscured.
 
-| Home | Week | Courses |
-|:---:|:---:|:---:|
-| <img src="release/android-v1/screenshots/01-home.png" width="180" alt="Rollcall home in monochrome dark theme"> | <img src="release/android-v1/screenshots/02-week.png" width="180" alt="Rollcall Week in monochrome dark theme"> | <img src="release/android-v1/screenshots/03-courses.png" width="180" alt="Rollcall courses in monochrome dark theme"> |
+| Home | Week | Courses | Lab |
+|:---:|:---:|:---:|:---:|
+| <img src="release/android-v1/screenshots/01-home.png" width="145" alt="Rollcall home in monochrome dark theme"> | <img src="release/android-v1/screenshots/02-week.png" width="145" alt="Rollcall Week in monochrome dark theme"> | <img src="release/android-v1/screenshots/03-courses.png" width="145" alt="Rollcall courses in monochrome dark theme"> | <img src="release/android-v1/screenshots/04-lab.png" width="145" alt="Rollcall attendance planner in monochrome dark theme"> | |
 
 
 If Play Protect shows a warning, check that you downloaded the APK from this Rollcall repository. On the warning screen, choose **More details** and then **Install anyway** if Android offers that option. You can also ask Play Protect to scan the app first. Keep Play Protect enabled; if Android does not offer an install option, stop and contact us rather than changing phone security settings.
