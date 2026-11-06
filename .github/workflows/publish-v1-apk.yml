@@ -1,11 +1,10 @@
-name: Publish Rollcall V1 APK
+name: Publish Rollcall V1 APK and notify users
 
 on:
   push:
     branches: [main]
     paths:
       - "Rollcall V1.apk"
-      - ".github/workflows/publish-v1-apk.yml"
 
 permissions:
   contents: write
@@ -17,9 +16,15 @@ jobs:
       - name: Check out release files
         uses: actions/checkout@v4
 
-      - name: Verify and upload the APK
+      - name: Prepare Android tools
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'build-tools;35.0.0'
+
+      - name: Verify, publish, and notify
         env:
           GH_TOKEN: ${{ github.token }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
           apk="Rollcall V1.apk"
@@ -27,23 +32,65 @@ jobs:
           test -s "$apk"
           size="$(stat -c %s "$apk")"
           test "$size" -gt 1000000
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          badging="$("$aapt" dump badging "$apk")"
+          package_name="$(printf '%s\n' "$badging" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          version_code="$(printf '%s\n' "$badging" | sed -n "s/^package:.*versionCode='\\([^']*\\)'.*/\\1/p")"
+          version_name="$(printf '%s\n' "$badging" | sed -n "s/^package:.*versionName='\\([^']*\\)'.*/\\1/p")"
+          test "$package_name" = "com.iniexe.rollcall"
+          [[ "$version_code" =~ ^[0-9]+$ ]]
+          [[ "$version_name" =~ ^[A-Za-z0-9._-]{1,80}$ ]]
+
           cp "$apk" "$release_apk"
           sha256sum "$release_apk" > "$release_apk.sha256"
 
-          gh release upload v1.0.0 "$release_apk" "$release_apk.sha256" --clobber
-
-          uploaded_size="$(gh api repos/inianexe/Rollcall/releases/tags/v1.0.0 --jq '.assets[] | select(.name == "Rollcall-V1.apk") | .size')"
-          test "$uploaded_size" -eq "$size"
-
-          for stale_asset in app-debug.apk app-debug.apk.sha256 Rollcall.V1.apk Rollcall.V1.apk.sha256; do
-            gh release delete-asset v1.0.0 "$stale_asset" --yes || true
-          done
-
-          cat > /tmp/rollcall-release-notes.md <<'NOTES'
+          cat > /tmp/rollcall-release-notes.md <<NOTES
+          <!-- rollcall-version-code: $version_code -->
+          <!-- rollcall-version-name: $version_name -->
           # Rollcall V1
 
           Download **Rollcall-V1.apk** below. It is signed with Rollcall’s release key and distributed outside Google Play, so Chrome or Android may still show security warnings. Install steps and screenshots are in the README.
 
           The matching SHA-256 checksum is included alongside the APK.
           NOTES
-          gh release edit v1.0.0 --title "Rollcall V1 — Android Preview" --notes-file /tmp/rollcall-release-notes.md
+
+          tag="v1.0.0"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$release_apk" "$release_apk.sha256" --clobber
+            gh release edit "$tag" --title "Rollcall V1 — Android Preview" --notes-file /tmp/rollcall-release-notes.md
+          else
+            gh release create "$tag" "$release_apk" "$release_apk.sha256" --target "$GITHUB_SHA" \
+              --title "Rollcall V1 — Android Preview" --notes-file /tmp/rollcall-release-notes.md --latest
+          fi
+
+          uploaded_size="$(gh api "repos/inianexe/Rollcall/releases/tags/$tag" --jq '.assets[] | select(.name == "Rollcall-V1.apk") | .size')"
+          test "$uploaded_size" -eq "$size"
+          for stale_asset in app-debug.apk app-debug.apk.sha256 Rollcall.V1.apk Rollcall.V1.apk.sha256; do
+            gh release delete-asset "$tag" "$stale_asset" --yes || true
+          done
+
+          npm install --prefix "$RUNNER_TEMP/firebase-admin" firebase-admin@13
+          NODE_PATH="$RUNNER_TEMP/firebase-admin/node_modules" \
+            VERSION_CODE="$version_code" VERSION_NAME="$version_name" node <<'NODE'
+          const admin = require('firebase-admin');
+          (async () => {
+            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}');
+            if (serviceAccount.project_id !== 'rollcall-ab5d1'
+                || !serviceAccount.private_key || !serviceAccount.client_email) {
+              throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is missing or belongs to another Firebase project.');
+            }
+            admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+            const id = await admin.messaging().send({
+              topic: 'app_updates',
+              data: {
+                type: 'update',
+                versionCode: process.env.VERSION_CODE,
+                versionName: process.env.VERSION_NAME,
+                releaseTag: 'v1.0.0',
+                releaseTitle: 'Rollcall V1'
+              },
+              android: { priority: 'high' }
+            });
+            console.log(`Update announced: ${id}`);
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
