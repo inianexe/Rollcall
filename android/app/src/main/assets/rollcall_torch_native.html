@@ -106,6 +106,29 @@ body.light-mode #page-home .broadcast-row .micro-card.lilac .eyebrow{color:#1B1B
 body.light-mode .footer-label{color:#596057}
 button:focus-visible,[role="button"]:focus-visible{outline:3px solid var(--lilac);outline-offset:3px}
 
+
+/* Preserve Torch's editorial hierarchy on narrower Android phones. */
+.hero-foot{min-width:0;max-width:80%}
+.hero-foot span:last-child{display:inline-block;max-width:205px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero h2{overflow-wrap:anywhere}
+.course-head{min-width:0}
+.course-head h3{overflow-wrap:anywhere}
+.course .percent-pill{flex-shrink:0}
+@media(max-width:370px){
+  .screen{padding-left:17px;padding-right:17px}
+  .app-header{padding-left:17px;padding-right:17px}
+  .hero{padding:19px;min-height:245px}
+  .hero h2{font-size:29px;max-width:170px}
+  .ticket-art{right:-2px;top:75px;transform:rotate(14deg) scale(.80);transform-origin:top right}
+  .hero-copy{max-width:175px}
+  .navi{width:calc(100% - 20px)!important}
+  .micro-card{padding:12px}
+  .micro-card strong{font-size:19px}
+  .course{padding:13px}
+  .metric{padding:11px}
+  .metric strong{font-size:30px}
+}
+
 </style>
 </head>
 <body>
