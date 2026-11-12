@@ -15,6 +15,7 @@ import com.iniexe.rollcall.ui.theme.RollcallThemeColors
 
 class RollcallHeroIdentityView(context: Context) : AbstractComposeView(context) {
     private var state by mutableStateOf(HomeHeroIdentityState("Good afternoon,", "MyCamu student.", "", "", "", "ONE CLASS AT A TIME. YOUR WEEK, DECODED."))
+    private var ticketAction by mutableStateOf<Runnable>(Runnable {})
     private var colors by mutableStateOf(
         RollcallThemeColors(Color(0xFF111827), Color(0xFF3E4651), Color(0xFFCCFF00),
             Color(0xFF111827), Color(0xFF3E4651), Color(0xFFF1EEDA), Color(0xFF121212))
@@ -25,6 +26,7 @@ class RollcallHeroIdentityView(context: Context) : AbstractComposeView(context) 
     }
 
     fun setIdentity(state: HomeHeroIdentityState) { this.state = state }
+    fun setTicketAction(action: Runnable) { ticketAction = action }
 
     fun setColors(hero: Int, heroInk: Int, heroMuted: Int, paper: Int, ink: Int, border: Int) {
         colors = RollcallThemeColors(Color(ink), Color(heroMuted), Color(hero), Color(heroInk),
@@ -33,6 +35,6 @@ class RollcallHeroIdentityView(context: Context) : AbstractComposeView(context) 
 
     @Composable
     override fun Content() {
-        RollcallTheme(colors = colors) { HomeHeroIdentity(state) }
+        RollcallTheme(colors = colors) { HomeHeroIdentity(state, onTicketClick = { ticketAction.run() }) }
     }
 }
