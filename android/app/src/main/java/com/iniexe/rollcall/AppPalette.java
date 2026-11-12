@@ -16,14 +16,51 @@ final class AppPalette {
         this.heroMuted = heroMuted; this.focusSurface = focusSurface; this.focusBorder = focusBorder;
     }
 
+    /**
+     * Torch Genesis is the single visual system throughout Rollcall.
+     * Dark values are ported from rollcall_torch_prototype(1).html.
+     * Light values preserve its black/lime/lilac/orange vocabulary on paper.
+     */
     static AppPalette get(boolean dark, int ignoredLegacyTheme) {
-        if (dark) return new AppPalette("Rollcall Signal", 0xFF121212, 0xFFF4F5EF, 0xFFC2C6B7,
-                0xFF292929, 0xFF666765, 0xFF343628, 0xFF90E1B4, 0xFFFF9784, 0xFFFFC675,
-                0xFF525745, 0xFFCCFF00, 0xFF121212, 0xFFFF663D, 0xFFCCFF00, 0xFF121212,
-                0xFF3F4B16, 0xFF292929, 0xFFFF663D);
-        return new AppPalette("Rollcall Signal", 0xFFF5F4EC, 0xFF182019, 0xFF586057,
-                0xFFFFFEFA, 0xFFC6C8BC, 0xFFEEEEE6, 0xFF176146, 0xFFAA2921, 0xFF744500,
-                0xFF91AA31, 0xFF121212, 0xFFCCFF00, 0xFFCB421B, 0xFFCCFF00, 0xFF111827,
-                0xFF3E4651, 0xFFDEDCFF, 0xFFCB421B);
+        if (dark) return new AppPalette("Torch Genesis",
+                0xFF121212, // canvas / --ink
+                0xFFF5F5EE, // text / --paper
+                0xFFA8AAA1, // muted
+                0xFF222222, // cards
+                0xFF525252, // borders
+                0xFF2C2C2C, // raised controls
+                0xFF9BE4A1, // positive
+                0xFFFF8C73, // warning / destructive contrast
+                0xFFFFC675, // pending
+                0xFF555555, // progress track
+                0xFFCCFF00, // high-priority action
+                0xFF121212, // button label
+                0xFFFF4400, // signature orange
+                0xFFCCFF00, // hero
+                0xFF111111, // hero title
+                0xFF343A26, // hero secondary text
+                0xFFC8C8FF, // lilac accent panel
+                0xFF121212  // focus panel stroke
+        );
+        return new AppPalette("Torch Genesis",
+                0xFFF5F5EE, // warm paper
+                0xFF121212, // primary text
+                0xFF51574E, // subdued text
+                0xFFFFFFFF, // clean surface
+                0xFFB9BDB2, // outline
+                0xFFE8EAE0, // raised controls
+                0xFF176146, // readable green
+                0xFFAD321D, // readable red
+                0xFF83510D, // readable amber
+                0xFFABB09E, // progress track
+                0xFF121212, // dark primary action
+                0xFFCCFF00, // action label
+                0xFFAD3000, // readable orange on warm paper
+                0xFFCCFF00, // same hero in both modes
+                0xFF111111, // hero text remains ink
+                0xFF343A26, // secondary hero text
+                0xFFC8C8FF, // lilac panel
+                0xFF121212
+        );
     }
 }
