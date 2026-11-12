@@ -386,7 +386,11 @@ public class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         setContentView(root);
         applyTheme();
-        if (saved != null && saved.getBoolean("restore_about_settings", false)) showAbout();
+        if (saved != null && connectedOnce && dashboardView != null) {
+            String restoredPage = saved.getString("torch_page", "home");
+            if ("home".equals(restoredPage)) routeWidgetLaunch(getIntent());
+            else dashboardView.openNotificationDestination(restoredPage);
+        } else if (saved != null && saved.getBoolean("restore_about_settings", false)) showAbout();
         else routeWidgetLaunch(getIntent());
         if (saved == null) showStartupAnimation(root);
 
@@ -1273,6 +1277,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle outState) {
         outState.putBoolean("restore_about_settings", aboutPage != null && aboutPage.getVisibility() == View.VISIBLE);
+        outState.putString("torch_page", dashboardView == null ? "home" : dashboardView.getCurrentPage());
         super.onSaveInstanceState(outState);
     }
 
@@ -3350,7 +3355,7 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (myCamuConsentPage != null && myCamuConsentPage.getVisibility() == View.VISIBLE) deferMyCamuConsent();
-        else if (dashboardView != null && dashboardView.closeOdDetailsForBack()) { /* Returned to Week attendance. */ }
+        else if (dashboard != null && dashboard.getVisibility() == View.VISIBLE && dashboardView != null && dashboardView.closeOdDetailsForBack()) { /* Returned to Home. */ }
         else if (kctPortalPage != null && kctPortalPage.getVisibility() == View.VISIBLE) showDashboard();
         else if (aboutPage != null && aboutPage.getVisibility() == View.VISIBLE) showDashboard();
         else if (webPage != null && webPage.getVisibility() == View.VISIBLE) {
@@ -3375,6 +3380,10 @@ public class MainActivity extends Activity {
             if (kctWebView.getParent() instanceof ViewGroup) ((ViewGroup) kctWebView.getParent()).removeView(kctWebView);
             kctWebView.destroy();
             kctWebView = null;
+        }
+        if (dashboardView != null) {
+            dashboardView.destroy();
+            dashboardView = null;
         }
         super.onDestroy();
     }
