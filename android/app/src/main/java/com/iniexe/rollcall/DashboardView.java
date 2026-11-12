@@ -2168,7 +2168,8 @@ final class DashboardView extends FrameLayout {
     }
 
     private View plannerCard() {
-        LinearLayout card = card();
+        LinearLayout card = column();
+        card.setPadding(0, 0, 0, 0);
         card.addView(label("CHOOSE A COURSE", 10, muted, Typeface.BOLD));
         coursePicker = new FrameLayout(getContext());
         coursePicker.setBackground(shape(soft, 9, border));
@@ -2184,6 +2185,34 @@ final class DashboardView extends FrameLayout {
         coursePicker.addView(spinnerArrow, arrowParams);
         coursePicker.setOnClickListener(v -> showCoursePopup());
         card.addView(coursePicker, topLp(-1, dp(56), 12));
+        LinearLayout result = column();
+        result.setPadding(dp(20), dp(20), dp(20), dp(20));
+        result.setBackground(shape(0xFFC8C8FF, 17, 0));
+        result.addView(label("YOUR ATTENDANCE / PROJECTED", 10, 0xFF111111, Typeface.BOLD));
+        LinearLayout comparison = row();
+        comparison.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout current = column();
+        current.addView(text("CURRENT", 10, 0xFF111111, Typeface.BOLD));
+        plannerCurrentPercentView = text("—", 35, 0xFF111111, Typeface.BOLD);
+        plannerCurrentPercentView.setIncludeFontPadding(false);
+        current.addView(plannerCurrentPercentView, topLp(-1, -2, 7));
+        comparison.addView(current, new LinearLayout.LayoutParams(0, -2, 1));
+        comparison.addView(text("→", 25, 0xFF111111, Typeface.BOLD), lp(-2, -2));
+        LinearLayout projection = column();
+        projection.setGravity(Gravity.RIGHT);
+        TextView after = text("AFTER PLAN", 10, 0xFF111111, Typeface.BOLD);
+        after.setGravity(Gravity.RIGHT);
+        projection.addView(after);
+        projectionView = text("—", 35, 0xFF111111, Typeface.BOLD);
+        projectionView.setGravity(Gravity.RIGHT);
+        projectionView.setIncludeFontPadding(false);
+        projection.addView(projectionView, topLp(-1, -2, 7));
+        comparison.addView(projection, new LinearLayout.LayoutParams(0, -2, 1));
+        result.addView(comparison, topLp(-1, -2, 21));
+        projectionStatusView = text("Counts unavailable", 11, 0xFF333344, Typeface.BOLD);
+        result.addView(projectionStatusView, topLp(-1, -2, 17));
+        card.addView(result, topLp(-1, -2, 19));
+
         plannerBaseline = text("", 12, muted, Typeface.NORMAL);
         card.addView(plannerBaseline, topLp(-1, -2, 10));
         odNotice = text("", 12, muted, Typeface.NORMAL);
@@ -2260,33 +2289,6 @@ final class DashboardView extends FrameLayout {
         }
         card.addView(range);
 
-        LinearLayout result = column();
-        result.setPadding(dp(20), dp(20), dp(20), dp(20));
-        result.setBackground(shape(0xFFC8C8FF, 17, 0));
-        result.addView(label("YOUR ATTENDANCE / PROJECTED", 10, 0xFF111111, Typeface.BOLD));
-        LinearLayout comparison = row();
-        comparison.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout current = column();
-        current.addView(text("CURRENT", 10, 0xFF111111, Typeface.BOLD));
-        plannerCurrentPercentView = text("—", 35, 0xFF111111, Typeface.BOLD);
-        plannerCurrentPercentView.setIncludeFontPadding(false);
-        current.addView(plannerCurrentPercentView, topLp(-1, -2, 7));
-        comparison.addView(current, new LinearLayout.LayoutParams(0, -2, 1));
-        comparison.addView(text("→", 25, 0xFF111111, Typeface.BOLD), lp(-2, -2));
-        LinearLayout projection = column();
-        projection.setGravity(Gravity.RIGHT);
-        TextView after = text("AFTER PLAN", 10, 0xFF111111, Typeface.BOLD);
-        after.setGravity(Gravity.RIGHT);
-        projection.addView(after);
-        projectionView = text("—", 35, 0xFF111111, Typeface.BOLD);
-        projectionView.setGravity(Gravity.RIGHT);
-        projectionView.setIncludeFontPadding(false);
-        projection.addView(projectionView, topLp(-1, -2, 7));
-        comparison.addView(projection, new LinearLayout.LayoutParams(0, -2, 1));
-        result.addView(comparison, topLp(-1, -2, 21));
-        projectionStatusView = text("Counts unavailable", 11, 0xFF333344, Typeface.BOLD);
-        result.addView(projectionStatusView, topLp(-1, -2, 17));
-        card.addView(result, topLp(-1, -2, 19));
         plannerMeter = new PlannerMeter(getContext());
         card.addView(plannerMeter, topLp(-1, 28, 12));
         plannerFeedback = text("Choose a course to explore your options.", 11, ink, Typeface.NORMAL);
