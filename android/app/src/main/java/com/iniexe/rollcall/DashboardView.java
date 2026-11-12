@@ -184,7 +184,7 @@ final class DashboardView extends FrameLayout {
     private final TextView[] navItems = new TextView[5];
 
     private TextView headlineView, statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
-    private TextView allCoursesFilter, focusCoursesFilter;
+    private TextView allCoursesFilter, focusCoursesFilter, onTrackCoursesFilter;
     private TextView coursesEmptyView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
     private TextView attendForecastView, skipForecastView, forecastStatusView;
@@ -233,7 +233,7 @@ final class DashboardView extends FrameLayout {
     private final TextView[] odChips = new TextView[3];
     private int odMode;
     private TextView scheduleTab, historyTab;
-    private boolean showingHistory;
+    private boolean showingHistory = true;
     private int historyLimit = 30;
     private boolean scheduleDirty = true;
     private boolean historyDirty = true;
@@ -244,7 +244,7 @@ final class DashboardView extends FrameLayout {
     private FrameLayout dashboardSyncButton;
     private State state = new State();
     private String query = "";
-    private boolean belowOnly;
+    private boolean belowOnly, onTrackOnly;
     private boolean plannerAttend;
     private TextView plannerMissView, plannerAttendView;
     private int plannerCount = 1, plannerCourse;
@@ -344,6 +344,7 @@ final class DashboardView extends FrameLayout {
         historyDirty = true;
         query = next.query == null ? query : next.query;
         belowOnly = next.belowOnly;
+        if (belowOnly) onTrackOnly = false;
         if (headlineView == null) return;
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
@@ -819,7 +820,7 @@ final class DashboardView extends FrameLayout {
 
     private void buildCoursesPage() {
         LinearLayout body = newPage(1);
-        addTop(body, heading("02 / YOUR PROGRESS", "Courses", "Attendance, stripped down to what matters. Can miss. Must attend. No guessing."), 18);
+        addTop(body, heading("02 / YOUR PROGRESS", "Courses", "Attendance, stripped down to what matters.\nCan miss. Must attend. No guessing."), 18);
         courseSummary = text("", 12, muted, Typeface.NORMAL);
         addTop(body, courseSummary, 0);
         coursesSearch = searchField("Search by subject or code");
@@ -839,7 +840,7 @@ final class DashboardView extends FrameLayout {
 
     private void buildLabPage() {
         LinearLayout body = newPage(3);
-        addTop(body, heading("04 / ATTENDANCE LAB", "What if?", "See how attending or missing classes changes your target."), 8);
+        addTop(body, heading("04 / SCENARIO LAB", "What if?", "Try the possibilities. Your recorded attendance never changes."), 8);
         addTop(body, plannerCard(), 2);
         addTop(body, targetCard(), 12);
         addTop(body, text("This is an estimate based on your latest MyCamu counts. It does not change your attendance record.",
@@ -870,10 +871,10 @@ final class DashboardView extends FrameLayout {
                     13, muted, Typeface.NORMAL);
             detail.setLineSpacing(dp(2), 1f);
             empty.addView(detail, topLp(-1, -2, 8));
-            TextView open = text("Sign in to KCT  →", 14, palette.buttonText, Typeface.BOLD);
+            TextView open = text("Sign in to KCT  →", 14, palette.heroText, Typeface.BOLD);
             open.setGravity(Gravity.CENTER);
             open.setMinHeight(dp(50));
-            open.setBackground(shape(palette.button, 12, 0));
+            open.setBackground(shape(palette.hero, 12, 0));
             open.setOnClickListener(v -> actions.onAcademicsPortal());
             setTactileFeedback(open);
             empty.addView(open, topLp(-1, -2, 14));
@@ -904,11 +905,11 @@ final class DashboardView extends FrameLayout {
         double cgpa = creditTotal == 0 ? Double.NaN : weighted / creditTotal;
 
         LinearLayout summary = column();
-        summary.setPadding(dp(18), dp(16), dp(18), dp(16));
+        summary.setPadding(dp(22), dp(22), dp(22), dp(22));
         summary.setBackground(shape(palette.hero, 18, 0));
-        summary.addView(label("CGPA", 10, palette.heroMuted, Typeface.BOLD));
+        summary.addView(label("CUMULATIVE GPA / CGPA", 10, palette.heroMuted, Typeface.BOLD));
         TextView value = text(Double.isNaN(cgpa) ? "—" : String.format(Locale.getDefault(), "%.2f", cgpa) + " / 10",
-                42, palette.heroText, Typeface.BOLD);
+                50, palette.heroText, Typeface.BOLD);
         value.setLetterSpacing(-.04f);
         summary.addView(value, topLp(-1, -2, 2));
         double earnedCredits = 0;
@@ -922,7 +923,7 @@ final class DashboardView extends FrameLayout {
                 12, muted, Typeface.NORMAL);
         method.setLineSpacing(dp(2), 1f);
         addTop(academicsContent, method, 10);
-        TextView sync = text("Refresh from KCT portal  →", 13, palette.highlight, Typeface.BOLD);
+        TextView sync = text("Refresh from KCT portal  ↗", 13, linkInk, Typeface.BOLD);
         sync.setGravity(Gravity.CENTER_VERTICAL);
         sync.setMinHeight(dp(48));
         sync.setOnClickListener(v -> actions.onAcademicsPortal());
@@ -942,13 +943,13 @@ final class DashboardView extends FrameLayout {
         }
         Collections.sort(trend, (a, b) -> Integer.compare(semesterNumber(a.semester), semesterNumber(b.semester)));
         if (!trend.isEmpty()) {
-            addTop(academicsContent, text("Semester GPA trend", 18, ink, Typeface.BOLD), 20);
+            addTop(academicsContent, text("Semester trend", 21, ink, Typeface.BOLD), 24);
             SemesterGpaChart chart = new SemesterGpaChart(getContext(), palette.highlight, muted, uiTypeface);
             chart.setPoints(trend);
             academicsContent.addView(chart, topLp(-1, dp(168), 4));
         }
 
-        addTop(academicsContent, text("Semester results", 20, ink, Typeface.BOLD), 20);
+        addTop(academicsContent, text("Results", 21, ink, Typeface.BOLD), 24);
         for (String semester : semesters) {
             ArrayList<AcademicCourse> courses = grouped.get(semester);
             if (courses == null || courses.isEmpty()) continue;
@@ -1075,8 +1076,8 @@ final class DashboardView extends FrameLayout {
         LinearLayout selector = row();
         selector.setPadding(dp(3), dp(3), dp(3), dp(3));
         selector.setBackground(shape(soft, 13, border));
-        scheduleTab = text("Schedule", 12, ink, Typeface.BOLD);
-        historyTab = text("Attendance", 12, muted, Typeface.BOLD);
+        scheduleTab = text("SCHEDULE", 11, muted, Typeface.BOLD);
+        historyTab = text("ATTENDANCE", 11, heroText, Typeface.BOLD);
         scheduleTab.setGravity(Gravity.CENTER);
         historyTab.setGravity(Gravity.CENTER);
         scheduleTab.setMinHeight(dp(48));
@@ -1387,12 +1388,12 @@ final class DashboardView extends FrameLayout {
         scheduleContent.setVisibility(showingHistory ? GONE : VISIBLE);
         historyContent.setVisibility(showingHistory ? VISIBLE : GONE);
         scheduleExtras.setVisibility(showingHistory ? GONE : VISIBLE);
-        scheduleTab.setTextColor(showingHistory ? muted : ink);
-        historyTab.setTextColor(showingHistory ? ink : muted);
+        scheduleTab.setTextColor(showingHistory ? muted : heroText);
+        historyTab.setTextColor(showingHistory ? heroText : muted);
         scheduleTab.setSelected(!showingHistory);
         historyTab.setSelected(showingHistory);
-        scheduleTab.setBackground(showingHistory ? null : shape(surface, 10, border));
-        historyTab.setBackground(showingHistory ? shape(surface, 10, border) : null);
+        scheduleTab.setBackground(showingHistory ? null : shape(hero, 9, 0));
+        historyTab.setBackground(showingHistory ? shape(hero, 9, 0) : null);
         if (weekPulse != null) {
             int total = weekPulse.setSchedule(state.timetable);
             int campusDays = 0;
@@ -2096,16 +2097,33 @@ final class DashboardView extends FrameLayout {
         filters.setGravity(Gravity.CENTER_VERTICAL);
         filters.setPadding(dp(3), dp(3), dp(3), dp(3));
         filters.setBackground(shape(soft, 12, 0));
-        TextView all = filterChip("All courses · " + state.courses);
-        TextView focus = filterChip("Below target · " + state.below);
+        TextView all = filterChip("ALL / " + state.courses);
+        TextView focus = filterChip("BELOW TARGET");
+        TextView safe = filterChip("ON TRACK");
         allCoursesFilter = all;
         focusCoursesFilter = focus;
+        onTrackCoursesFilter = safe;
         all.setTag("allFilter");
         focus.setTag("focusFilter");
+        safe.setTag("safeFilter");
         all.setOnClickListener(v -> setFilter(false));
         focus.setOnClickListener(v -> setFilter(true));
+        safe.setOnClickListener(v -> {
+            onTrackOnly = true;
+            belowOnly = false;
+            refreshVisibleRows();
+            for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, false);
+            for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, false);
+            for (View chip : findTaggedViews("safeFilter")) setChipSelected(chip, true);
+            actions.onFilter(false);
+        });
         filters.addView(all, new LinearLayout.LayoutParams(0, dp(48), 1));
-        filters.addView(focus, new LinearLayout.LayoutParams(0, dp(48), 1));
+        LinearLayout.LayoutParams focusParams = new LinearLayout.LayoutParams(0, dp(48), 1.4f);
+        focusParams.leftMargin = dp(5);
+        filters.addView(focus, focusParams);
+        LinearLayout.LayoutParams safeParams = new LinearLayout.LayoutParams(0, dp(48), 1.15f);
+        safeParams.leftMargin = dp(5);
+        filters.addView(safe, safeParams);
         return filters;
     }
 
@@ -2403,9 +2421,11 @@ final class DashboardView extends FrameLayout {
 
     private void setFilter(boolean focus) {
         belowOnly = focus;
+        onTrackOnly = false;
         refreshVisibleRows();
         for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !focus);
         for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, focus);
+        for (View chip : findTaggedViews("safeFilter")) setChipSelected(chip, false);
         actions.onFilter(focus);
     }
 
@@ -2550,7 +2570,8 @@ final class DashboardView extends FrameLayout {
     private void refreshVisibleRows() {
         boolean anyVisible = false;
         for (CourseRow row : courseViews) {
-            boolean visible = row.overviewPreview || ((!belowOnly || row.course.below) && matches(row.course, query));
+            boolean visible = row.overviewPreview || ((!belowOnly || row.course.below)
+                    && (!onTrackOnly || !row.course.below) && matches(row.course, query));
             row.root.setVisibility(visible ? VISIBLE : GONE);
         }
         for (CourseGroupRow row : courseGroupViews) {
@@ -3324,16 +3345,30 @@ final class DashboardView extends FrameLayout {
             this.group = group;
             root = card();
             root.setPadding(dp(16), dp(14), dp(16), dp(14));
+            boolean risk = group.priority() < state.target;
+            View registrationMark = new View(getContext());
+            registrationMark.setBackground(shape(risk ? palette.highlight : hero, 2, 0));
+            LinearLayout.LayoutParams markParams = new LinearLayout.LayoutParams(dp(48), dp(6));
+            markParams.gravity = Gravity.RIGHT;
+            root.addView(registrationMark, markParams);
             subjects.add(group.lecture);
             subjects.addAll(group.labs);
 
             LinearLayout header = row();
             header.setGravity(Gravity.CENTER_VERTICAL);
-            TextView courseName = text(group.lecture.name, 17, ink, Typeface.BOLD);
+            TextView courseName = text(group.lecture.name, 16, ink, Typeface.BOLD);
             courseName.setMaxLines(2);
             courseName.setEllipsize(android.text.TextUtils.TruncateAt.END);
             header.addView(courseName, new LinearLayout.LayoutParams(0, -2, 1));
             boolean atRisk = group.priority() < state.target;
+            TextView badge = text(String.format(Locale.getDefault(), "%.0f%%", group.priority()),
+                    13, heroText, Typeface.BOLD);
+            badge.setGravity(Gravity.CENTER);
+            badge.setPadding(dp(9), dp(9), dp(9), dp(9));
+            badge.setBackground(shape(atRisk ? palette.highlight : hero, 9, 0));
+            LinearLayout.LayoutParams badgeParams = lp(-2, -2);
+            badgeParams.leftMargin = dp(10);
+            header.addView(badge, badgeParams);
             header.setOnClickListener(v -> actions.onCourse(group.lecture.code));
             header.setContentDescription(courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
                     + ". Tap to expand course guidance.");
@@ -3349,7 +3384,13 @@ final class DashboardView extends FrameLayout {
                 LinearLayout.LayoutParams metricParams = topLp(-1, -2, i == 0 ? 0 : 10);
                 meters.addView(metric, metricParams);
             }
-            root.addView(meters, topLp(-1, -2, 4));
+            root.addView(meters, topLp(-1, -2, 10));
+            TextView details = text("DETAILS  " + (group.lecture.expanded ? "−" : "+"), 11, linkInk, Typeface.BOLD);
+            details.setGravity(Gravity.CENTER_VERTICAL);
+            details.setMinHeight(dp(48));
+            details.setContentDescription("Toggle guidance for " + group.lecture.name);
+            details.setOnClickListener(v -> actions.onCourse(group.lecture.code));
+            root.addView(details, topLp(-1, -2, 7));
             for (Course subject : subjects) {
                 if (!subject.expanded) continue;
                 TextView guidance = text(subject.guidance, 10, muted, Typeface.NORMAL);
@@ -3446,7 +3487,8 @@ final class DashboardView extends FrameLayout {
                 hasMatch |= DashboardView.this.matches(subject, query);
                 hasFocus |= subject.below;
             }
-            return hasMatch && (!belowOnly || hasFocus);
+            return hasMatch && (!belowOnly || hasFocus)
+                    && (!onTrackOnly || !hasFocus);
         }
     }
 
