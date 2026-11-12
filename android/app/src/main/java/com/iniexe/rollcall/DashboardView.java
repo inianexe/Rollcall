@@ -232,7 +232,7 @@ final class DashboardView extends FrameLayout {
     private final TextView[] odChips = new TextView[3];
     private int odMode;
     private TextView scheduleTab, historyTab;
-    private boolean showingHistory;
+    private boolean showingHistory = true;
     private int historyLimit = 30;
     private boolean scheduleDirty = true;
     private boolean historyDirty = true;
@@ -347,7 +347,8 @@ final class DashboardView extends FrameLayout {
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
                         .replaceAll("\\.$", "");
-        headlineView.setText(displayName.toUpperCase(Locale.ROOT) + ".");
+        String first = displayName.toUpperCase(Locale.ROOT);
+        headlineView.setText(first + ".\nYOU GOT THIS.");
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
         welcomeView.setText(greeting + ",");
@@ -384,9 +385,14 @@ final class DashboardView extends FrameLayout {
                     + new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH).format(displayedDate)
                     + ". Open " + (homeTicketDestination == 4 ? "marks and exams" : "your week"));
         }
-        homeEncouragementView.setText(next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
-                : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
-                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.");
+        homeEncouragementView.setText(next.rows.isEmpty()
+                ? "Your attendance, classes and next steps."
+                : next.below == 0 ? "One class at a time. Your academic week, decoded."
+                : "A little clarity. Your next move starts here.");
+        homeBroadcastStatus.setText(next.syncing ? "SYNCING ↻"
+                : next.syncError ? "CHECK SYNC !" : next.rows.isEmpty() ? "READY ↗"
+                : next.below == 0 ? "ON TRACK ↗" : next.below + " TO FOCUS ↗");
+        homeBroadcastStatus.setTextColor(next.syncError ? red : next.below > 0 ? amber : green);
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
@@ -405,7 +411,7 @@ final class DashboardView extends FrameLayout {
             statusView.announceForAccessibility("Attendance updated. You’re ready to plan.");
             settleFeedback(statusView);
         }
-        statusView.setTextColor(next.syncError ? 0xFF762B1E : next.syncing ? 0xFF704400 : heroMuted);
+        statusView.setTextColor(heroMuted);
         statusView.setContentDescription(next.syncError ? "Attendance refresh failed. " + next.status : next.status);
         statusView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         statusView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
@@ -1054,9 +1060,9 @@ final class DashboardView extends FrameLayout {
 
         LinearLayout selector = row();
         selector.setPadding(dp(3), dp(3), dp(3), dp(3));
-        selector.setBackground(shape(soft, 13, border));
-        scheduleTab = text("Schedule", 12, ink, Typeface.BOLD);
-        historyTab = text("Attendance", 12, muted, Typeface.BOLD);
+        selector.setBackground(shape(soft, 12, border));
+        scheduleTab = text("SCHEDULE", 11, muted, Typeface.BOLD);
+        historyTab = text("ATTENDANCE", 11, heroText, Typeface.BOLD);
         scheduleTab.setGravity(Gravity.CENTER);
         historyTab.setGravity(Gravity.CENTER);
         scheduleTab.setMinHeight(dp(48));
@@ -1065,8 +1071,8 @@ final class DashboardView extends FrameLayout {
         historyTab.setContentDescription("Show attendance history");
         scheduleTab.setOnClickListener(v -> { showingHistory = false; updateTimetable(); });
         historyTab.setOnClickListener(v -> { showingHistory = true; updateTimetable(); });
-        selector.addView(scheduleTab, new LinearLayout.LayoutParams(0, -2, 1));
         selector.addView(historyTab, new LinearLayout.LayoutParams(0, -2, 1));
+        selector.addView(scheduleTab, new LinearLayout.LayoutParams(0, -2, 1));
         addTop(body, selector, 10);
         addTop(body, scheduleExtras, 10);
         addTop(body, scheduleUpdatedView, 8);
@@ -1155,11 +1161,11 @@ final class DashboardView extends FrameLayout {
     private View overviewSectionHeader(String title, String action, Runnable onAction) {
         LinearLayout header = row();
         header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 17, ink, Typeface.BOLD);
-        heading.setTypeface(displayTypeface);
-        heading.setLetterSpacing(cyberpunk ? .04f : -.02f);
+        TextView heading = text(title, 21, ink, Typeface.BOLD);
+        heading.setTypeface(uiTypeface, Typeface.BOLD);
+        heading.setLetterSpacing(-.07f);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView button = text(action + "  →", 11, green, Typeface.BOLD);
+        TextView button = text(action + "  ↗", 11, linkInk, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setMinWidth(dp(48));
         button.setMinHeight(dp(48));
@@ -1180,11 +1186,11 @@ final class DashboardView extends FrameLayout {
         int campusDays = 0;
         for (int count : overviewWeekPulse.counts) if (count > 0) campusDays++;
         String todayLabel = new SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(new Date());
-        overviewWeekMeta.setText(!state.timetableLoaded ? "Today · " + todayLabel + " · timetable updates after sync."
-                : state.timetable.isEmpty() ? "Today · " + todayLabel + " · no classes scheduled."
-                : total == 0 ? "Today · " + todayLabel + " · no class periods mapped this week."
-                : "Today · " + todayLabel + " · " + total + (total == 1 ? " class" : " classes")
-                + " across " + campusDays + (campusDays == 1 ? " day" : " days"));
+        overviewWeekMeta.setText(!state.timetableLoaded ? "SYNC YOUR TIMETABLE // WAITING FOR DATA"
+                : state.timetable.isEmpty() ? "NO CLASSES SCHEDULED // FREE SLOT"
+                : total == 0 ? "NO CLASS PERIODS MAPPED // THIS WEEK"
+                : total + (total == 1 ? " CLASS" : " CLASSES")
+                + " / " + campusDays + (campusDays == 1 ? " DAY" : " DAYS"));
         if (nextItem == null) {
             return;
         }
@@ -1367,12 +1373,12 @@ final class DashboardView extends FrameLayout {
         scheduleContent.setVisibility(showingHistory ? GONE : VISIBLE);
         historyContent.setVisibility(showingHistory ? VISIBLE : GONE);
         scheduleExtras.setVisibility(showingHistory ? GONE : VISIBLE);
-        scheduleTab.setTextColor(showingHistory ? muted : ink);
-        historyTab.setTextColor(showingHistory ? ink : muted);
+        scheduleTab.setTextColor(showingHistory ? muted : heroText);
+        historyTab.setTextColor(showingHistory ? heroText : muted);
         scheduleTab.setSelected(!showingHistory);
         historyTab.setSelected(showingHistory);
-        scheduleTab.setBackground(showingHistory ? null : shape(surface, 10, border));
-        historyTab.setBackground(showingHistory ? shape(surface, 10, border) : null);
+        scheduleTab.setBackground(showingHistory ? null : shape(hero, 9, 0));
+        historyTab.setBackground(showingHistory ? shape(hero, 9, 0) : null);
         if (weekPulse != null) {
             int total = weekPulse.setSchedule(state.timetable);
             int campusDays = 0;
@@ -2094,7 +2100,7 @@ final class DashboardView extends FrameLayout {
         chip.setPadding(dp(11), dp(8), dp(11), dp(8));
         chip.setGravity(Gravity.CENTER);
         chip.setMinHeight(dp(34));
-        chip.setBackground(shape(soft, 6, 0));
+        chip.setBackground(shape(surface, 10, border));
         return chip;
     }
 
@@ -2219,9 +2225,9 @@ final class DashboardView extends FrameLayout {
     private void buildNavigation(LinearLayout shell) {
         LinearLayout holder = new LinearLayout(getContext());
         holder.setGravity(Gravity.CENTER);
-        holder.setPadding(dp(16), dp(8), dp(16), dp(8));
+        holder.setPadding(dp(16), dp(7), dp(16), dp(10));
         shell.addView(holder, lp(-1, -2));
-        nav.setPadding(dp(4), dp(3), dp(4), dp(3));
+        nav.setPadding(dp(5), dp(5), dp(5), dp(5));
         nav.setGravity(Gravity.CENTER);
         navBackground = new NavBackgroundDrawable();
         nav.setBackground(navBackground);
@@ -2235,7 +2241,7 @@ final class DashboardView extends FrameLayout {
             tab.setOrientation(LinearLayout.VERTICAL);
             tab.setGravity(Gravity.CENTER);
             tab.setFocusable(true);
-            tab.setMinimumHeight(dp(56));
+            tab.setMinimumHeight(dp(67));
             tab.setPadding(dp(4), dp(6), dp(4), dp(6));
             tab.setOnClickListener(v -> showPage(page));
             setTactileFeedback(tab);
@@ -2689,6 +2695,7 @@ final class DashboardView extends FrameLayout {
             else actions.onSync();
         });
         ScheduleItem next = nextScheduledClass(System.currentTimeMillis());
+        overviewDecisionBlock.setVisibility(next == null ? GONE : VISIBLE);
         long nextStartsAt = next == null ? -1 : next.startsAt;
         if (nextStartsAt != decisionStartsAt) attendForecastSelected = true;
         decisionStartsAt = nextStartsAt;
