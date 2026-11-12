@@ -189,7 +189,7 @@ final class DashboardView extends FrameLayout {
     private final TextView[] navItems = new TextView[5];
 
     private TextView headlineView, statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
-    private TextView allCoursesFilter, focusCoursesFilter;
+    private TextView allCoursesFilter, focusCoursesFilter, safeCoursesFilter;
     private TextView coursesEmptyView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
     private TextView attendForecastView, skipForecastView, forecastStatusView;
@@ -876,7 +876,10 @@ final class DashboardView extends FrameLayout {
         coursesEmptyView = text("", 13, muted, Typeface.NORMAL);
         coursesEmptyView.setPadding(dp(14), dp(14), dp(14), dp(14));
         coursesEmptyView.setMinHeight(dp(56));
-        coursesEmptyView.setBackground(shape(soft, 12, 0));
+        coursesEmptyView.setTextColor(0xFF121212);
+        coursesEmptyView.setTextSize(16);
+        coursesEmptyView.setTypeface(uiTypeface, Typeface.BOLD);
+        coursesEmptyView.setBackground(shape(palette.focusSurface, 16, 0));
         coursesEmptyView.setVisibility(GONE);
         coursesEmptyView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         addTop(body, coursesEmptyView, 10);
@@ -2164,6 +2167,7 @@ final class DashboardView extends FrameLayout {
         TextView safe = filterChip("ON TRACK");
         allCoursesFilter = all;
         focusCoursesFilter = below;
+        safeCoursesFilter = safe;
         all.setTag("allFilter");
         below.setTag("focusFilter");
         safe.setTag("safeFilter");
@@ -2177,6 +2181,9 @@ final class DashboardView extends FrameLayout {
         p = new LinearLayout.LayoutParams(0, dp(48), 1f);
         p.leftMargin = dp(7);
         filters.addView(safe, p);
+        setChipSelected(all, !belowOnly && !onTrackOnly);
+        setChipSelected(below, belowOnly);
+        setChipSelected(safe, onTrackOnly);
         return filters;
     }
 
@@ -2559,15 +2566,20 @@ final class DashboardView extends FrameLayout {
     private void updateSearchFields() {
         setTextWithoutCursorJump(coursesSearch, query);
         if (allCoursesFilter != null) {
-            allCoursesFilter.setText("All courses · " + state.courses);
+            allCoursesFilter.setText("ALL / " + state.courses);
             allCoursesFilter.setContentDescription("Show all " + state.courses + " courses");
         }
         if (focusCoursesFilter != null) {
-            focusCoursesFilter.setText("Below target · " + state.below);
+            focusCoursesFilter.setText("BELOW TARGET / " + state.below);
             focusCoursesFilter.setContentDescription("Show courses below your " + state.target + "% target");
         }
-        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !belowOnly);
+        if (safeCoursesFilter != null) {
+            safeCoursesFilter.setText("ON TRACK / " + state.onTrack);
+            safeCoursesFilter.setContentDescription("Show " + state.onTrack + " courses on track");
+        }
+        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !belowOnly && !onTrackOnly);
         for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, belowOnly);
+        for (View chip : findTaggedViews("safeFilter")) setChipSelected(chip, onTrackOnly);
     }
 
     private String courseHeading(Course course) {
@@ -2688,7 +2700,7 @@ final class DashboardView extends FrameLayout {
                 });
             } else {
                 coursesEmptyView.setText(belowOnly && query.trim().isEmpty()
-                        ? "All courses are on track with your attendance target."
+                        ? "NOTHING TO SEE. THAT'S GOOD.\nAll courses are at or above target."
                         : "No courses match this search and filter.");
                 coursesEmptyView.setContentDescription(coursesEmptyView.getText());
                 coursesEmptyView.setClickable(false);
