@@ -1,5 +1,8 @@
 package com.iniexe.rollcall;
 
+import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
+import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
+
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -390,6 +393,13 @@ final class DashboardView extends FrameLayout {
                 ? "Your attendance, classes and next steps."
                 : next.below == 0 ? "One class at a time. Your academic week, decoded."
                 : "A little clarity. Your next move starts here.");
+        homeHeroComposeView.setIdentity(new HomeHeroIdentityState(
+                greeting + ",", displayName.toUpperCase(Locale.ROOT),
+                broadcastDate.format(new Date()).toUpperCase(Locale.ROOT),
+                new SimpleDateFormat("dd", Locale.ENGLISH).format(displayedDate),
+                new SimpleDateFormat("EEE · MMM", Locale.ENGLISH)
+                    .format(displayedDate).toUpperCase(Locale.ROOT),
+                homeEncouragementView.getText().toString(), eventLabel));
         homeBroadcastStatus.setText(next.syncing ? "SYNCING ↻"
                 : next.syncError ? "CHECK SYNC !" : next.rows.isEmpty() ? "READY ↗"
                 : next.below == 0 ? "ON TRACK ↗" : next.below + " TO FOCUS ↗");
@@ -506,6 +516,7 @@ final class DashboardView extends FrameLayout {
 
     private LinearLayout overviewDecisionBlock;
     private TextView homeBroadcastStatus;
+    private RollcallHeroIdentityView homeHeroComposeView;
 
     /** Literal native reconstruction of the supplied Torch Genesis Home screen. */
     private void buildOverview() {
@@ -517,6 +528,10 @@ final class DashboardView extends FrameLayout {
         heroStage.setClipChildren(false);
         heroStage.addView(new TorchOrbitView(getContext()),
                 new FrameLayout.LayoutParams(-1, -1));
+        homeHeroComposeView = new RollcallHeroIdentityView(getContext());
+        homeHeroComposeView.setColors(hero, heroText, heroMuted, 0xFFF1EEDA, ink, 0xFF121212);
+        homeHeroComposeView.setTicketAction(() -> showPage(homeTicketDestination));
+        heroStage.addView(homeHeroComposeView, new FrameLayout.LayoutParams(-1, dp(218)));
         LinearLayout heroContent = column();
         heroContent.setPadding(dp(22), dp(19), dp(22), dp(18));
         heroStage.addView(heroContent, new FrameLayout.LayoutParams(-1, dp(244)));
@@ -529,6 +544,7 @@ final class DashboardView extends FrameLayout {
         homeDateView.setBackground(shape(hero, 100, heroText));
         overline.addView(homeDateView);
         heroContent.addView(overline);
+        overline.setVisibility(INVISIBLE); // Compose draws the exact broadcast heading.
 
         LinearLayout identity = column();
         identity.setPadding(0, dp(21), 0, 0);
@@ -547,6 +563,7 @@ final class DashboardView extends FrameLayout {
         encouragementParams.rightMargin = dp(86);
         identity.addView(homeEncouragementView, encouragementParams);
         heroContent.addView(identity, new LinearLayout.LayoutParams(-1, 0, 1f));
+        identity.setVisibility(INVISIBLE); // Keep spacer to anchor native sync controls.
 
         LinearLayout heroFoot = row();
         heroFoot.setGravity(Gravity.CENTER_VERTICAL);
@@ -572,7 +589,8 @@ final class DashboardView extends FrameLayout {
                 Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         ticketParams.rightMargin = dp(4);
         ticketParams.topMargin = dp(20);
-        heroStage.addView(homeWeekTicket(), ticketParams);
+        // Compose owns the visible interactive calendar ticket.
+        homeWeekTicket();
         addTop(body, heroStage, 16);
 
         LinearLayout broadcast = row();
