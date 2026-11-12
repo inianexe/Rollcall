@@ -80,7 +80,7 @@ function renderHome(){
  var hero=document.querySelector('#page-home .hero');
  hero.innerHTML='<div class="hero-top"><span class="eyebrow">ACADEMIC TRANSMISSION / 01</span><span class="hero-date">'+html(date(now,{weekday:'short',day:'2-digit',month:'short'}).toUpperCase())+'</span></div>'+
  '<div><p class="overline" style="color:#343a26;margin:0">'+greeting+',</p><h2>'+html(name.toUpperCase())+'<span style="color:var(--orange)">.</span><br>YOU GOT THIS.</h2><p class="hero-copy">One class at a time. Your academic week, decoded.</p></div>'+
- '<div class="hero-bottom"><div class="hero-foot"><span class="status-dot"></span><span>'+html(state.syncing?'SYNCING / LIVE':state.syncError?'SYNC ERROR / RETRY':state.status||'ROLLCALL / READY')+'</span></div><button class="section-action" style="color:#111" data-action="sync" type="button" aria-label="Refresh your attendance">↻ SYNC</button></div>'+
+ '<div class="hero-bottom"><div class="hero-foot"><span class="status-dot"></span><span>'+html(state.syncing?'SYNCING / LIVE':state.sessionExpired?'MYCAMU / SIGN-IN EXPIRED':state.syncError?'SYNC ERROR / RETRY':state.status||'ROLLCALL / READY')+'</span></div><button class="section-action" style="color:#111" data-action="'+(state.sessionExpired?'portal':'sync')+'" type="button" aria-label="'+(state.sessionExpired?'Reconnect to MyCamu':'Refresh your attendance')+'">'+(state.sessionExpired?'↗ SIGN IN':'↻ SYNC')+'</button></div>'+
  '<div class="ticket-art" role="button" tabindex="0" aria-label="'+html(event.kind+', '+date(event.when,{dateStyle:'long'}))+'. Open '+event.target+'" data-page="'+event.target+'">'+
  '<div class="ticket-back"></div><div class="ticket-front"><span class="tk-tag">'+html(event.kind)+'</span><strong>'+date(event.when,{day:'2-digit'})+'</strong><span class="tk-bottom">'+html(date(event.when,{month:'short',year:'numeric'}).toUpperCase())+'</span></div><i class="ticket-ring"></i><i class="ticket-ring r2"></i></div>';
  var total=nativeCourses().length,below=nativeCourses().filter(isBelow).length;
@@ -264,6 +264,7 @@ function renderSettings(){
  '<div class="settings-row"><div><strong>Attendance target</strong><br><span>Current goal: '+goal()+'%</span></div><button class="button" type="button" data-action="target">EDIT ↗</button></div>'+
  '<div class="settings-row"><div><strong>Android notifications</strong><br><span>Manage permissions and channels.</span></div><button class="button" type="button" data-action="notifications">OPEN ↗</button></div></div>'+
  '<div class="settings-block"><h3>ACCOUNTS & UPDATES</h3><div class="settings-row"><div><strong>Rollcall web account</strong><br><span>Connect phone and cloud snapshot.</span></div><button class="button" type="button" data-action="cloud">MANAGE ↗</button></div>'+
+ '<div class="settings-row"><div><strong>MyCamu connection</strong><br><span>Refresh or reconnect your attendance source.</span></div><button class="button" type="button" data-action="portal">OPEN ↗</button></div>'+
  '<div class="settings-row"><div><strong>KCT academics</strong><br><span>Marks, GPA and upcoming exams.</span></div><button class="button" type="button" data-action="kct">CONNECT ↗</button></div>'+
  '<div class="settings-row"><div><strong>App updates</strong><br><span>Check the latest GitHub release.</span></div><button class="button" type="button" data-action="updates">CHECK ↗</button></div></div>'+
  '<div class="about-box"><div class="eyebrow">ABOUT / THE PROJECT</div><h3>GOOD DESIGN.<br>BETTER ATTENDANCE.</h3><p>Rollcall makes it easier to understand attendance, timetable, academic marks and progress toward your target.</p>'+
@@ -302,7 +303,7 @@ document.addEventListener('click',function(e){
   var act=node.dataset.action;
   if(act==='attend'||act==='miss'){planMode=act;renderPlanner();return}
   if(act==='target'){showTarget();return}
-  bridge(({sync:'sync',theme:'toggleTheme',reminders:'toggleReminders',notifications:'notifications',cloud:'cloud',kct:'kct',updates:'updates',clear:'clear',privacy:'privacy',terms:'terms',github:'github'})[act]||act);
+  bridge(({sync:'sync',theme:'toggleTheme',reminders:'toggleReminders',notifications:'notifications',cloud:'cloud',portal:'portal',kct:'kct',updates:'updates',clear:'clear',privacy:'privacy',terms:'terms',github:'github'})[act]||act);
  }
 });
 document.addEventListener('change',function(e){if(e.target.id==='courseSelect'){planCourse=e.target.value;odMode='recorded';renderPlanner()}});
