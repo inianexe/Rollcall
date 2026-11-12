@@ -1,6 +1,7 @@
 package com.iniexe.rollcall.ui.screens.courses
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -36,6 +37,7 @@ import com.iniexe.rollcall.AppPalette
 import com.iniexe.rollcall.ui.theme.LocalRollcallColors
 import com.iniexe.rollcall.ui.theme.RollcallMono
 import com.iniexe.rollcall.ui.theme.RollcallTheme
+import com.iniexe.rollcall.ui.animation.motion.RollcallMotion
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -54,7 +56,7 @@ fun CourseCard(
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, Color(colors.border)),
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.animateContentSize(RollcallMotion.expandCollapse()).padding(14.dp)) {
             Text(
                 state.title,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)

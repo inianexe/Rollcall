@@ -2,12 +2,14 @@ package com.iniexe.rollcall;
 
 import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
 import com.iniexe.rollcall.ui.bridge.LatestClassAttendanceCardView;
-import com.iniexe.rollcall.ui.bridge.CourseCardView;
+import com.iniexe.rollcall.ui.bridge.CoursesScreenView;
 import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
 import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
 import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState;
 import com.iniexe.rollcall.ui.screens.courses.CourseCardUiState;
 import com.iniexe.rollcall.ui.screens.courses.CourseMetricUiState;
+import com.iniexe.rollcall.ui.screens.courses.CourseFilter;
+import com.iniexe.rollcall.ui.screens.courses.CoursesScreenUiState;
 import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
 
 import android.animation.ValueAnimator;
@@ -26,10 +28,8 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.Drawable;
-import android.text.Editable;
 import android.text.SpannableString;
 import android.text.Spanned;
-import android.text.TextWatcher;
 import android.text.style.ReplacementSpan;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -172,10 +172,10 @@ final class DashboardView extends FrameLayout {
     private final Typeface cyberpunkTypeface;
     private final FrameLayout pages = new FrameLayout(getContext());
     private final ScrollView[] pageScrolls = new ScrollView[5];
+    private final View[] pageViews = new View[5];
     private final LinearLayout[] pageBodies = new LinearLayout[5];
-    private final LinearLayout[] courseLists = new LinearLayout[2];
+    private final LinearLayout[] courseLists = new LinearLayout[1];
     private final ArrayList<CourseRow> courseViews = new ArrayList<>();
-    private final ArrayList<CourseGroupRow> courseGroupViews = new ArrayList<>();
     private final ArrayList<TextView> avatars = new ArrayList<>();
     private final HashSet<String> expandedScheduleDays = new HashSet<>();
     private boolean scheduleExpansionInitialized;
@@ -189,14 +189,13 @@ final class DashboardView extends FrameLayout {
     private final LinearLayout[] navTabs = new LinearLayout[5];
     private final ImageView[] navIcons = new ImageView[5];
     private AttendanceRail attendanceRail;
-    private TextView overviewGoal, courseSummary, decisionCourse, decisionLabel, decisionAction, plannerBaseline;
+    private TextView overviewGoal, decisionCourse, decisionLabel, decisionAction, plannerBaseline;
     private String decisionCode = "";
     private ModeSwitchButtonView homeThemeButton;
     private final TextView[] navItems = new TextView[5];
 
     private TextView statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
-    private TextView allCoursesFilter, focusCoursesFilter;
-    private TextView coursesEmptyView;
+    private CoursesScreenView coursesScreenView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
     private TextView attendForecastView, skipForecastView, forecastStatusView;
     private LinearLayout attendForecastTile, skipForecastTile;
@@ -245,7 +244,6 @@ final class DashboardView extends FrameLayout {
     private FrameLayout coursePicker;
     private TextView coursePickerText;
     private PopupWindow coursePopup;
-    private EditText coursesSearch;
     private FrameLayout dashboardSyncButton;
     private State state = new State();
     private String query = "";
@@ -304,11 +302,14 @@ final class DashboardView extends FrameLayout {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             swipeDownX = event.getX();
             swipeDownY = event.getY();
-            ScrollView page = selectedPage >= 0 && selectedPage < pageScrolls.length
-                    ? pageScrolls[selectedPage] : null;
-            swipeAllowed = !odDetailsOpen && page != null
-                    && !startsOnHorizontalControl(page, event.getX() - pages.getLeft() - page.getLeft(),
-                    event.getY() - pages.getTop() - page.getTop());
+            View page = selectedPage >= 0 && selectedPage < pageViews.length
+                    ? pageViews[selectedPage] : null;
+            float pageX = page == null ? 0 : event.getX() - pages.getLeft() - page.getLeft();
+            float pageY = page == null ? 0 : event.getY() - pages.getTop() - page.getTop();
+            boolean searchTouch = page instanceof CoursesScreenView
+                    && ((CoursesScreenView) page).isSearchTouch(pageX, pageY);
+            swipeAllowed = !odDetailsOpen && page instanceof ViewGroup
+                    && !searchTouch && !startsOnHorizontalControl((ViewGroup) page, pageX, pageY);
             swipingPages = false;
             return false;
         }
@@ -373,10 +374,6 @@ final class DashboardView extends FrameLayout {
         if (attendanceRail != null) attendanceRail.invalidate();
         if (overviewGoal != null) overviewGoal.setText(next.target + "% target  ↗");
         if (rulerTargetLabel != null) rulerTargetLabel.setText(next.target + "% target");
-        if (courseSummary != null) {
-            courseSummary.setVisibility(next.rows.isEmpty() ? GONE : VISIBLE);
-            courseSummary.setText(next.courses + " courses  ·  " + next.below + " below target");
-        }
         boolean completedSync = wasSyncing && !next.syncing && next.syncSucceeded && !next.syncError && !next.sessionExpired;
         wasSyncing = next.syncing;
         statusView.setText(next.syncing ? "Checking your latest attendance…" : next.status);
@@ -420,7 +417,6 @@ final class DashboardView extends FrameLayout {
                     "Latest class attendance. " + next.latestClassName + ": " + statusLabel + ". Open attendance history"));
         }
         updateSyncIndicator(next.syncing, next.syncError || next.sessionExpired || next.partialSync, next.syncSucceeded);
-        updateSearchFields();
         rebuildCourseRows();
         updatePlannerCourses();
         refreshVisibleRows();
@@ -462,9 +458,9 @@ final class DashboardView extends FrameLayout {
         buildTimetablePage();
         buildLabPage();
         buildAcademicsPage();
-        for (int i = 0; i < pageScrolls.length; i++) {
-            pageScrolls[i].setVisibility(i == 0 ? VISIBLE : GONE);
-            pages.addView(pageScrolls[i], new FrameLayout.LayoutParams(-1, -1));
+        for (int i = 0; i < pageViews.length; i++) {
+            pageViews[i].setVisibility(i == 0 ? VISIBLE : GONE);
+            pages.addView(pageViews[i], new FrameLayout.LayoutParams(-1, -1));
         }
         buildOdDetailsPage();
         buildNavigation(shell);
@@ -624,23 +620,24 @@ final class DashboardView extends FrameLayout {
     }
 
     private void buildCoursesPage() {
-        LinearLayout body = newPage(1);
-        addTop(body, heading("02 / YOUR PROGRESS", "Courses", "Attendance, stripped down to what matters. Can miss. Must attend. No guessing."), 18);
-        courseSummary = text("", 12, muted, Typeface.NORMAL);
-        addTop(body, courseSummary, 0);
-        coursesSearch = searchField("Search by subject or code");
-        addTop(body, coursesSearch, 8);
-        addTop(body, filters(), 6);
-        courseLists[1] = column();
-        body.addView(courseLists[1], lp(-1, -2));
-        coursesEmptyView = text("", 13, muted, Typeface.NORMAL);
-        coursesEmptyView.setPadding(dp(14), dp(14), dp(14), dp(14));
-        coursesEmptyView.setMinHeight(dp(56));
-        coursesEmptyView.setBackground(shape(soft, 12, 0));
-        coursesEmptyView.setVisibility(GONE);
-        coursesEmptyView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        addTop(body, coursesEmptyView, 10);
-        addBottom(body, 24);
+        coursesScreenView = new CoursesScreenView(getContext(), palette.toComposeColors(), coursesScreenState(),
+                query -> {
+                    DashboardView.this.query = query;
+                    actions.onQuery(query);
+                    updateCoursesScreen();
+                    return kotlin.Unit.INSTANCE;
+                },
+                filter -> {
+                    setFilter(filter == CourseFilter.BELOW_TARGET);
+                    return kotlin.Unit.INSTANCE;
+                },
+                code -> { actions.onCourse(code); return kotlin.Unit.INSTANCE; },
+                code -> { openPlannerFor(code); return kotlin.Unit.INSTANCE; },
+                () -> {
+                    if (state.sessionExpired) actions.onPortal(); else actions.onSync();
+                    return kotlin.Unit.INSTANCE;
+                });
+        pageViews[1] = coursesScreenView;
     }
 
     private void buildLabPage() {
@@ -1382,7 +1379,7 @@ final class DashboardView extends FrameLayout {
         odDetailsReturnPage = selectedPage;
         updateOdDetails();
         odDetailsOpen = true;
-        for (ScrollView page : pageScrolls) if (page != null) {
+        for (View page : pageViews) if (page != null) {
             page.animate().cancel();
             page.setVisibility(GONE);
         }
@@ -1399,7 +1396,7 @@ final class DashboardView extends FrameLayout {
             odDetailsPage.animate().cancel();
             odDetailsPage.setVisibility(GONE);
         }
-        ScrollView returnPage = pageScrolls[odDetailsReturnPage];
+        View returnPage = pageViews[odDetailsReturnPage];
         returnPage.setVisibility(VISIBLE);
         returnPage.bringToFront();
         nav.setVisibility(VISIBLE);
@@ -1741,6 +1738,7 @@ final class DashboardView extends FrameLayout {
         body.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         pageScrolls[index] = scroll;
+        pageViews[index] = scroll;
         pageBodies[index] = body;
         return body;
     }
@@ -1881,24 +1879,6 @@ final class DashboardView extends FrameLayout {
     }
 
 
-    private View filters() {
-        LinearLayout filters = row();
-        filters.setGravity(Gravity.CENTER_VERTICAL);
-        filters.setPadding(dp(3), dp(3), dp(3), dp(3));
-        filters.setBackground(shape(soft, 12, 0));
-        TextView all = filterChip("All courses · " + state.courses);
-        TextView focus = filterChip("Below target · " + state.below);
-        allCoursesFilter = all;
-        focusCoursesFilter = focus;
-        all.setTag("allFilter");
-        focus.setTag("focusFilter");
-        all.setOnClickListener(v -> setFilter(false));
-        focus.setOnClickListener(v -> setFilter(true));
-        filters.addView(all, new LinearLayout.LayoutParams(0, dp(48), 1));
-        filters.addView(focus, new LinearLayout.LayoutParams(0, dp(48), 1));
-        return filters;
-    }
-
     private TextView filterChip(String label) {
         TextView chip = text(label, 10, muted, Typeface.BOLD);
         chip.setPadding(dp(11), dp(8), dp(11), dp(8));
@@ -1906,30 +1886,6 @@ final class DashboardView extends FrameLayout {
         chip.setMinHeight(dp(34));
         chip.setBackground(shape(soft, 6, 0));
         return chip;
-    }
-
-    private EditText searchField(String hint) {
-        EditText field = new EditText(getContext());
-        field.setSingleLine(true);
-        field.setTextSize(14);
-        field.setMinHeight(dp(48));
-        field.setTextColor(ink);
-        field.setHintTextColor(muted);
-        field.setHint(hint);
-        field.setTypeface(uiTypeface);
-        field.setContentDescription(hint);
-        field.setPadding(dp(12), 0, dp(12), 0);
-        field.setBackground(shape(soft, 5, 0));
-        field.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                query = s.toString();
-                refreshVisibleRows();
-                actions.onQuery(query);
-            }
-            @Override public void afterTextChanged(Editable e) { }
-        });
-        return field;
     }
 
     private View plannerCard() {
@@ -2071,7 +2027,7 @@ final class DashboardView extends FrameLayout {
 
     private void showPage(int page) {
         if (page < 0 || page >= pageScrolls.length || page == selectedPage) return;
-        ScrollView incoming = pageScrolls[page];
+        View incoming = pageViews[page];
         if (incoming == null) return;
 
         // Update visibility synchronously so rapid taps cannot hide the newly selected page.
@@ -2079,8 +2035,8 @@ final class DashboardView extends FrameLayout {
         selectedPage = page;
         if (homeThemeButton != null) homeThemeButton.setVisibility(page == 0 ? VISIBLE : GONE);
         if (page == 2) updateTimetable();
-        for (int i = 0; i < pageScrolls.length; i++) {
-            ScrollView candidate = pageScrolls[i];
+        for (int i = 0; i < pageViews.length; i++) {
+            View candidate = pageViews[i];
             if (candidate == null) continue;
             candidate.animate().cancel();
             candidate.setVisibility(i == page ? VISIBLE : GONE);
@@ -2105,8 +2061,8 @@ final class DashboardView extends FrameLayout {
     }
 
     void animateCurrentPageEntry() {
-        if (selectedPage >= 0 && selectedPage < pageScrolls.length && pageScrolls[selectedPage] != null)
-            animatePageArrival(pageScrolls[selectedPage], 1);
+        if (selectedPage >= 0 && selectedPage < pageViews.length && pageViews[selectedPage] != null)
+            animatePageArrival(pageViews[selectedPage], 1);
     }
 
     private void animatePageArrival(View page, int direction) {
@@ -2126,16 +2082,16 @@ final class DashboardView extends FrameLayout {
     /** Repairs page visibility after window reattachment or a background data refresh. */
     void restoreSelectedPage() {
         if (odDetailsOpen && odDetailsPage != null) {
-            for (ScrollView candidate : pageScrolls) if (candidate != null) candidate.setVisibility(GONE);
+            for (View candidate : pageViews) if (candidate != null) candidate.setVisibility(GONE);
             nav.setVisibility(GONE);
             odDetailsPage.setVisibility(VISIBLE);
             odDetailsPage.bringToFront();
             return;
         }
-        ScrollView selected = pageScrolls[selectedPage];
+        View selected = pageViews[selectedPage];
         if (selected == null) return;
-        for (int i = 0; i < pageScrolls.length; i++) {
-            ScrollView candidate = pageScrolls[i];
+        for (int i = 0; i < pageViews.length; i++) {
+            View candidate = pageViews[i];
             if (candidate == null) continue;
             candidate.animate().cancel();
             candidate.setVisibility(i == selectedPage ? VISIBLE : GONE);
@@ -2193,10 +2149,8 @@ final class DashboardView extends FrameLayout {
 
     private void setFilter(boolean focus) {
         belowOnly = focus;
-        refreshVisibleRows();
-        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !focus);
-        for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, focus);
         actions.onFilter(focus);
+        updateCoursesScreen();
     }
 
     private void settleFeedback(View view) {
@@ -2219,34 +2173,6 @@ final class DashboardView extends FrameLayout {
         }
     }
 
-    private List<View> findTaggedViews(String tag) {
-        ArrayList<View> found = new ArrayList<>();
-        findTagged(this, tag, found);
-        return found;
-    }
-
-    private void findTagged(View view, String tag, List<View> found) {
-        if (tag.equals(view.getTag())) found.add(view);
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) findTagged(group.getChildAt(i), tag, found);
-        }
-    }
-
-    private void updateSearchFields() {
-        setTextWithoutCursorJump(coursesSearch, query);
-        if (allCoursesFilter != null) {
-            allCoursesFilter.setText("All courses · " + state.courses);
-            allCoursesFilter.setContentDescription("Show all " + state.courses + " courses");
-        }
-        if (focusCoursesFilter != null) {
-            focusCoursesFilter.setText("Below target · " + state.below);
-            focusCoursesFilter.setContentDescription("Show courses below your " + state.target + "% target");
-        }
-        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !belowOnly);
-        for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, belowOnly);
-    }
-
     private String courseHeading(Course course) {
         String title = course.name == null ? "" : course.name.trim();
         String code = course.code == null ? "" : course.code.trim();
@@ -2264,23 +2190,11 @@ final class DashboardView extends FrameLayout {
                 : identifier + "Class counts unavailable";
     }
 
-    private void setTextWithoutCursorJump(EditText view, String value) {
-        if (view != null && !view.getText().toString().equals(value)) view.setText(value);
-    }
-
     private void rebuildCourseRows() {
-        int[] scrollY = {pageScrolls[0].getScrollY(), pageScrolls[1].getScrollY()};
         courseViews.clear();
-        courseGroupViews.clear();
-        for (int page = 0; page < courseLists.length; page++) {
-            LinearLayout list = courseLists[page];
-            list.removeAllViews();
-            if (page == 0) rebuildOverviewRows(list);
-            else rebuildGroupedCourseRows(list);
-            final int restore = scrollY[page];
-            final ScrollView scroll = pageScrolls[page];
-            scroll.post(() -> scroll.scrollTo(0, restore));
-        }
+        LinearLayout list = courseLists[0];
+        list.removeAllViews();
+        rebuildOverviewRows(list);
     }
 
     private void rebuildOverviewRows(LinearLayout list) {
@@ -2301,14 +2215,6 @@ final class DashboardView extends FrameLayout {
                     riskCount++;
                 }
             }
-        }
-    }
-
-    private void rebuildGroupedCourseRows(LinearLayout list) {
-        for (CourseGroup group : groupedCourses()) {
-            CourseGroupRow item = new CourseGroupRow(group);
-            courseGroupViews.add(item);
-            list.addView(item.root, topLp(-1, -2, 8));
         }
     }
 
@@ -2338,37 +2244,60 @@ final class DashboardView extends FrameLayout {
     }
 
     private void refreshVisibleRows() {
-        boolean anyVisible = false;
         for (CourseRow row : courseViews) {
             boolean visible = row.overviewPreview || ((!belowOnly || row.course.below) && matches(row.course, query));
             row.root.setVisibility(visible ? VISIBLE : GONE);
         }
-        for (CourseGroupRow row : courseGroupViews) {
-            boolean visible = row.matches();
-            row.root.setVisibility(visible ? VISIBLE : GONE);
-            anyVisible |= visible;
-        }
-        if (coursesEmptyView != null) {
-            coursesEmptyView.setVisibility(anyVisible ? GONE : VISIBLE);
-            if (state.rows.isEmpty()) {
-                coursesEmptyView.setText(state.attendanceLoaded
-                        ? "MyCamu returned no course attendance. Tap here to sync again."
-                        : "Your courses appear here after your first MyCamu sync. Tap to connect.");
-                coursesEmptyView.setContentDescription("Sync MyCamu to load course attendance");
-                coursesEmptyView.setClickable(true);
-                coursesEmptyView.setOnClickListener(v -> {
-                    if (state.sessionExpired) actions.onPortal();
-                    else actions.onSync();
-                });
-            } else {
-                coursesEmptyView.setText(belowOnly && query.trim().isEmpty()
-                        ? "All courses are on track with your attendance target."
-                        : "No courses match this search and filter.");
-                coursesEmptyView.setContentDescription(coursesEmptyView.getText());
-                coursesEmptyView.setClickable(false);
-                coursesEmptyView.setOnClickListener(null);
+        updateCoursesScreen();
+    }
+
+    private void updateCoursesScreen() {
+        if (coursesScreenView != null) coursesScreenView.update(palette.toComposeColors(), coursesScreenState());
+    }
+
+    private CoursesScreenUiState coursesScreenState() {
+        ArrayList<CourseCardUiState> cards = new ArrayList<>();
+        for (CourseGroup group : groupedCourses()) {
+            ArrayList<Course> subjects = new ArrayList<>();
+            subjects.add(group.lecture);
+            subjects.addAll(group.labs);
+            boolean hasMatch = false;
+            boolean hasFocus = false;
+            for (Course subject : subjects) {
+                hasMatch |= matches(subject, query);
+                hasFocus |= subject.below;
             }
+            if (!hasMatch || belowOnly && !hasFocus) continue;
+
+            boolean atRisk = group.priority() < state.target;
+            ArrayList<CourseMetricUiState> metrics = new ArrayList<>();
+            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
+            for (Course subject : subjects) {
+                boolean lab = isLabCourse(subject.code);
+                metrics.add(CourseCardStateMapper.map(subject, lab ? "LAB" : "THEORY", courseHeading(subject)));
+                description.append(". ").append(lab ? "Lab" : "Theory").append(" ")
+                        .append(subject.percentLabel).append(", ").append(subject.counts);
+            }
+            cards.add(new CourseCardUiState(group.lecture.name, group.lecture.code,
+                    courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
+                            + ". Tap to expand course guidance.", description.toString(), metrics));
         }
+
+        String emptyMessage = "";
+        String emptyActionLabel = null;
+        if (state.rows.isEmpty()) {
+            emptyMessage = state.attendanceLoaded
+                    ? "MyCamu returned no course attendance. Tap here to sync again."
+                    : "Your courses appear here after your first MyCamu sync. Tap to connect.";
+            emptyActionLabel = "Sync MyCamu to load course attendance";
+        } else if (cards.isEmpty()) {
+            emptyMessage = belowOnly && query.trim().isEmpty()
+                    ? "All courses are on track with your attendance target."
+                    : "No courses match this search and filter.";
+        }
+        return new CoursesScreenUiState(state.courses + " courses  ·  " + state.below + " below target",
+                query, belowOnly ? CourseFilter.BELOW_TARGET : CourseFilter.ALL,
+                state.courses, state.below, cards, emptyMessage, emptyActionLabel);
     }
 
     private boolean matches(Course course, String needle) {
@@ -3102,49 +3031,6 @@ final class DashboardView extends FrameLayout {
             animate().cancel();
             setScaleX(1f); setScaleY(1f); setAlpha(1f);
             super.onDetachedFromWindow();
-        }
-    }
-
-    private final class CourseGroupRow {
-        final CourseGroup group;
-        final CourseCardView root;
-        private final ArrayList<Course> subjects = new ArrayList<>();
-
-        CourseGroupRow(CourseGroup group) {
-            this.group = group;
-            subjects.add(group.lecture);
-            subjects.addAll(group.labs);
-            boolean atRisk = group.priority() < state.target;
-            ArrayList<CourseMetricUiState> metrics = new ArrayList<>();
-            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
-            for (int i = 0; i < subjects.size(); i++) {
-                Course subject = subjects.get(i);
-                String kind = isLabCourse(subject.code) ? "LAB" : "THEORY";
-                if (isLabCourse(group.lecture.code) && subject == group.lecture) kind = "LAB";
-                metrics.add(CourseCardStateMapper.map(subject, kind, courseHeading(subject)));
-                description.append(". ").append(isLabCourse(subject.code) ? "Lab" : "Theory")
-                        .append(" ").append(subject.percentLabel).append(", ").append(subject.counts);
-            }
-            CourseCardUiState cardState = new CourseCardUiState(
-                    group.lecture.name, group.lecture.code,
-                    courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
-                            + ". Tap to expand course guidance.",
-                    description.toString(), metrics);
-            root = new CourseCardView(getContext(), palette.toComposeColors(), cardState,
-                    code -> { actions.onCourse(code); return kotlin.Unit.INSTANCE; },
-                    code -> { openPlannerFor(code); return kotlin.Unit.INSTANCE; });
-        }
-
-        private void openPlannerFor(String code) { DashboardView.this.openPlannerFor(code); }
-
-        boolean matches() {
-            boolean hasMatch = false;
-            boolean hasFocus = false;
-            for (Course subject : subjects) {
-                hasMatch |= DashboardView.this.matches(subject, query);
-                hasFocus |= subject.below;
-            }
-            return hasMatch && (!belowOnly || hasFocus);
         }
     }
 

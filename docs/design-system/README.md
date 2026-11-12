@@ -20,7 +20,7 @@ Screen components accept immutable UI data and a `Modifier`. The Java bridge may
 
 Provide previews for standalone Compose screens/components where their data can be represented without production services. Preview examples are not production data.
 
-The grouped Courses card is the first Courses component in Compose. It receives Java-computed percentage, Can miss, Must attend, status, progress color and expanded state through `CourseCardUiState`. Search, grouping, filters and event routing stay in `DashboardView`; do not add attendance math to the composable.
+The Courses screen is Compose. Its `LazyColumn`, search field, filter controls, empty state and reused `CourseCard` use shared semantic colors and typography. Java still computes attendance, groups and priority-sorts lecture/lab rows, applies the legacy search/filter behavior, and owns expansion state and callbacks. `CourseCardUiState` contains the existing calculated percentage, Can miss, Must attend, status, progress color and expanded state. Do not add attendance math or a parallel grouping/filter pipeline to composables.
 
 ## Theme switching
 
