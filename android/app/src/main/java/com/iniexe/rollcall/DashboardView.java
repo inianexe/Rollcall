@@ -191,6 +191,7 @@ final class DashboardView extends FrameLayout {
             currentPage = destination;
         }
         @JavascriptInterface public void sync(String unused) { ui(actions::onSync); }
+        @JavascriptInterface public void portal(String unused) { ui(actions::onPortal); }
         @JavascriptInterface public void toggleTheme(String unused) { ui(actions::onTheme); }
         @JavascriptInterface public void reminders(String unused) { ui(actions::onReminderToggle); }
         @JavascriptInterface public void toggleReminders(String unused) { ui(actions::onReminderToggle); }
@@ -236,6 +237,7 @@ final class DashboardView extends FrameLayout {
         json.put("target", s.target);
         json.put("syncing", s.syncing);
         json.put("syncError", s.syncError);
+        json.put("sessionExpired", s.sessionExpired);
         json.put("remindersEnabled", s.remindersEnabled);
         json.put("version", s.version);
         json.put("timetableLoaded", s.timetableLoaded);
