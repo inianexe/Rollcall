@@ -1,6 +1,8 @@
 package com.iniexe.rollcall;
 
 import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
+import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
+import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
 import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
 
 import android.animation.ValueAnimator;
@@ -517,6 +519,7 @@ final class DashboardView extends FrameLayout {
     private LinearLayout overviewDecisionBlock;
     private TextView homeBroadcastStatus;
     private RollcallHeroIdentityView homeHeroComposeView;
+    private UpcomingExamCardView overviewExamComposeView;
 
     /** Literal native reconstruction of the supplied Torch Genesis Home screen. */
     private void buildOverview() {
@@ -665,6 +668,12 @@ final class DashboardView extends FrameLayout {
         overviewExamDetails = text("", 10, muted, Typeface.NORMAL);
         overviewExamDetails.setMaxLines(3);
         overviewExamBlock.addView(overviewExamDetails, topLp(-1, -2, 6));
+        // The visible card is the migrated Compose component; Java placeholders keep data bindings stable.
+        overviewExamBlock.removeAllViews();
+        overviewExamBlock.setPadding(0, 0, 0, 0);
+        overviewExamBlock.setBackgroundColor(Color.TRANSPARENT);
+        overviewExamComposeView = new UpcomingExamCardView(getContext());
+        overviewExamBlock.addView(overviewExamComposeView, lp(-1, -2));
         overviewExamSection.addView(overviewExamBlock, topLp(-1, -2, 12));
         addTop(body, overviewExamSection, 24);
 
@@ -1313,6 +1322,9 @@ final class DashboardView extends FrameLayout {
             overviewExamDetails.setText("Open Marks to connect your academic portal.");
             overviewExamBlock.setOnClickListener(v -> actions.onAcademicsPortal());
             overviewExamBlock.setContentDescription("Connect the KCT portal to see exams");
+            renderComposeExam(false, "CONNECT KCT FOR UPCOMING EXAMS", "", "", "", "",
+                    "Open Marks to connect your academic portal.",
+                    "Connect the KCT portal to see exams", amber);
             return;
         }
         overviewExamBlock.setOnClickListener(v -> showPage(4));
@@ -1325,6 +1337,10 @@ final class DashboardView extends FrameLayout {
             overviewExamDetails.setText("Refresh KCT from Marks & academics to check the latest schedule.");
             overviewExamDetails.setVisibility(VISIBLE);
             overviewExamBlock.setContentDescription("No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.");
+            renderComposeExam(false, "No upcoming exam found", "", "", "", "",
+                    "Refresh KCT from Marks & academics to check the latest schedule.",
+                    "No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.",
+                    amber);
             return;
         }
         overviewExamWhen.setVisibility(VISIBLE);
@@ -1368,6 +1384,19 @@ final class DashboardView extends FrameLayout {
                 + (next.upcomingExamSession.isEmpty() ? "" : ", session " + next.upcomingExamSession)
                 + ", " + overviewExamWhen.getText() + ", " + overviewExamDate.getText()
                 + (details.isEmpty() ? "" : ", " + details));
+        renderComposeExam(true, next.upcomingExamTitle, next.upcomingExamType,
+                next.upcomingExamSession, countdown, format.format(new Date(next.upcomingExamAt)),
+                details, overviewExamBlock.getContentDescription().toString(), sessionColor);
+    }
+
+    private void renderComposeExam(boolean active, String title, String type, String session,
+                                   String countdown, String date, String details,
+                                   String accessibility, int sessionColor) {
+        if (overviewExamComposeView == null) return;
+        overviewExamComposeView.setExamState(new UpcomingExamCardState(
+                active, title, type, session, countdown, date, details, accessibility,
+                ink, muted, surface, soft, border, palette.highlight, hero,
+                ink, statusTint(sessionColor), sessionColor));
     }
 
     private LinearLayout forecastTile(LinearLayout parent, String title) {
