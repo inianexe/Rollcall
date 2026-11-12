@@ -522,7 +522,7 @@ final class DashboardView extends FrameLayout {
         LinearLayout body = newPage(0);
         LinearLayout heroCard = column();
         heroCard.setPadding(dp(22), dp(22), dp(22), dp(18));
-        heroCard.setBackground(shape(hero, 18, 0));
+        heroCard.setBackground(new BroadcastBackgroundDrawable());
         LinearLayout transmission = row();
         transmission.setGravity(Gravity.CENTER_VERTICAL);
         TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 10, heroText, Typeface.BOLD);
@@ -689,7 +689,7 @@ final class DashboardView extends FrameLayout {
         examBadges.setGravity(Gravity.CENTER_VERTICAL);
         overviewExamType = text("", 10, ink, Typeface.BOLD);
         overviewExamType.setPadding(dp(9), dp(5), dp(9), dp(5));
-        overviewExamType.setBackground(shape(0xFF34352B, 7, 0));
+        overviewExamType.setBackground(shape(palette.canvas == 0xFF121212 ? 0xFF34352B : soft, 7, 0));
         examBadges.addView(overviewExamType, lp(-2, -2));
         overviewExamSession = text("", 10, ink, Typeface.BOLD);
         overviewExamSession.setPadding(dp(9), dp(5), dp(9), dp(5));
@@ -806,6 +806,21 @@ final class DashboardView extends FrameLayout {
         FrameLayout.LayoutParams faceParams = new FrameLayout.LayoutParams(dp(78), dp(100), Gravity.CENTER_VERTICAL | Gravity.RIGHT);
         faceParams.rightMargin = dp(10);
         ticket.addView(face, faceParams);
+        // Printed ticket binder rings from the source design, drawn with native shapes.
+        for (int index = 0; index < 2; index++) {
+            View ring = new View(getContext());
+            GradientDrawable metal = new GradientDrawable();
+            metal.setColor(Color.TRANSPARENT);
+            metal.setCornerRadius(dp(11));
+            metal.setStroke(dp(4), 0xFF707775);
+            ring.setBackground(metal);
+            ring.setRotation(-5f);
+            FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(
+                    dp(15), dp(24), Gravity.TOP | Gravity.RIGHT);
+            ringParams.topMargin = dp(6);
+            ringParams.rightMargin = dp(index == 0 ? 68 : 28);
+            ticket.addView(ring, ringParams);
+        }
         homeTicketView = ticket;
         ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         ticket.setFocusable(true);
@@ -2054,7 +2069,8 @@ final class DashboardView extends FrameLayout {
         }
         TextView avatar = text("R", 12, ink, Typeface.BOLD);
         avatar.setGravity(Gravity.CENTER);
-        avatar.setBackground(new android.graphics.drawable.InsetDrawable(shape(0xFF3A3C2F, 100, 0), dp(4)));
+        avatar.setBackground(new android.graphics.drawable.InsetDrawable(
+                shape(palette.canvas == 0xFF121212 ? 0xFF3A3C2F : soft, 100, 0), dp(4)));
         avatar.setContentDescription("About Rollcall and student profile");
         avatar.setFocusable(true);
         avatar.setOnClickListener(v -> actions.onAbout());
@@ -3116,6 +3132,46 @@ final class DashboardView extends FrameLayout {
         @Override public void setAlpha(int alpha) { line.setAlpha(alpha); invalidateSelf(); }
         @Override public void setColorFilter(android.graphics.ColorFilter filter) { line.setColorFilter(filter); invalidateSelf(); }
         @Override public int getOpacity() { return PixelFormat.OPAQUE; }
+    }
+
+    /** Minimal non-animated print marks that appear only inside the lime hero. */
+    private final class BroadcastBackgroundDrawable extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rectangle = new RectF();
+        private final android.graphics.DashPathEffect registration =
+                new android.graphics.DashPathEffect(new float[]{dp(7), dp(8)}, 0f);
+
+        @Override public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            rectangle.set(bounds);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(hero);
+            canvas.drawRoundRect(rectangle, dp(18), dp(18), paint);
+
+            canvas.save();
+            Path clip = new Path();
+            clip.addRoundRect(rectangle, dp(18), dp(18), Path.Direction.CW);
+            canvas.clipPath(clip);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(1));
+            paint.setColor(0x33111111);
+            paint.setPathEffect(registration);
+            canvas.drawCircle(bounds.right + dp(15), bounds.top - dp(35), dp(115), paint);
+            paint.setPathEffect(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(Typeface.create("monospace", Typeface.BOLD));
+            paint.setTextSize(dp(8));
+            paint.setColor(0x99111111);
+            paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText("ROLLCALL / 001", bounds.right - dp(19),
+                    bounds.bottom - dp(10), paint);
+            canvas.restore();
+        }
+        @Override public void setAlpha(int a) { paint.setAlpha(a); invalidateSelf(); }
+        @Override public void setColorFilter(android.graphics.ColorFilter f) {
+            paint.setColorFilter(f); invalidateSelf();
+        }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
     private final class NavBackgroundDrawable extends Drawable {
