@@ -69,8 +69,21 @@
 
 This is a foundation slice, not a completed Compose migration. The app remains predominantly Java Views and must not be described as fully migrated.
 
+## Phase 6A — lifecycle, theme, data, accessibility and performance checkpoint
+
+Phase 6A was run from `22d58c9` on `codex/rollcall-torch-ui`.
+
+- Added production `MainActivityLifecycleTest` using a local offline preference route and sanitized `LiveSnapshotStore` fixtures. It verifies onboarding startup, production dashboard startup, all five tabs, Java-to-Compose updates, Java-computed attendance target changes, theme preference through Activity recreation, existing selected-tab reset behavior, ActivityScenario lifecycle transitions, repeated recreation and Back exit. No portal credentials, cookies or live accounts are used.
+- The connected suite now passes 18/18 instrumentation tests on the isolated `rollcall_phase4b` Android 16/API 36 emulator. JVM tests pass 16/16. Debug, release and instrumentation APK builds pass.
+- Screenshot review covered dark/light Courses at standard width and long course content/font scale on a narrow 320dp layout. The tab labels hide above 1.3× font scale to avoid splitting words; their accessible names remain on the clickable tabs. Large course titles may still visually ellipsize at 1.5×–2.0× while full semantic text remains available.
+- A real hidden-tab animation issue was fixed: Home's Java sync glyph pauses when hidden, resumes when visible, and cancels on detach. The isolated instrumentation test verifies this.
+- Repeated debug startup proxies were collected on the AVD (cold median 1387ms, n=5; warm `WaitTime` median 200ms, n=5) and one debug PSS snapshot was recorded. These are not release benchmarks. Frame/jank and Courses scroll/search/filter/expand timing, recomposition/allocation profiling, repeated memory sampling, process-death persistence, manual TalkBack and live integrations remain unverified.
+- Full details: `docs/testing/PHASE6A_VERIFICATION.md`.
+
+**Status: PARTIALLY VERIFIED.** The tested lifecycle/theme/snapshot/Courses gates pass. Do not call the entire app migrated or begin Week on the strength of these tests alone. Remaining integration and runtime profiling risks are documented.
+
 ## Next safe slices
 
-1. Add production `MainActivity` lifecycle/theme persistence verification without accessing portal credentials or real user data.
-2. Add font-scale/narrow-screen visual review and profile Courses scrolling/search before migrating another dashboard screen.
+1. Add a reproducible Courses performance scenario or profiler trace, including scroll/search and frame timing, on the same isolated AVD.
+2. Perform manual TalkBack and process-death/relaunch checks; verify live external integrations separately with an authorized account only when required.
 3. Continue with Week only after a separate behavior inventory and migration gate.

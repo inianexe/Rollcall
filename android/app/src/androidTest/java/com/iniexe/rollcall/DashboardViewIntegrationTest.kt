@@ -12,6 +12,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import android.view.View
 import android.view.ViewGroup
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import android.os.SystemClock
+import android.animation.ValueAnimator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -184,6 +187,41 @@ class DashboardViewIntegrationTest {
         assertEquals(1, portalOpens)
     }
 
+    @Test fun homeSyncSpinnerPausesOnHiddenTabAndResumesWhenVisible() {
+        val dashboard = DashboardView(compose.activity, object : DashboardView.Actions {
+            override fun onSync() = Unit
+            override fun onPortal() = Unit
+            override fun onAcademicsPortal() = Unit
+            override fun onTarget() = Unit
+            override fun onTheme() = Unit
+            override fun onPalette() = Unit
+            override fun onAbout() = Unit
+            override fun onFilter(belowOnly: Boolean) = Unit
+            override fun onQuery(value: String) = Unit
+            override fun onCourse(code: String) = Unit
+        }, AppPalette.get(false, 0))
+        val state = DashboardView.State().apply { syncing = true }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        lateinit var glyph: View
+        instrumentation.runOnMainSync {
+            compose.activity.setContentView(dashboard)
+            dashboard.update(state)
+            glyph = findByClassName(dashboard, "SyncGlyphView")!!
+        }
+        val spinField = glyph.javaClass.getDeclaredField("spin").apply { isAccessible = true }
+        waitForAnimator(glyph, spinField) { it?.isRunning == true }
+        instrumentation.runOnMainSync { findByDescription(dashboard, "Courses")!!.performClick() }
+        waitForAnimator(glyph, spinField) { it?.isPaused == true }
+        instrumentation.runOnMainSync { findByDescription(dashboard, "Home")!!.performClick() }
+        waitForAnimator(glyph, spinField) { it?.isRunning == true }
+
+        instrumentation.runOnMainSync {
+            state.syncing = false
+            dashboard.update(state)
+        }
+        waitForAnimator(glyph, spinField) { spinField.get(glyph) == null }
+    }
+
     private fun testCourse(code: String, name: String, percent: Float, below: Boolean) =
         DashboardView.Course().apply {
             this.code = code
@@ -222,5 +260,31 @@ class DashboardViewIntegrationTest {
             findByDescription(view.getChildAt(index), description)?.let { return it }
         }
         return null
+    }
+
+    private fun findByClassName(view: View, simpleName: String): View? {
+        if (view.javaClass.simpleName == simpleName) return view
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            findByClassName(view.getChildAt(index), simpleName)?.let { return it }
+        }
+        return null
+    }
+
+    private fun waitForAnimator(
+        glyph: View,
+        field: java.lang.reflect.Field,
+        condition: (ValueAnimator?) -> Boolean,
+    ) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            var matched = false
+            instrumentation.runOnMainSync {
+                matched = condition(field.get(glyph) as? ValueAnimator)
+            }
+            if (matched) return
+            SystemClock.sleep(16)
+        }
+        assertTrue("Sync animator did not reach the expected state", false)
     }
 }

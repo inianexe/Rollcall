@@ -30,7 +30,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.boundsInRoot
@@ -140,8 +139,8 @@ private fun FilterChip(label: String, isSelected: Boolean, modifier: Modifier, b
         color = animateColorAsState(Color(if (isSelected) LocalRollcallColors.current.surface else background),
             animationSpec = tween(RollcallMotion.standardMillis, easing = RollcallMotion.standard), label = "course-filter").value,
         shape = RoundedCornerShape(9.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color(border))) {
-        Text(label, Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp), maxLines = 1,
-            overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = RollcallMono, fontWeight = FontWeight.Bold,
+        Text(label, Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp),
+            style = TextStyle(fontFamily = RollcallMono, fontWeight = FontWeight.Bold,
                 fontSize = 10.sp, color = Color(foreground)))
     }
 }

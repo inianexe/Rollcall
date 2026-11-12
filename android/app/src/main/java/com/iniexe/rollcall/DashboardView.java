@@ -2010,8 +2010,12 @@ final class DashboardView extends FrameLayout {
             icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
             icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             TextView label = text(labels[i], 11, muted, Typeface.NORMAL);
-            label.setSingleLine(true);
-            label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            label.setMaxLines(2);
+            label.setEllipsize(null);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                label.setAutoSizeTextTypeUniformWithConfiguration(8, 11, 1,
+                        android.util.TypedValue.COMPLEX_UNIT_SP);
+            }
             label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             label.setGravity(Gravity.CENTER);
             icon.setVisibility(VISIBLE);
@@ -2121,9 +2125,11 @@ final class DashboardView extends FrameLayout {
 
     private void updateNavigation() {
         nav.setVisibility(odDetailsOpen ? GONE : VISIBLE);
+        boolean showLabels = getResources().getConfiguration().fontScale <= 1.3f;
         boolean selectionChanged = false;
         for (int i = 0; i < navItems.length; i++) {
             TextView item = navItems[i];
+            item.setVisibility(showLabels ? VISIBLE : GONE);
             boolean selected = i == selectedPage;
             selectionChanged |= navTabs[i].isSelected() != selected;
             item.setTypeface(item.getTypeface(), selected ? Typeface.BOLD : Typeface.NORMAL);
@@ -2888,12 +2894,7 @@ final class DashboardView extends FrameLayout {
             boolean motionEnabled = android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled();
             if (loading && motionEnabled) {
                 morphFromSpinner = false;
-                spin = ValueAnimator.ofFloat(rotation, rotation + 360f);
-                spin.setDuration(1200);
-                spin.setRepeatCount(ValueAnimator.INFINITE);
-                spin.setInterpolator(new LinearInterpolator());
-                spin.addUpdateListener(value -> { rotation = (float) value.getAnimatedValue(); invalidate(); });
-                spin.start();
+                startSpinIfVisible();
             } else {
                 if (next == 1 || next == -1) {
                     markProgress = motionEnabled ? 0f : 1f;
@@ -2920,6 +2921,42 @@ final class DashboardView extends FrameLayout {
                 }
             }
             invalidate();
+        }
+
+        private void startSpinIfVisible() {
+            if (state != 0 || !isShown()
+                    || android.os.Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
+            if (spin == null) {
+                spin = ValueAnimator.ofFloat(rotation, rotation + 360f);
+                spin.setDuration(1200);
+                spin.setRepeatCount(ValueAnimator.INFINITE);
+                spin.setInterpolator(new LinearInterpolator());
+                spin.addUpdateListener(value -> { rotation = (float) value.getAnimatedValue(); invalidate(); });
+                spin.start();
+            } else if (spin.isPaused()) {
+                spin.resume();
+            }
+        }
+
+        @Override protected void onVisibilityChanged(View changedView, int visibility) {
+            super.onVisibilityChanged(changedView, visibility);
+            if (isShown()) startSpinIfVisible();
+            else if (spin != null && spin.isRunning()) spin.pause();
+        }
+
+        @Override protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            if (state == 0 && spin == null) startSpinIfVisible();
+        }
+
+        @Override protected void onDetachedFromWindow() {
+            if (spin != null) { spin.cancel(); spin = null; }
+            if (markAnimator != null) { markAnimator.cancel(); markAnimator = null; }
+            if (morphFromSpinner) { morphFromSpinner = false; markProgress = 1f; }
+            if (navIndicatorAnimator != null) { navIndicatorAnimator.cancel(); navIndicatorAnimator = null; }
+            animate().cancel();
+            setScaleX(1f); setScaleY(1f); setAlpha(1f);
+            super.onDetachedFromWindow();
         }
 
         @Override protected void onDraw(Canvas canvas) {
@@ -3015,23 +3052,6 @@ final class DashboardView extends FrameLayout {
             }
         }
 
-        @Override protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            if (state == 0 && spin == null) {
-                state = 2;
-                show(true, false, false);
-            }
-        }
-
-        @Override protected void onDetachedFromWindow() {
-            if (spin != null) { spin.cancel(); spin = null; }
-            if (markAnimator != null) { markAnimator.cancel(); markAnimator = null; }
-            if (morphFromSpinner) { morphFromSpinner = false; markProgress = 1f; }
-            if (navIndicatorAnimator != null) { navIndicatorAnimator.cancel(); navIndicatorAnimator = null; }
-            animate().cancel();
-            setScaleX(1f); setScaleY(1f); setAlpha(1f);
-            super.onDetachedFromWindow();
-        }
     }
 
     private final class AttendanceRail extends View {

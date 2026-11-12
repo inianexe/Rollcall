@@ -71,7 +71,8 @@ fun CourseCard(
                 style = TextStyle(fontFamily = RollcallMono, fontWeight = FontWeight.Bold,
                     fontSize = 17.sp, color = Color(colors.contentPrimary)),
             )
-            val columns = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
+            val columns = if (LocalDensity.current.fontScale > 1f || state.metrics.size == 1 ||
+                state.metrics.any { maxOf(it.canMiss.length, it.mustAttend.length) > 4 }) 1 else 2
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val itemWidth = if (columns == 1) maxWidth else (maxWidth - 8.dp) / 2
                 FlowRow(
@@ -168,7 +169,7 @@ private fun Outcome(label: String, value: String, color: Int, modifier: Modifier
             fontSize = 9.sp, color = Color(colors.contentSecondary)))
         Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = TextStyle(fontFamily = RollcallMono, fontWeight = FontWeight.Bold,
-                fontSize = if (value.length > 5) 10.sp else 18.sp, color = Color(color)))
+                fontSize = if (value.length > 4) 10.sp else 18.sp, color = Color(color)))
     }
 }
 
