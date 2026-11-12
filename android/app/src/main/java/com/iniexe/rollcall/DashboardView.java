@@ -918,7 +918,7 @@ final class DashboardView extends FrameLayout {
 
         LinearLayout summary = column();
         summary.setPadding(dp(18), dp(16), dp(18), dp(16));
-        summary.setBackground(shape(palette.hero, 18, 0));
+        summary.setBackground(new EditorialCalloutDrawable(hero, 0xFF111111, "★", 26));
         summary.addView(label("CGPA", 10, palette.heroMuted, Typeface.BOLD));
         TextView value = text(Double.isNaN(cgpa) ? "—" : String.format(Locale.getDefault(), "%.2f", cgpa) + " / 10",
                 42, palette.heroText, Typeface.BOLD);
@@ -2187,7 +2187,7 @@ final class DashboardView extends FrameLayout {
         card.addView(coursePicker, topLp(-1, dp(56), 12));
         LinearLayout result = column();
         result.setPadding(dp(20), dp(20), dp(20), dp(20));
-        result.setBackground(shape(0xFFC8C8FF, 17, 0));
+        result.setBackground(new EditorialCalloutDrawable(0xFFC8C8FF, 0xFFFF4400, "↗", 38));
         result.addView(label("YOUR ATTENDANCE / PROJECTED", 10, 0xFF111111, Typeface.BOLD));
         LinearLayout comparison = row();
         comparison.setGravity(Gravity.CENTER_VERTICAL);
@@ -3135,6 +3135,44 @@ final class DashboardView extends FrameLayout {
         @Override public void setAlpha(int alpha) { line.setAlpha(alpha); invalidateSelf(); }
         @Override public void setColorFilter(android.graphics.ColorFilter filter) { line.setColorFilter(filter); invalidateSelf(); }
         @Override public int getOpacity() { return PixelFormat.OPAQUE; }
+    }
+
+    /** Non-interactive printed marks from the source's GPA and projection cards. */
+    private final class EditorialCalloutDrawable extends Drawable {
+        private final int background, mark, markAlpha;
+        private final String glyph;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF boundsRect = new RectF();
+
+        EditorialCalloutDrawable(int background, int mark, String glyph, int alpha) {
+            this.background = background;
+            this.mark = mark;
+            this.glyph = glyph;
+            this.markAlpha = alpha;
+        }
+
+        @Override public void draw(Canvas canvas) {
+            Rect area = getBounds();
+            boundsRect.set(area);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(background);
+            canvas.drawRoundRect(boundsRect, dp(17), dp(17), paint);
+            canvas.save();
+            Path clip = new Path();
+            clip.addRoundRect(boundsRect, dp(17), dp(17), Path.Direction.CW);
+            canvas.clipPath(clip);
+            paint.setColor(mark);
+            paint.setAlpha(markAlpha);
+            paint.setTypeface(Typeface.DEFAULT_BOLD);
+            paint.setTextSize(dp(125));
+            paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText(glyph, area.right + dp(15), area.top + dp(97), paint);
+            canvas.restore();
+            paint.setAlpha(255);
+        }
+        @Override public void setAlpha(int alpha) { invalidateSelf(); }
+        @Override public void setColorFilter(android.graphics.ColorFilter filter) { invalidateSelf(); }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
     /** Minimal non-animated print marks that appear only inside the lime hero. */
