@@ -1398,7 +1398,8 @@ final class DashboardView extends FrameLayout {
         if (overviewExamComposeView == null) return;
         overviewExamComposeView.setExamState(new UpcomingExamCardState(
                 active, title, type, session, countdown, date, details, accessibility,
-                ink, muted, surface, soft, border, palette.highlight, hero,
+                ink, muted, surface, soft, border, palette.highlight,
+                palette.canvas == 0xFF121212 ? hero : linkInk,
                 ink, statusTint(sessionColor), sessionColor));
     }
 
