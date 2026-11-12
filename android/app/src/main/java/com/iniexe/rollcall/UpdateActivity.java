@@ -48,7 +48,7 @@ public final class UpdateActivity extends Activity {
 
     private String tag, title, notes, releaseUrl, apkName, downloadUrl, digest;
     private AppPalette palette;
-    private Typeface brandTypeface;
+    private Typeface brandTypeface, brandBoldTypeface;
     private LinearLayout root, content;
     private ProgressBar progressBar;
     private TextView progressLabel, statusLabel, stageLabel, backLabel;
@@ -88,6 +88,8 @@ public final class UpdateActivity extends Activity {
         palette = AppPalette.get(dark, index);
         try { brandTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Regular.ttf"); }
         catch (RuntimeException ignored) { brandTypeface = Typeface.MONOSPACE; }
+        try { brandBoldTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
+        catch (RuntimeException ignored) { brandBoldTypeface = Typeface.create(brandTypeface, Typeface.BOLD); }
         getWindow().setStatusBarColor(palette.canvas);
         getWindow().setNavigationBarColor(palette.canvas);
         getWindow().getDecorView().setSystemUiVisibility(dark ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
@@ -533,7 +535,7 @@ public final class UpdateActivity extends Activity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
-        view.setTypeface(brandTypeface, style);
+        view.setTypeface(style == Typeface.BOLD ? brandBoldTypeface : brandTypeface);
         return view;
     }
 
@@ -550,7 +552,7 @@ public final class UpdateActivity extends Activity {
         button.setText(value);
         button.setTextColor(palette.buttonText);
         button.setAllCaps(false);
-        button.setTypeface(brandTypeface, Typeface.BOLD);
+        button.setTypeface(brandBoldTypeface);
         GradientDrawable background = new GradientDrawable();
         background.setColor(palette.button);
         background.setCornerRadius(dp(10));
