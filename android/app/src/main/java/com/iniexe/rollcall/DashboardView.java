@@ -1,5 +1,15 @@
 package com.iniexe.rollcall;
 
+import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
+import com.iniexe.rollcall.ui.bridge.LatestClassAttendanceCardView;
+import com.iniexe.rollcall.ui.bridge.CourseCardView;
+import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
+import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
+import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState;
+import com.iniexe.rollcall.ui.screens.courses.CourseCardUiState;
+import com.iniexe.rollcall.ui.screens.courses.CourseMetricUiState;
+import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
+
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -104,6 +114,7 @@ final class DashboardView extends FrameLayout {
 
     static final class Course {
         String code = "", name = "", percentLabel = "", status = "", counts = "", guidance = "", targetCount = "";
+        String canMissText = "—", mustAttendText = "—";
         float percent;
         int attended, total, color, odCredit, odCount;
         boolean odReconciled;
@@ -183,7 +194,7 @@ final class DashboardView extends FrameLayout {
     private ModeSwitchButtonView homeThemeButton;
     private final TextView[] navItems = new TextView[5];
 
-    private TextView headlineView, statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
+    private TextView statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
     private TextView allCoursesFilter, focusCoursesFilter;
     private TextView coursesEmptyView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
@@ -197,17 +208,15 @@ final class DashboardView extends FrameLayout {
     private final Runnable classStartRefresh = () -> { updateDecision(); updateOverviewSchedule(); };
     private TextView overviewLeaveSummary;
     private View overviewCourseHeader;
-    private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewAttendanceBlock, overviewExamSection;
-    private LinearLayout overviewExamBlock;
-    private TextView overviewExamTitle, overviewExamWhen, overviewExamDate, overviewExamDetails, overviewExamType, overviewExamSession;
-    private TextView overviewAttendanceTitle, overviewAttendanceCourse, overviewAttendanceStatus;
+    private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewExamSection;
+    private UpcomingExamCardView overviewExamBlock;
+    private LatestClassAttendanceCardView overviewAttendanceBlock;
     private LinearLayout overviewScheduleRows;
     private TextView overviewWeekMeta;
     private WeekPulseView overviewWeekPulse;
     private TextView projectionView, projectionStatusView, plannerCountView;
     private final java.util.Map<String, Float> previousCourseProgress = new java.util.HashMap<>();
-    private TextView welcomeView;
-    private TextView homeDateView, homeWeekNumberView, homeWeekMonthView, homeEncouragementView;
+    private RollcallHeroIdentityView homeHeroIdentity;
     private boolean wasSyncing;
     private PlannerMeter plannerMeter;
     private TextView plannerFeedback;
@@ -340,22 +349,23 @@ final class DashboardView extends FrameLayout {
         historyDirty = true;
         query = next.query == null ? query : next.query;
         belowOnly = next.belowOnly;
-        if (headlineView == null) return;
+        if (homeHeroIdentity == null) return;
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
                         .replaceAll("\\.$", "");
-        headlineView.setText(displayName.toUpperCase(Locale.ROOT) + ".");
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-        welcomeView.setText(greeting + ",");
         SimpleDateFormat broadcastDate = new SimpleDateFormat("EEE / dd MMM", Locale.ENGLISH);
-        homeDateView.setText(broadcastDate.format(new Date()).toUpperCase(Locale.ROOT));
         Calendar currentWeek = Calendar.getInstance();
-        homeWeekNumberView.setText(String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)));
-        homeWeekMonthView.setText(new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT));
-        homeEncouragementView.setText(next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
+        String encouragement = next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
                 : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
-                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.");
+                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.";
+        homeHeroIdentity.setIdentity(new HomeHeroIdentityState(
+                greeting + ",", displayName.toUpperCase(Locale.ROOT) + ".",
+                broadcastDate.format(new Date()).toUpperCase(Locale.ROOT),
+                String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)),
+                new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT),
+                encouragement));
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
@@ -405,15 +415,9 @@ final class DashboardView extends FrameLayout {
             String statusLabel = "present".equals(next.latestClassStatus) ? "Present"
                     : "absent".equals(next.latestClassStatus) ? "Absent"
                     : "not_taken".equals(next.latestClassStatus) ? "Not marked yet" : "Unable to confirm";
-            int statusColor = "present".equals(next.latestClassStatus) ? green
-                    : "absent".equals(next.latestClassStatus) ? red
-                    : "not_taken".equals(next.latestClassStatus) ? amber : muted;
-            overviewAttendanceTitle.setText("LATEST CLASS");
-            overviewAttendanceTitle.setTextColor(muted);
-            overviewAttendanceCourse.setText(next.latestClassName);
-            overviewAttendanceStatus.setText(statusLabel);
-            overviewAttendanceStatus.setTextColor(statusColor);
-            overviewAttendanceStatus.setBackground(shape(statusTint(statusColor), 9, 0));
+            overviewAttendanceBlock.setAttendanceState(new LatestClassAttendanceState(
+                    next.latestClassName, statusLabel, next.latestClassStatus,
+                    "Latest class attendance. " + next.latestClassName + ": " + statusLabel + ". Open attendance history"));
         }
         updateSyncIndicator(next.syncing, next.syncError || next.sessionExpired || next.partialSync, next.syncSucceeded);
         updateSearchFields();
@@ -471,33 +475,8 @@ final class DashboardView extends FrameLayout {
         LinearLayout heroCard = column();
         heroCard.setPadding(dp(16), dp(14), dp(16), dp(14));
         heroCard.setBackground(shape(hero, 18, 0));
-        LinearLayout transmission = row();
-        transmission.setGravity(Gravity.CENTER_VERTICAL);
-        TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 9, heroMuted, Typeface.BOLD);
-        transmission.addView(transmissionLabel, new LinearLayout.LayoutParams(0, -2, 1));
-        homeDateView = text("THU / 12 NOV", 9, heroText, Typeface.BOLD);
-        homeDateView.setGravity(Gravity.CENTER);
-        homeDateView.setPadding(dp(8), dp(6), dp(8), dp(6));
-        homeDateView.setBackground(shape(hero, 100, heroText));
-        transmission.addView(homeDateView, lp(-2, -2));
-        heroCard.addView(transmission);
-
-        LinearLayout identityRow = row();
-        identityRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout identity = column();
-        welcomeView = text("Good afternoon,", 11, heroMuted, Typeface.NORMAL);
-        identity.addView(welcomeView);
-        headlineView = text("MyCamu student", 24, heroText, Typeface.BOLD);
-        headlineView.setLetterSpacing(-.04f);
-        headlineView.setMaxLines(1);
-        headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        identity.addView(headlineView, topLp(-1, -2, 4));
-        homeEncouragementView = text("ONE CLASS AT A TIME. YOUR WEEK, DECODED.", 9, heroMuted, Typeface.BOLD);
-        homeEncouragementView.setMaxLines(2);
-        identity.addView(homeEncouragementView, topLp(-1, -2, 3));
-        identityRow.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
-        identityRow.addView(homeWeekTicket(), lp(dp(104), dp(112)));
-        heroCard.addView(identityRow, topLp(-1, -2, 12));
+        homeHeroIdentity = new RollcallHeroIdentityView(getContext(), palette.toComposeColors());
+        heroCard.addView(homeHeroIdentity, lp(-1, -2));
 
         LinearLayout syncLine = row();
         syncLine.setGravity(Gravity.CENTER_VERTICAL);
@@ -598,46 +577,7 @@ final class DashboardView extends FrameLayout {
         radarHeading.addView(radarTitle, new LinearLayout.LayoutParams(0, -2, 1));
         radarHeading.addView(label("01 / EXAM", 9, palette.highlight, Typeface.BOLD));
         overviewExamSection.addView(radarHeading);
-        overviewExamBlock = column();
-        overviewExamBlock.setPadding(dp(16), dp(14), dp(16), dp(14));
-        overviewExamBlock.setBackground(industrialSurface(surface, 18, border));
-        overviewExamBlock.addView(label("UPCOMING EXAM", 10, lime, Typeface.BOLD));
-        overviewExamTitle = text("", 17, ink, Typeface.BOLD);
-        overviewExamTitle.setMaxLines(2);
-        overviewExamTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamBlock.addView(overviewExamTitle, topLp(-1, -2, 5));
-        LinearLayout examBadges = row();
-        examBadges.setGravity(Gravity.CENTER_VERTICAL);
-        overviewExamType = text("", 10, muted, Typeface.BOLD);
-        overviewExamType.setPadding(dp(9), dp(5), dp(9), dp(5));
-        overviewExamType.setBackground(shape(soft, 8, 0));
-        examBadges.addView(overviewExamType, lp(-2, -2));
-        overviewExamSession = text("", 10, ink, Typeface.BOLD);
-        overviewExamSession.setPadding(dp(9), dp(5), dp(9), dp(5));
-        LinearLayout.LayoutParams sessionParams = lp(-2, -2);
-        sessionParams.leftMargin = dp(6);
-        examBadges.addView(overviewExamSession, sessionParams);
-        overviewExamBlock.addView(examBadges, topLp(-1, -2, 7));
-        LinearLayout examTiming = row();
-        examTiming.setGravity(Gravity.CENTER_VERTICAL);
-        overviewExamWhen = text("", 13, heroText, Typeface.BOLD);
-        overviewExamWhen.setPadding(dp(11), dp(7), dp(11), dp(7));
-        overviewExamWhen.setBackground(shape(hero, 10, 0));
-        examTiming.addView(overviewExamWhen, lp(-2, -2));
-        overviewExamDate = text("", 13, ink, Typeface.BOLD);
-        overviewExamDate.setPadding(dp(10), dp(7), dp(10), dp(7));
-        overviewExamDate.setSingleLine(true);
-        overviewExamDate.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamDate.setBackground(shape(soft, 10, border));
-        LinearLayout.LayoutParams examDateParams = new LinearLayout.LayoutParams(0, -2, 1f);
-        examDateParams.leftMargin = dp(8);
-        examTiming.addView(overviewExamDate, examDateParams);
-        overviewExamBlock.addView(examTiming, topLp(-1, -2, 8));
-        overviewExamDetails = text("", 11, muted, Typeface.NORMAL);
-        overviewExamDetails.setMaxLines(2);
-        overviewExamDetails.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamBlock.addView(overviewExamDetails, topLp(-1, -2, 3));
-        overviewExamBlock.setVisibility(GONE);
+        overviewExamBlock = new UpcomingExamCardView(getContext(), palette.toComposeColors());
         overviewExamSection.addView(overviewExamBlock, topLp(-1, -2, 8));
         addTop(body, overviewExamSection, 14);
 
@@ -659,25 +599,9 @@ final class DashboardView extends FrameLayout {
         overviewWeekBlock.setVisibility(GONE);
         addTop(body, overviewWeekBlock, 18);
 
-        overviewAttendanceBlock = column();
-        overviewAttendanceBlock.setPadding(dp(12), dp(9), dp(12), dp(9));
-        overviewAttendanceBlock.setBackground(industrialSurface(soft, 12, 0));
-        overviewAttendanceTitle = label("LAST CLASS", 11, muted, Typeface.BOLD);
-        overviewAttendanceBlock.addView(overviewAttendanceTitle);
-        LinearLayout latestClassRow = row();
-        latestClassRow.setGravity(Gravity.CENTER_VERTICAL);
-        overviewAttendanceCourse = text("", 12, ink, Typeface.BOLD);
-        overviewAttendanceCourse.setMaxLines(2);
-        overviewAttendanceCourse.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        latestClassRow.addView(overviewAttendanceCourse, new LinearLayout.LayoutParams(0, -2, 1));
-        overviewAttendanceStatus = text("", 10, ink, Typeface.BOLD);
-        overviewAttendanceStatus.setGravity(Gravity.CENTER);
-        overviewAttendanceStatus.setPadding(dp(9), dp(5), dp(9), dp(5));
-        latestClassRow.addView(overviewAttendanceStatus, lp(-2, -2));
-        overviewAttendanceBlock.addView(latestClassRow, topLp(-1, -2, 3));
+        overviewAttendanceBlock = new LatestClassAttendanceCardView(getContext(), palette.toComposeColors(),
+                () -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
         overviewAttendanceBlock.setVisibility(GONE);
-        overviewAttendanceBlock.setOnClickListener(v -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
-        overviewAttendanceBlock.setContentDescription("Latest class attendance. Open attendance history");
         addTop(body, overviewAttendanceBlock, 10);
 
         overviewCourseHeader = overviewSectionHeader("Below target", "All courses", () -> showPage(1));
@@ -697,35 +621,6 @@ final class DashboardView extends FrameLayout {
         overviewLeaveBlock.setVisibility(VISIBLE);
         addTop(body, overviewLeaveBlock, 14);
         addBottom(body, 24);
-    }
-
-    private FrameLayout homeWeekTicket() {
-        FrameLayout ticket = new FrameLayout(getContext());
-        View backing = new View(getContext());
-        backing.setBackground(shape(0xFFC8C8FF, 8, 0xFF121212));
-        backing.setRotation(9f);
-        FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(82), dp(102), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        backParams.rightMargin = dp(2);
-        ticket.addView(backing, backParams);
-        LinearLayout face = column();
-        face.setGravity(Gravity.CENTER_HORIZONTAL);
-        face.setPadding(dp(8), dp(9), dp(8), dp(8));
-        face.setBackground(shape(0xFFF1EEDA, 8, 0xFF121212));
-        face.setRotation(-4f);
-        TextView weekLabel = text("THE / WEEK", 7, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView = text("46", 34, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView.setIncludeFontPadding(false);
-        TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
-        homeWeekMonthView = text("NOVEMBER", 7, 0xFF121212, Typeface.BOLD);
-        face.addView(weekLabel);
-        face.addView(homeWeekNumberView, topLp(-1, -2, 4));
-        face.addView(ticketRule, topLp(-1, -2, 1));
-        face.addView(homeWeekMonthView, topLp(-1, -2, 2));
-        FrameLayout.LayoutParams faceParams = new FrameLayout.LayoutParams(dp(78), dp(100), Gravity.CENTER_VERTICAL | Gravity.RIGHT);
-        faceParams.rightMargin = dp(10);
-        ticket.addView(face, faceParams);
-        ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        return ticket;
     }
 
     private void buildCoursesPage() {
@@ -1177,29 +1072,14 @@ final class DashboardView extends FrameLayout {
                 && !next.upcomingExamTitle.isEmpty();
         boolean connected = next.academicConnected || !next.academicCourses.isEmpty();
         overviewExamSection.setVisibility(connected ? VISIBLE : GONE);
-        overviewExamBlock.setVisibility(connected ? VISIBLE : GONE);
         if (!connected) return;
         if (!upcoming) {
-            overviewExamTitle.setText("No upcoming exam found");
-            overviewExamType.setVisibility(GONE);
-            overviewExamSession.setVisibility(GONE);
-            overviewExamWhen.setVisibility(GONE);
-            overviewExamDate.setVisibility(GONE);
-            overviewExamDetails.setText("Refresh KCT from Marks & academics to check the latest schedule.");
-            overviewExamDetails.setVisibility(VISIBLE);
-            overviewExamBlock.setContentDescription("No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.");
+            overviewExamBlock.setExamState(new UpcomingExamCardState(
+                    false, "No upcoming exam found", "", "", "", "",
+                    "Refresh KCT from Marks & academics to check the latest schedule.",
+                    "No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule."));
             return;
         }
-        overviewExamWhen.setVisibility(VISIBLE);
-        overviewExamDate.setVisibility(VISIBLE);
-        overviewExamTitle.setText(next.upcomingExamTitle);
-        overviewExamType.setText(next.upcomingExamType);
-        overviewExamType.setVisibility(next.upcomingExamType.isEmpty() ? GONE : VISIBLE);
-        overviewExamSession.setText(next.upcomingExamSession);
-        overviewExamSession.setVisibility(next.upcomingExamSession.isEmpty() ? GONE : VISIBLE);
-        int sessionColor = "AN".equals(next.upcomingExamSession) ? palette.highlight : amber;
-        overviewExamSession.setTextColor(sessionColor);
-        overviewExamSession.setBackground(shape(statusTint(sessionColor), 8, 0));
         SimpleDateFormat format = new SimpleDateFormat(next.upcomingExamHasTime
                 ? "EEE, d MMM · h:mm a" : "EEE, d MMM", Locale.getDefault());
         java.util.Calendar day = java.util.Calendar.getInstance();
@@ -1219,18 +1099,17 @@ final class DashboardView extends FrameLayout {
             daysUntil++;
         }
         String countdown = daysUntil == 0 ? "Today" : daysUntil == 1 ? "Tomorrow" : "In " + daysUntil + " days";
-        overviewExamWhen.setText(countdown);
-        overviewExamDate.setText(format.format(new Date(next.upcomingExamAt)));
+        String examDate = format.format(new Date(next.upcomingExamAt));
         String details = next.upcomingExamCode;
         if (!next.upcomingExamDetails.isEmpty())
             details += (details.isEmpty() ? "" : " · ") + next.upcomingExamDetails;
-        overviewExamDetails.setText(details);
-        overviewExamDetails.setVisibility(details.isEmpty() ? GONE : VISIBLE);
-        overviewExamBlock.setContentDescription("Upcoming exam: " + next.upcomingExamTitle
+        String accessibleDescription = "Upcoming exam: " + next.upcomingExamTitle
                 + (next.upcomingExamType.isEmpty() ? "" : ", " + next.upcomingExamType)
                 + (next.upcomingExamSession.isEmpty() ? "" : ", session " + next.upcomingExamSession)
-                + ", " + overviewExamWhen.getText() + ", " + overviewExamDate.getText()
-                + (details.isEmpty() ? "" : ", " + details));
+                + ", " + countdown + ", " + examDate + (details.isEmpty() ? "" : ", " + details);
+        overviewExamBlock.setExamState(new UpcomingExamCardState(
+                true, next.upcomingExamTitle, next.upcomingExamType, next.upcomingExamSession,
+                countdown, examDate, details, accessibleDescription));
     }
 
     private LinearLayout forecastTile(LinearLayout parent, String title) {
@@ -3228,84 +3107,35 @@ final class DashboardView extends FrameLayout {
 
     private final class CourseGroupRow {
         final CourseGroup group;
-        final LinearLayout root;
+        final CourseCardView root;
         private final ArrayList<Course> subjects = new ArrayList<>();
 
         CourseGroupRow(CourseGroup group) {
             this.group = group;
-            root = card();
-            root.setPadding(dp(16), dp(14), dp(16), dp(14));
             subjects.add(group.lecture);
             subjects.addAll(group.labs);
-
-            LinearLayout header = row();
-            header.setGravity(Gravity.CENTER_VERTICAL);
-            TextView courseName = text(group.lecture.name, 17, ink, Typeface.BOLD);
-            courseName.setMaxLines(2);
-            courseName.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            header.addView(courseName, new LinearLayout.LayoutParams(0, -2, 1));
             boolean atRisk = group.priority() < state.target;
-            header.setOnClickListener(v -> actions.onCourse(group.lecture.code));
-            header.setContentDescription(courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
-                    + ". Tap to expand course guidance.");
-            root.addView(header);
-
-            LinearLayout meters = row();
+            ArrayList<CourseMetricUiState> metrics = new ArrayList<>();
+            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
             for (int i = 0; i < subjects.size(); i++) {
                 Course subject = subjects.get(i);
                 String kind = isLabCourse(subject.code) ? "LAB" : "THEORY";
                 if (isLabCourse(group.lecture.code) && subject == group.lecture) kind = "LAB";
-                LinearLayout metric = metric(subject, kind);
-                LinearLayout.LayoutParams metricParams = new LinearLayout.LayoutParams(0, -2, 1);
-                if (i > 0) metricParams.leftMargin = dp(7);
-                meters.addView(metric, metricParams);
-            }
-            root.addView(meters, topLp(-1, -2, 4));
-            for (Course subject : subjects) {
-                if (!subject.expanded) continue;
-                TextView guidance = text(subject.guidance, 10, muted, Typeface.NORMAL);
-                guidance.setPadding(dp(2), dp(8), dp(2), 0);
-                guidance.setContentDescription(subject.status + ". " + subject.guidance);
-                root.addView(guidance);
-                TextView planner = text("Try in What if?  →", 12, green, Typeface.BOLD);
-                planner.setPadding(dp(2), dp(8), 0, dp(8));
-                planner.setMinHeight(dp(48));
-                planner.setGravity(Gravity.CENTER_VERTICAL);
-                planner.setOnClickListener(v -> openPlannerFor(subject.code));
-                root.addView(planner);
-            }
-            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
-            for (Course subject : subjects) {
+                metrics.add(CourseCardStateMapper.map(subject, kind, courseHeading(subject)));
                 description.append(". ").append(isLabCourse(subject.code) ? "Lab" : "Theory")
                         .append(" ").append(subject.percentLabel).append(", ").append(subject.counts);
             }
-            root.setContentDescription(description.toString());
-            root.setFocusable(true);
+            CourseCardUiState cardState = new CourseCardUiState(
+                    group.lecture.name, group.lecture.code,
+                    courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
+                            + ". Tap to expand course guidance.",
+                    description.toString(), metrics);
+            root = new CourseCardView(getContext(), palette.toComposeColors(), cardState,
+                    code -> { actions.onCourse(code); return kotlin.Unit.INSTANCE; },
+                    code -> { openPlannerFor(code); return kotlin.Unit.INSTANCE; });
         }
 
-        private LinearLayout metric(Course subject, String kind) {
-            LinearLayout box = column();
-            box.setPadding(0, dp(5), 0, dp(5));
-            box.setFocusable(true);
-            TextView type = text(kind + (subject.code.isEmpty() ? "" : " · " + subject.code), 9, muted, Typeface.BOLD);
-            type.setMaxLines(1);
-            type.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            box.addView(type);
-            TextView allowance = text(subject.targetCount.isEmpty() ? "—" : subject.targetCount,
-                    21, ink, Typeface.BOLD);
-            allowance.setMaxLines(1);
-            allowance.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            box.addView(allowance, topLp(-1, -2, 3));
-            AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code, subject.percent, subject.color);
-            meter.setContentDescription("Attendance " + subject.percentLabel);
-            box.addView(meter, topLp(-1, dp(7), 4));
-            String detail = subject.countsKnown ? subject.percentLabel + " · " + subject.attended + " / " + subject.total + " attended"
-                    : "Attendance counts unavailable";
-            box.addView(text(detail, 10, muted, Typeface.NORMAL), topLp(-1, -2, 4));
-            box.setContentDescription(kind + " attendance for " + courseHeading(subject) + ": " + subject.percentLabel + ", " + subject.targetCount);
-            box.setOnClickListener(v -> actions.onCourse(subject.code));
-            return box;
-        }
+        private void openPlannerFor(String code) { DashboardView.this.openPlannerFor(code); }
 
         boolean matches() {
             boolean hasMatch = false;
