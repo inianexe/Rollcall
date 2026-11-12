@@ -1,0 +1,52 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <application android:theme="@style/RollcallTheme" android:label="Rollcall" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:usesCleartextTraffic="false">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <activity android:name=".UpdateActivity" android:exported="false" android:parentActivityName=".MainActivity" />
+        <service android:name=".ReleaseUpdateMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="com.iniexe.rollcall.updates" android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_file_paths" />
+        </provider>
+        <receiver android:name=".ClassReminderReceiver" android:exported="false"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="com.iniexe.rollcall.CLASS_REMINDER" />
+                <action android:name="com.iniexe.rollcall.RESCHEDULE_REMINDERS" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".RollcallTodayWidget" android:label="@string/widget_next_picker" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rollcall_today_widget_info" />
+        </receiver>
+        <receiver android:name=".AttendanceHealthWidget" android:label="@string/widget_attendance_picker" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rollcall_attendance_widget_info" />
+        </receiver>
+        <receiver android:name=".RollcallWeekWidget" android:label="@string/widget_week_picker" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rollcall_week_widget_info" />
+        </receiver>
+        <receiver android:name=".RollcallStreakWidget" android:label="@string/widget_streak_picker" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rollcall_streak_widget_info" />
+        </receiver>
+        <receiver android:name=".RollcallReminderWidget" android:label="@string/widget_reminder_picker" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rollcall_reminder_widget_info" />
+        </receiver>
+    </application>
+</manifest>

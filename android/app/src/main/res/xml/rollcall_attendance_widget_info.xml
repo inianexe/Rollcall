@@ -1,0 +1,12 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_attendance_description"
+    android:initialLayout="@layout/widget_attendance"
+    android:previewLayout="@layout/widget_attendance"
+    android:minWidth="120dp"
+    android:minHeight="76dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="60dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

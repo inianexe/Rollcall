@@ -1,0 +1,68 @@
+plugins {
+    id 'com.android.application'
+    id 'com.google.gms.google-services'
+}
+
+def releaseSigningPropertiesFile = new File(System.getProperty('user.home'), '.config/rollcall/release-signing.properties')
+def releaseSigningProperties = new Properties()
+if (releaseSigningPropertiesFile.isFile()) {
+    releaseSigningPropertiesFile.withInputStream { releaseSigningProperties.load(it) }
+}
+def releasePasswordFile = releaseSigningProperties.getProperty('passwordFile')
+def releasePassword = releasePasswordFile ? new File(releasePasswordFile) : null
+def releaseSigningReady = releaseSigningPropertiesFile.isFile() && releaseSigningProperties.getProperty('storeFile') && releaseSigningProperties.getProperty('keyAlias') && releasePassword?.isFile()
+
+android {
+    namespace 'com.iniexe.rollcall'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.iniexe.rollcall'
+        minSdk 23
+        targetSdk 35
+        versionCode 24
+        versionName '1.0.23'
+        buildConfigField 'String', 'ROLLCALL_API_BASE_URL', '"' + (project.findProperty('rollcallApiBaseUrl') ?: 'https://rollcall-campus-companion.pages.dev/api') + '"'
+    }
+
+    signingConfigs {
+        release {
+            if (releaseSigningReady) {
+                storeFile file(releaseSigningProperties.getProperty('storeFile'))
+                storePassword releasePassword.text.trim()
+                keyAlias releaseSigningProperties.getProperty('keyAlias')
+                keyPassword releasePassword.text.trim()
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+    buildFeatures { buildConfig true }
+}
+
+tasks.register('requireReleaseSigning') {
+    doLast {
+        if (!releaseSigningReady) {
+            throw new GradleException('Release signing is not configured. See android/README.md for the local signing setup.')
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == 'packageRelease' || task.name == 'bundleRelease') {
+        task.dependsOn('requireReleaseSigning')
+    }
+}
+
+dependencies {
+    implementation 'androidx.work:work-runtime:2.10.0'
+    implementation platform('com.google.firebase:firebase-bom:34.19.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-auth'
+    testImplementation 'junit:junit:4.13.2'
+}

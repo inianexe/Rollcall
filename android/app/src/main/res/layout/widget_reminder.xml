@@ -1,0 +1,21 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@color/rollcall_widget_surface">
+
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_kicker" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/widget_reminder_title" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.12" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_reminder_status" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginTop="5dp" android:text="@string/widget_reminders_on" android:textSize="26sp" android:textStyle="bold" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_reminder_permission" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="1dp" android:maxLines="2" android:textSize="11sp" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_reminder_next" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="9dp" android:ellipsize="end" android:maxLines="2" android:textSize="13sp" android:textStyle="bold" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_reminder_later" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="5dp" android:ellipsize="end" android:maxLines="2" android:lineSpacingExtra="3dp" android:textSize="11sp" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_updated" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:text="@string/widget_waiting_for_sync" android:textSize="10sp" />
+</LinearLayout>

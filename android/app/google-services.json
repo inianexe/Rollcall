@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "761627592440",
+    "project_id": "rollcall-ab5d1",
+    "storage_bucket": "rollcall-ab5d1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:761627592440:android:7b95a4de8a3bda0eb21d0d",
+        "android_client_info": {
+          "package_name": "com.iniexe.rollcall"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBajb8dJ7RaSA5I61rr_EaXrvAPit_rNDE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
