@@ -208,6 +208,7 @@ final class DashboardView extends FrameLayout {
     private final java.util.Map<String, Float> previousCourseProgress = new java.util.HashMap<>();
     private TextView welcomeView;
     private TextView homeDateView, homeWeekNumberView, homeWeekMonthView, homeTicketLabelView, homeEncouragementView;
+    private TextView broadcastStatusView, broadcastCaptionView, broadcastNextView;
     private FrameLayout homeTicketView;
     private int homeTicketDestination = 2;
     private final int linkInk;
@@ -347,7 +348,14 @@ final class DashboardView extends FrameLayout {
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
                         .replaceAll("\\.$", "");
-        headlineView.setText(displayName.toUpperCase(Locale.ROOT) + ".");
+        String name = displayName.toUpperCase(Locale.ROOT);
+        String heroHeadline = name + ".\nYOU GOT THIS.";
+        SpannableString heroSpans = new SpannableString(heroHeadline);
+        heroSpans.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                name.length(), name.length() + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        heroSpans.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                heroHeadline.length() - 1, heroHeadline.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        headlineView.setText(heroSpans);
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
         welcomeView.setText(greeting + ",");
@@ -384,9 +392,21 @@ final class DashboardView extends FrameLayout {
                     + new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH).format(displayedDate)
                     + ". Open " + (homeTicketDestination == 4 ? "marks and exams" : "your week"));
         }
-        homeEncouragementView.setText(next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
-                : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
-                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.");
+        homeEncouragementView.setText("One class at a time. Your academic week, decoded.");
+        if (broadcastStatusView != null) {
+            if (!next.attendanceLoaded) {
+                broadcastStatusView.setText("WAITING ↗");
+                broadcastCaptionView.setText("Connect to see your snapshot");
+            } else if (next.below > 0) {
+                broadcastStatusView.setText(next.below + " NEED FOCUS");
+                broadcastCaptionView.setText("Courses below your target");
+            } else {
+                broadcastStatusView.setText("ON TRACK ↗");
+                broadcastCaptionView.setText("Academic snapshot");
+            }
+            broadcastNextView.setText(next.upcomingExamAt > System.currentTimeMillis()
+                    ? "One exam.\nOne step\nahead." : "Don't miss\nyour next\nmove.");
+        }
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
@@ -405,7 +425,7 @@ final class DashboardView extends FrameLayout {
             statusView.announceForAccessibility("Attendance updated. You’re ready to plan.");
             settleFeedback(statusView);
         }
-        statusView.setTextColor(next.syncError ? 0xFF762B1E : next.syncing ? 0xFF704400 : heroMuted);
+        statusView.setTextColor(heroText);
         statusView.setContentDescription(next.syncError ? "Attendance refresh failed. " + next.status : next.status);
         statusView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         statusView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
@@ -500,11 +520,11 @@ final class DashboardView extends FrameLayout {
     private void buildOverview() {
         LinearLayout body = newPage(0);
         LinearLayout heroCard = column();
-        heroCard.setPadding(dp(16), dp(14), dp(16), dp(14));
+        heroCard.setPadding(dp(22), dp(22), dp(22), dp(18));
         heroCard.setBackground(shape(hero, 18, 0));
         LinearLayout transmission = row();
         transmission.setGravity(Gravity.CENTER_VERTICAL);
-        TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 9, heroMuted, Typeface.BOLD);
+        TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 10, heroText, Typeface.BOLD);
         transmission.addView(transmissionLabel, new LinearLayout.LayoutParams(0, -2, 1));
         homeDateView = text("THU / 12 NOV", 9, heroText, Typeface.BOLD);
         homeDateView.setGravity(Gravity.CENTER);
@@ -516,26 +536,26 @@ final class DashboardView extends FrameLayout {
         LinearLayout identityRow = row();
         identityRow.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout identity = column();
-        welcomeView = text("Good afternoon,", 11, heroMuted, Typeface.NORMAL);
+        welcomeView = text("Good afternoon,", 11, 0xFF343A26, Typeface.NORMAL);
         identity.addView(welcomeView);
-        headlineView = text("MyCamu student", 24, heroText, Typeface.BOLD);
-        headlineView.setLetterSpacing(-.04f);
-        headlineView.setMaxLines(1);
+        headlineView = text("YOU GOT THIS.", 25, heroText, Typeface.BOLD);
+        headlineView.setLetterSpacing(-.07f);
+        headlineView.setMaxLines(4);
         headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         identity.addView(headlineView, topLp(-1, -2, 4));
-        homeEncouragementView = text("ONE CLASS AT A TIME. YOUR WEEK, DECODED.", 9, heroMuted, Typeface.BOLD);
-        homeEncouragementView.setMaxLines(2);
+        homeEncouragementView = text("One class at a time. Your academic week, decoded.", 10, heroText, Typeface.NORMAL);
+        homeEncouragementView.setMaxLines(3);
         identity.addView(homeEncouragementView, topLp(-1, -2, 3));
         identityRow.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
-        identityRow.addView(homeWeekTicket(), lp(dp(104), dp(112)));
-        heroCard.addView(identityRow, topLp(-1, -2, 12));
+        identityRow.addView(homeWeekTicket(), lp(dp(112), dp(140)));
+        heroCard.addView(identityRow, topLp(-1, -2, 14));
 
         LinearLayout syncLine = row();
         syncLine.setGravity(Gravity.CENTER_VERTICAL);
         statusView = text("", 10, heroMuted, Typeface.NORMAL);
         syncLine.addView(statusView, new LinearLayout.LayoutParams(0, -2, 1));
         dashboardSyncButton = new FrameLayout(getContext());
-        dashboardSyncButton.setBackground(shape(0x223F4B16, 100, 0x663F4B16));
+        dashboardSyncButton.setBackground(shape(0x33FFFFFF, 100, 0x55111111));
         dashboardSyncButton.setClickable(true);
         dashboardSyncButton.setFocusable(true);
         dashboardSyncGlyph = new SyncGlyphView(getContext());
@@ -546,6 +566,33 @@ final class DashboardView extends FrameLayout {
         syncLine.addView(dashboardSyncButton, lp(dp(48), dp(48)));
         heroCard.addView(syncLine, topLp(-1, -2, 8));
         addTop(body, heroCard, 10);
+
+        // HTML reference: two-card STATUS / LIVE and WHAT'S NEXT? broadcast beneath the hero.
+        LinearLayout broadcasts = row();
+        LinearLayout live = column();
+        live.setPadding(dp(15), dp(13), dp(13), dp(14));
+        live.setBackground(shape(surface, 15, border));
+        live.addView(label("STATUS / LIVE", 9, muted, Typeface.BOLD));
+        broadcastStatusView = text("WAITING ↗", 18, palette.button, Typeface.BOLD);
+        broadcastStatusView.setMaxLines(2);
+        broadcastStatusView.setLetterSpacing(-.045f);
+        live.addView(broadcastStatusView, topLp(-1, -2, 10));
+        broadcastCaptionView = text("Academic snapshot", 9, muted, Typeface.NORMAL);
+        live.addView(broadcastCaptionView, topLp(-1, -2, 5));
+        broadcasts.addView(live, new LinearLayout.LayoutParams(0, dp(112), 1f));
+        LinearLayout whatsNext = column();
+        whatsNext.setPadding(dp(15), dp(13), dp(10), dp(10));
+        whatsNext.setBackground(shape(0xFFC8C8FF, 15, 0xFF111111));
+        whatsNext.addView(label("WHAT'S NEXT?  ✱", 9, 0xFF111111, Typeface.BOLD));
+        broadcastNextView = text("Don't miss\nyour next\nmove.", 15, 0xFF111111, Typeface.BOLD);
+        broadcastNextView.setLetterSpacing(-.05f);
+        whatsNext.addView(broadcastNextView, topLp(-1, -2, 7));
+        whatsNext.setOnClickListener(v -> showPage(2));
+        setTactileFeedback(whatsNext);
+        LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(0, dp(112), 1f);
+        nextParams.leftMargin = dp(10);
+        broadcasts.addView(whatsNext, nextParams);
+        addTop(body, broadcasts, 11);
         courseLists[0] = column();
         LinearLayout summary = column();
         summary.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -619,22 +666,22 @@ final class DashboardView extends FrameLayout {
         });
         setTactileFeedback(decisionAction);
         summary.addView(decisionAction, topLp(-1, -2, 14));
-        addTop(body, summary, 12);
+        // Keep the interactive next-class forecast, but lower in the broadcast hierarchy.
 
         overviewExamSection = column();
         LinearLayout radarHeading = row();
         radarHeading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView radarTitle = text("On your radar", 17, ink, Typeface.BOLD);
+        TextView radarTitle = text("On your radar", 21, ink, Typeface.BOLD);
         radarTitle.setTypeface(displayTypeface, Typeface.BOLD);
         radarHeading.addView(radarTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        radarHeading.addView(label("01 / EXAM", 9, palette.highlight, Typeface.BOLD));
+        radarHeading.addView(label("01 / EXAM", 10, palette.highlight, Typeface.BOLD));
         overviewExamSection.addView(radarHeading);
         overviewExamBlock = column();
         overviewExamBlock.setPadding(dp(16), dp(14), dp(16), dp(14));
-        overviewExamBlock.setBackground(industrialSurface(surface, 18, border));
-        overviewExamBlock.addView(label("UPCOMING EXAM", 10, lime, Typeface.BOLD));
+        overviewExamBlock.setBackground(industrialSurface(surface, 16, border));
+        overviewExamBlock.addView(label("● UPCOMING EXAM", 10, palette.highlight, Typeface.BOLD));
         overviewExamTitle = text("", 17, ink, Typeface.BOLD);
-        overviewExamTitle.setMaxLines(2);
+        overviewExamTitle.setMaxLines(4);
         overviewExamTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         overviewExamBlock.addView(overviewExamTitle, topLp(-1, -2, 5));
         LinearLayout examBadges = row();
@@ -692,7 +739,7 @@ final class DashboardView extends FrameLayout {
 
         overviewAttendanceBlock = column();
         overviewAttendanceBlock.setPadding(dp(12), dp(9), dp(12), dp(9));
-        overviewAttendanceBlock.setBackground(industrialSurface(soft, 12, 0));
+        overviewAttendanceBlock.setBackground(industrialSurface(surface, 12, border));
         overviewAttendanceTitle = label("LAST CLASS", 11, muted, Typeface.BOLD);
         overviewAttendanceBlock.addView(overviewAttendanceTitle);
         LinearLayout latestClassRow = row();
@@ -711,15 +758,18 @@ final class DashboardView extends FrameLayout {
         overviewAttendanceBlock.setContentDescription("Latest class attendance. Open attendance history");
         addTop(body, overviewAttendanceBlock, 10);
 
-        overviewCourseHeader = overviewSectionHeader("Below target", "All courses", () -> showPage(1));
+        overviewCourseHeader = overviewSectionHeader("Needs attention", "All courses", () -> showPage(1));
         addTop(body, overviewCourseHeader, 18);
         body.addView(courseLists[0], lp(-1, -2));
         overviewEmptyView = text("", 12, green, Typeface.BOLD);
         addTop(body, overviewEmptyView, 6);
 
+        addTop(body, overviewSectionHeader("Next class", "What if?", () -> showPage(3)), 24);
+        addTop(body, summary, 8);
+
         overviewLeaveBlock = column();
         overviewLeaveBlock.setPadding(dp(14), dp(12), dp(14), dp(12));
-        overviewLeaveBlock.setBackground(shape(surface, 14, border));
+        overviewLeaveBlock.setBackground(shape(surface, 16, border));
         overviewLeaveBlock.addView(overviewSectionHeader("Leave & OD", "Open", this::openOdDetails));
         overviewLeaveSummary = text("", 12, muted, Typeface.NORMAL);
         overviewLeaveSummary.setPadding(0, dp(5), 0, 0);
@@ -733,7 +783,7 @@ final class DashboardView extends FrameLayout {
     private FrameLayout homeWeekTicket() {
         FrameLayout ticket = new FrameLayout(getContext());
         View backing = new View(getContext());
-        backing.setBackground(shape(0xFFC8C8FF, 8, 0xFF121212));
+        backing.setBackground(shape(0xFFC8C8FF, 7, 0xFF121212));
         backing.setRotation(9f);
         FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(82), dp(102), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         backParams.rightMargin = dp(2);
@@ -741,10 +791,10 @@ final class DashboardView extends FrameLayout {
         LinearLayout face = column();
         face.setGravity(Gravity.CENTER_HORIZONTAL);
         face.setPadding(dp(8), dp(9), dp(8), dp(8));
-        face.setBackground(shape(0xFFF1EEDA, 8, 0xFF121212));
+        face.setBackground(shape(0xFFF1EEDA, 7, 0xFF121212));
         face.setRotation(-4f);
         homeTicketLabelView = text("TODAY", 8, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView = text("—", 34, 0xFF121212, Typeface.BOLD);
+        homeWeekNumberView = text("—", 38, 0xFF121212, Typeface.BOLD);
         homeWeekNumberView.setIncludeFontPadding(false);
         TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
         homeWeekMonthView = text("—", 8, 0xFF121212, Typeface.BOLD);
@@ -1212,9 +1262,9 @@ final class DashboardView extends FrameLayout {
                 : dateKey.format(new Date(next.upcomingExamAt)).compareTo(dateKey.format(new Date())) >= 0)
                 && !next.upcomingExamTitle.isEmpty();
         boolean connected = next.academicConnected || !next.academicCourses.isEmpty();
-        overviewExamSection.setVisibility(connected ? VISIBLE : GONE);
-        overviewExamBlock.setVisibility(connected ? VISIBLE : GONE);
-        if (!connected) return;
+        overviewExamSection.setVisibility(VISIBLE);
+        overviewExamBlock.setVisibility(VISIBLE);
+        // Radar remains visible as an honest empty state until KCT has been connected.
         if (!upcoming) {
             overviewExamTitle.setText("No upcoming exam found");
             overviewExamType.setVisibility(GONE);
