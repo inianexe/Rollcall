@@ -172,6 +172,7 @@ final class DashboardView extends FrameLayout {
     private String pendingScheduleRevealDate = "";
     private SyncGlyphView dashboardSyncGlyph;
     private final Typeface uiTypeface;
+    private final Typeface uiBoldTypeface;
     private final Typeface displayTypeface;
     private final LinearLayout nav = new LinearLayout(getContext());
     private NavBackgroundDrawable navBackground;
@@ -263,6 +264,10 @@ final class DashboardView extends FrameLayout {
         try { loadedTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/JetBrainsMono-Regular.ttf"); }
         catch (RuntimeException ignored) { loadedTypeface = Typeface.create("monospace", Typeface.NORMAL); }
         uiTypeface = loadedTypeface;
+        Typeface loadedBold;
+        try { loadedBold = Typeface.createFromAsset(context.getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
+        catch (RuntimeException ignored) { loadedBold = Typeface.create(uiTypeface, Typeface.BOLD); }
+        uiBoldTypeface = loadedBold;
         cyberpunk = "Night City 2077".equals(palette.name);
         Typeface themeDisplayTypeface;
         if (cyberpunk) {
@@ -276,7 +281,7 @@ final class DashboardView extends FrameLayout {
                 themeDisplayTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/NovaRound-Bold.ttf");
             } catch (RuntimeException ignored) { /* Keep the readable system fallback. */ }
         }
-        displayTypeface = cyberpunk ? themeDisplayTypeface : Typeface.create(uiTypeface, Typeface.BOLD);
+        displayTypeface = cyberpunk ? themeDisplayTypeface : uiBoldTypeface;
         Typeface themeTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
         if (cyberpunk) {
             try { themeTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/Cyberpunk-Regular.ttf"); }
@@ -2974,13 +2979,13 @@ final class DashboardView extends FrameLayout {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
-        view.setTypeface(uiTypeface, style);
+        view.setTypeface(style == Typeface.BOLD ? uiBoldTypeface : uiTypeface);
         return view;
     }
 
     private TextView label(String value, float size, int color, int style) {
         TextView view = text(value, size, color, style);
-        view.setTypeface(cyberpunk ? displayTypeface : uiTypeface, Typeface.BOLD);
+        view.setTypeface(cyberpunk ? displayTypeface : uiBoldTypeface);
         view.setLetterSpacing(.055f);
         return view;
     }
@@ -2989,7 +2994,7 @@ final class DashboardView extends FrameLayout {
         Button button = new Button(getContext());
         button.setText(value);
         button.setTextSize(20);
-        button.setTypeface(uiTypeface, Typeface.BOLD);
+        button.setTypeface(uiBoldTypeface);
         button.setGravity(Gravity.CENTER);
         button.setIncludeFontPadding(false);
         button.setTextColor(foreground);
@@ -3005,7 +3010,7 @@ final class DashboardView extends FrameLayout {
     private Button roundedButton(String value, int background, int foreground) {
         Button button = compactButton(value, background, foreground);
         button.setTextSize(13);
-        button.setTypeface(uiTypeface, Typeface.BOLD);
+        button.setTypeface(uiBoldTypeface);
         button.setMinHeight(dp(48));
         return button;
     }
