@@ -957,7 +957,7 @@ public class MainActivity extends Activity {
         back.setContentDescription("Not now. Return to MyCamu sign-in");
         back.setOnClickListener(v -> deferMyCamuConsent());
         header.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        TextView headerTitle = text("MYCAMU CONNECTION", 11, MUTED, Typeface.BOLD);
+        TextView headerTitle = text("MYCAMU / CONNECTION", 11, darkTheme ? HERO : INK, Typeface.BOLD);
         headerTitle.setLetterSpacing(.08f);
         LinearLayout.LayoutParams headerTitleParams = new LinearLayout.LayoutParams(0, -2, 1f);
         headerTitleParams.leftMargin = dp(8);
@@ -972,7 +972,7 @@ public class MainActivity extends Activity {
         scroll.addView(content);
         layout.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-        TextView title = text("Review access", 29, INK, Typeface.BOLD);
+        TextView title = text("REVIEW ACCESS.", 32, INK, Typeface.BOLD);
         title.setLetterSpacing(-.035f);
         content.addView(title);
         TextView intro = text("Your MyCamu sign-in worked. Choose whether Rollcall can read the student details below before it opens your dashboard.",
@@ -983,25 +983,25 @@ public class MainActivity extends Activity {
         LinearLayout account = new LinearLayout(this);
         account.setGravity(android.view.Gravity.CENTER_VERTICAL);
         account.setPadding(dp(14), dp(13), dp(14), dp(13));
-        account.setBackground(background(SURFACE, BORDER, 16));
+        account.setBackground(background(0xFFC8C8FF, 0xFF121212, 16));
         LinearLayout.LayoutParams accountParams = new LinearLayout.LayoutParams(-1, -2);
         accountParams.topMargin = dp(20);
         content.addView(account, accountParams);
-        TextView accountMark = text("M", 17, HERO_TEXT, Typeface.BOLD);
+        TextView accountMark = text("M", 17, 0xFF121212, Typeface.BOLD);
         accountMark.setGravity(android.view.Gravity.CENTER);
-        accountMark.setBackground(background(HERO, 0, 13));
+        accountMark.setBackground(background(0xFFCCFF00, 0, 13));
         account.addView(accountMark, new LinearLayout.LayoutParams(dp(42), dp(42)));
         LinearLayout accountCopy = new LinearLayout(this);
         accountCopy.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams accountCopyParams = new LinearLayout.LayoutParams(0, -2, 1f);
         accountCopyParams.leftMargin = dp(12);
         account.addView(accountCopy, accountCopyParams);
-        accountCopy.addView(text("MyCamu student account", 14, INK, Typeface.BOLD));
-        accountCopy.addView(text("Signed in on this device", 12, MUTED, Typeface.NORMAL), topMargin(-1, -2, 3));
-        TextView connected = text("CONNECTED", 10, GREEN, Typeface.BOLD);
+        accountCopy.addView(text("MYCAMU / STUDENT", 14, 0xFF121212, Typeface.BOLD));
+        accountCopy.addView(text("Signed in on this device", 12, 0xFF333341, Typeface.NORMAL), topMargin(-1, -2, 3));
+        TextView connected = text("CONNECTED ✓", 10, 0xFF176146, Typeface.BOLD);
         account.addView(connected);
 
-        TextView scopeHeading = text("Rollcall will read", 16, INK, Typeface.BOLD);
+        TextView scopeHeading = text("ROLLCALL WILL READ", 16, INK, Typeface.BOLD);
         content.addView(scopeHeading, topMargin(-1, -2, 22));
         addConsentScope(content, "Student profile", "Name, institution, and roll number when available.");
         addConsentScope(content, "Course attendance", "Course names, attendance totals, and percentages.");
@@ -1030,7 +1030,7 @@ public class MainActivity extends Activity {
         myCamuConsentStatus.setVisibility(View.GONE);
         myCamuConsentStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         footer.addView(myCamuConsentStatus, topMargin(-1, -2, 0));
-        myCamuConsentButton = onboardingButton("Allow access", HERO, HERO_TEXT, v -> approveMyCamuAccess());
+        myCamuConsentButton = onboardingButton("ALLOW ACCESS  ↗", HERO, HERO_TEXT, v -> approveMyCamuAccess());
         LinearLayout.LayoutParams allowParams = new LinearLayout.LayoutParams(-1, dp(52));
         allowParams.topMargin = dp(8);
         footer.addView(myCamuConsentButton, allowParams);
@@ -1163,8 +1163,7 @@ public class MainActivity extends Activity {
         hintParams.topMargin = dp(12);
         content.addView(hint, hintParams);
 
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         AlertDialog dialog = new AlertDialog.Builder(this, dialogTheme).setView(content).create();
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -1334,8 +1333,7 @@ public class MainActivity extends Activity {
                 recreate();
             });
         }
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         ScrollView paletteScroll = new ScrollView(this);
         paletteScroll.setFillViewport(true);
         paletteScroll.addView(content);
@@ -1579,7 +1577,7 @@ public class MainActivity extends Activity {
     }
 
     private int cloudDialogTheme() {
-        return darkTheme ? android.R.style.Theme_Material_Dialog_Alert : android.R.style.Theme_Material_Light_Dialog_Alert;
+        return darkTheme ? R.style.TorchDialogDark : R.style.TorchDialogLight;
     }
 
     private void showCloudAccountDialog() {
@@ -1825,8 +1823,7 @@ public class MainActivity extends Activity {
     }
 
     private void confirmClearSavedData() {
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(20), dp(20), dp(16));
@@ -1996,8 +1993,7 @@ public class MainActivity extends Activity {
         button.setOnCheckedChangeListener(null);
         button.setChecked(true);
         button.setOnCheckedChangeListener(this::onReminderSwitchChanged);
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(20), dp(20), dp(16));
@@ -2066,20 +2062,25 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(CANVAS);
 
-        TextView title = text("Connect your account", 26, INK, Typeface.NORMAL);
+        TextView kicker = text("MYCAMU / AUTHENTICATION", 10, darkTheme ? HERO : 0xFF365000, Typeface.BOLD);
+        kicker.setLetterSpacing(.08f);
+        kicker.setPadding(dp(23), dp(12), dp(23), dp(12));
+        page.addView(kicker);
+        TextView title = text("CONNECT YOUR\nACCOUNT.", 32, INK, Typeface.BOLD);
         title.setTypeface(appTypeface(), Typeface.BOLD);
-        title.setPadding(dp(16), dp(12), dp(16), dp(4));
+        title.setLetterSpacing(-.055f);
+        title.setPadding(dp(23), 0, dp(23), dp(10));
         page.addView(title);
         webStatus = text(connectedOnce ? "Attendance refreshes every minute while Rollcall is open."
                 : "Sign in below. After sign-in, review what Rollcall can read before the first sync.", 13, MUTED, Typeface.NORMAL);
-        webStatus.setPadding(dp(16), dp(4), dp(16), dp(8));
+        webStatus.setPadding(dp(23), dp(4), dp(23), dp(15));
         page.addView(webStatus);
 
         LinearLayout actions = new LinearLayout(this);
-        webSyncButton = button(connectedOnce ? "Sync attendance" : "Check sign-in");
+        webSyncButton = button(connectedOnce ? "SYNC ATTENDANCE  ↗" : "CHECK SIGN-IN  ↗");
         webSyncButton.setAllCaps(false);
-        webSyncButton.setTextColor(BUTTON_TEXT);
-        webSyncButton.setBackgroundTintList(ColorStateList.valueOf(BUTTON));
+        webSyncButton.setTextColor(HERO_TEXT);
+        webSyncButton.setBackgroundTintList(ColorStateList.valueOf(HERO));
         webSyncButton.setOnClickListener(v -> syncAttendance(true));
         actions.addView(webSyncButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         dashboardWebButton = button("Dashboard");
@@ -2088,6 +2089,7 @@ public class MainActivity extends Activity {
         dashboardWebButton.setTextColor(INK);
         dashboardWebButton.setOnClickListener(v -> showDashboard());
         actions.addView(dashboardWebButton, new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions.setPadding(dp(23), 0, dp(23), dp(16));
         page.addView(actions);
 
         webView = new WebView(this);
