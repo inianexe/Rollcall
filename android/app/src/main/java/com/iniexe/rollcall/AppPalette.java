@@ -1,5 +1,10 @@
 package com.iniexe.rollcall;
 
+/**
+ * TORCH GENESIS / Design tokens transcribed from rollcall_torch_prototype(1).html.
+ * Brand colours are visual accents, never a replacement for semantic status colours.
+ * The HTML's dark mode is canonical; the light values preserve its relative hierarchy.
+ */
 final class AppPalette {
     final String name;
     final int canvas, ink, muted, surface, border, soft, green, red, amber, track;
@@ -17,13 +22,33 @@ final class AppPalette {
     }
 
     static AppPalette get(boolean dark, int ignoredLegacyTheme) {
-        if (dark) return new AppPalette("Rollcall Signal", 0xFF121212, 0xFFF4F5EF, 0xFFC2C6B7,
-                0xFF292929, 0xFF666765, 0xFF343628, 0xFF90E1B4, 0xFFFF9784, 0xFFFFC675,
-                0xFF525745, 0xFFCCFF00, 0xFF121212, 0xFFFF663D, 0xFFCCFF00, 0xFF121212,
-                0xFF3F4B16, 0xFF292929, 0xFFFF663D);
-        return new AppPalette("Rollcall Signal", 0xFFF5F4EC, 0xFF182019, 0xFF586057,
-                0xFFFFFEFA, 0xFFC6C8BC, 0xFFEEEEE6, 0xFF176146, 0xFFAA2921, 0xFF744500,
-                0xFF91AA31, 0xFF121212, 0xFFCCFF00, 0xFFAF3518, 0xFFCCFF00, 0xFF111827,
-                0xFF3E4651, 0xFFDEDCFF, 0xFFAF3518);
+        if (dark) {
+            return new AppPalette("Torch Genesis",
+                    0xFF121212, // canvas
+                    0xFFF5F5EE, // paper text
+                    0xFFA8AAA1, // subdued text
+                    0xFF222222, // cards
+                    0xFF525252, // 1dp outlines
+                    0xFF2C2C2C, // panels
+                    0xFF9BE4A1, // present/success
+                    0xFFFF8C73, // warnings/absent readable on dark surfaces
+                    0xFFFFC675,
+                    0xFF555555,
+                    0xFFCCFF00, // prototype vivid lime
+                    0xFF111111,
+                    0xFFFF4400, // prototype orange
+                    0xFFCCFF00,
+                    0xFF111111,
+                    0xFF343A26,
+                    0xFFC8C8FF, // lilac secondary callout
+                    0xFF111111);
+        }
+        return new AppPalette("Torch Genesis / Day",
+                0xFFF5F5EE, 0xFF121212, 0xFF53594F,
+                0xFFFFFEFA, 0xFFB8B9B0, 0xFFE9EAE1,
+                0xFF176146, 0xFFAA2921, 0xFF744500,
+                0xFFA1A49A, 0xFF121212, 0xFFCCFF00,
+                0xFFB42F08, 0xFFCCFF00, 0xFF111111,
+                0xFF343A26, 0xFFC8C8FF, 0xFF121212);
     }
 }
