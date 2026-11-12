@@ -22,6 +22,22 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v4
       - uses: gradle/actions/setup-gradle@v4
+      - name: Check the packaged Torch JavaScript and markup
+        run: |
+          node --check android/app/src/main/assets/rollcall_torch_runtime.js
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('android/app/src/main/assets/rollcall_torch_native.html').read_text()
+          js = Path('android/app/src/main/assets/rollcall_torch_runtime.js').read_text()
+          for page in ['home','courses','week','what','marks','settings','leave']:
+              assert f'id="page-{page}"' in html, page
+          assert 'rollcall_torch_runtime.js' in html
+          assert 'const courses=[{id:' not in html, 'The sample prototype script should not ship'
+          assert '__rollcallRender' in js
+          assert 'RollcallBridge' in js
+          assert 'fonts/JetBrainsMono-Regular.ttf' in html
+          print('Torch assets and live-data bindings verified')
+          PY
       - name: Compile Android and unit tests
         working-directory: android
         run: |
