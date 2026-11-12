@@ -515,8 +515,11 @@ public class MainActivity extends Activity {
             }
             @Override public void onCloudAccount() { showCloudAccountDialog(); }
             @Override public void onUpdates() {
-                ReleaseUpdateNotifier.check(MainActivity.this);
-                Toast.makeText(MainActivity.this, "Checking GitHub for Rollcall updates…", Toast.LENGTH_SHORT).show();
+                ReleaseUpdateNotifier.checkNow(MainActivity.this, (release, error) -> {
+                    if (release != null) ReleaseUpdateNotifier.openUpdate(MainActivity.this, release);
+                    else Toast.makeText(MainActivity.this,
+                            error.isEmpty() ? "You’re up to date." : error, Toast.LENGTH_LONG).show();
+                });
             }
             @Override public void onClearSavedData() { confirmClearSavedData(); }
             @Override public void onPrivacy() { openUrl("https://github.com/inianexe/Rollcall/blob/main/PRIVACY.md"); }
