@@ -591,140 +591,187 @@ public class MainActivity extends Activity {
                 .setInterpolator(new android.view.animation.PathInterpolator(.2f, 0f, 0f, 1f)).start();
     }
 
+    /**
+     * Torch Genesis onboarding: editorial scale, neutral ink and restrained acid-lime moments.
+     * This is deliberately a Rollcall-owned native screen; MyCamu's website stays untouched.
+     */
     private View buildOnboardingStep(int step) {
-        final int paper = palette.canvas, ink = palette.ink, muted = palette.muted;
+        final int paper = darkTheme ? 0xFF121212 : 0xFFF5F4EC;
+        final int ink = darkTheme ? 0xFFF5F5EE : 0xFF182019;
+        final int muted = darkTheme ? 0xFFA8AAA1 : 0xFF586057;
+        final int panel = darkTheme ? 0xFF252525 : 0xFFFFFEFA;
+        final int border = darkTheme ? 0xFF525252 : 0xFFC6C8BC;
+        final int lime = 0xFFCCFF00, orange = 0xFFFF4400, lilac = 0xFFC8C8FF;
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(paper);
+        scroll.setClipToPadding(false);
+        scroll.setVerticalScrollBarEnabled(false);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(28), dp(24), dp(28), dp(28));
+        content.setPadding(dp(23), dp(24), dp(23), dp(24));
         scroll.addView(content, new ScrollView.LayoutParams(-1, -2));
 
         LinearLayout brand = new LinearLayout(this);
         brand.setGravity(android.view.Gravity.CENTER_VERTICAL);
         RollcallLogo brandMark = new RollcallLogo(this, palette);
-        brandMark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         brand.addView(brandMark, new LinearLayout.LayoutParams(dp(36), dp(36)));
-        TextView brandName = text("Rollcall", 21, ink, Typeface.BOLD);
-        LinearLayout.LayoutParams brandNameParams = new LinearLayout.LayoutParams(-2, -2);
-        brandNameParams.leftMargin = dp(10);
-        brand.addView(brandName, brandNameParams);
+        TextView wordmark = text("rollcall", 23, ink, Typeface.BOLD);
+        wordmark.setLetterSpacing(-.07f);
+        wordmark.setPadding(dp(8), 0, 0, 0);
+        brand.addView(wordmark);
         content.addView(brand);
         if (step > 0) {
-            TextView back = text("‹  Back", 13, muted, Typeface.BOLD);
-            back.setPadding(0, dp(18), 0, dp(8));
+            TextView back = text("←  BACK", 12, muted, Typeface.BOLD);
+            back.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            back.setMinHeight(dp(48));
             back.setOnClickListener(v -> showOnboardingStep(step - 1));
-            content.addView(back);
+            content.addView(back, topMargin(-1, dp(48), 12));
         } else {
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(34)));
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(32)));
         }
 
-        TextView progress = text("GET STARTED  ·  0" + (step + 1) + " / 04", 10, muted, Typeface.BOLD);
-        progress.setLetterSpacing(.12f);
-        content.addView(progress);
-
+        TextView index = text("ACADEMIC TRANSMISSION / 0" + (step + 1) + " OF 04", 10,
+                darkTheme ? lime : 0xFF365000, Typeface.BOLD);
+        index.setLetterSpacing(.07f);
+        content.addView(index);
         if (step == 0) {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            content.addView(onboardingArtifact(0), new LinearLayout.LayoutParams(-1, dp(128)));
-            TextView headline = text("A little clarity.\nA better week.", 40, ink, Typeface.NORMAL);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
-            headline.setGravity(android.view.Gravity.CENTER);
-            content.addView(headline);
-            TextView intro = text("Your attendance, classes and next steps.\nTogether, in a place that feels like yours.", 15, muted, Typeface.NORMAL);
-            intro.setGravity(android.view.Gravity.CENTER);
-            intro.setLineSpacing(dp(5), 1f);
-            intro.setPadding(0, dp(20), 0, dp(30));
-            content.addView(intro);
+            LinearLayout hero = new LinearLayout(this);
+            hero.setOrientation(LinearLayout.VERTICAL);
+            hero.setPadding(dp(21), dp(20), dp(21), dp(24));
+            hero.setBackground(background(lime, 0, 18));
+            TextView eyebrow = text("GET STARTED / 001", 11, 0xFF121212, Typeface.BOLD);
+            hero.addView(eyebrow);
+            TextView graphic = text("✱   ◯   ↗", 49, orange, Typeface.BOLD);
+            graphic.setGravity(android.view.Gravity.CENTER);
+            hero.addView(graphic, topMargin(-1, dp(140), 14));
+            TextView headline = text("A LITTLE CLARITY.\nA BETTER WEEK.", 35, 0xFF121212, Typeface.BOLD);
+            headline.setLetterSpacing(-.055f);
+            headline.setLineSpacing(dp(1), 1f);
+            hero.addView(headline, topMargin(-1, -2, 22));
+            TextView description = text("Your classes, attendance and next moves. Together in one place.", 13, 0xFF343A26, Typeface.NORMAL);
+            description.setLineSpacing(dp(4), 1f);
+            hero.addView(description, topMargin(-1, -2, 10));
+            content.addView(hero, topMargin(-1, -2, 20));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            TextView label = text("MADE FOR YOUR ACTUAL CLASS WEEK", 10, muted, Typeface.BOLD);
-            label.setLetterSpacing(.1f);
-            label.setGravity(android.view.Gravity.CENTER);
-            label.setPadding(0, dp(22), 0, dp(12));
-            content.addView(label);
-            content.addView(onboardingButton("Get started  →", palette.button, palette.buttonText,
-                    v -> showOnboardingStep(1)),
-                    new LinearLayout.LayoutParams(-1, dp(56)));
+            content.addView(onboardingButton("GET STARTED  ↗", lime, 0xFF121212,
+                    v -> showOnboardingStep(1)), topMargin(-1, dp(56), 26));
         } else if (step == 1) {
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(42)));
-            TextView headline = text("Class reminders", 36, ink, Typeface.NORMAL);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
-            content.addView(headline);
-            content.addView(onboardingArtifact(1), topMargin(-1, dp(126), 12));
+            TextView title = text("REMINDERS\nTHAT MATTER.", 35, ink, Typeface.BOLD);
+            title.setLetterSpacing(-.055f);
+            content.addView(title, topMargin(-1, -2, 28));
+            TextView caption = text("Be ready before the next class—not after it starts.", 14, muted, Typeface.NORMAL);
+            caption.setLineSpacing(dp(4), 1f);
+            content.addView(caption, topMargin(-1, -2, 12));
+
+            LinearLayout info = new LinearLayout(this);
+            info.setOrientation(LinearLayout.VERTICAL);
+            info.setPadding(dp(20), dp(18), dp(20), dp(20));
+            info.setBackground(background(lilac, 0xFF121212, 16));
+            info.addView(text("CLASS ALERT / 010", 10, 0xFF242424, Typeface.BOLD));
+            TextView minutes = text("10 MINUTES\nBEFORE.", 29, 0xFF111111, Typeface.BOLD);
+            minutes.setLetterSpacing(-.05f);
+            info.addView(minutes, topMargin(-1, -2, 14));
+            TextView detail = text("Attendance changes, OD decisions and timetable updates can also appear as notifications.", 12, 0xFF333341, Typeface.NORMAL);
+            detail.setLineSpacing(dp(3), 1f);
+            info.addView(detail, topMargin(-1, -2, 10));
+            content.addView(info, topMargin(-1, -2, 24));
+            TextView note = text("Rollcall checks for changes when Android permits background work. Class alerts use your saved timetable.", 11, muted, Typeface.NORMAL);
+            note.setLineSpacing(dp(3), 1f);
+            content.addView(note, topMargin(-1, -2, 16));
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+
             boolean allowed = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                     == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            TextView detail = text(allowed
-                            ? "Rollcall can send class reminders, attendance changes, OD decisions, and schedule updates. Class reminders arrive about 10 minutes before class."
-                            : "Allow notifications for class reminders, attendance changes, OD decisions, and schedule updates. Class reminders arrive about 10 minutes before class.",
-                    15, muted, Typeface.NORMAL);
-            detail.setLineSpacing(dp(4), 1f);
-            detail.setPadding(0, dp(14), 0, dp(18));
-            content.addView(detail);
-            LinearLayout howItWorks = onboardingCard();
-            howItWorks.addView(text("HOW IT WORKS", 10, ink, Typeface.BOLD));
-            TextView note = text("Rollcall checks for updates while open and refreshes in the background when Android allows. Class reminders use your saved timetable; event alerts follow Android notification settings.",
-                    13, muted, Typeface.NORMAL);
-            note.setLineSpacing(dp(3), 1f);
-            note.setPadding(0, dp(8), 0, 0);
-            howItWorks.addView(note);
-            content.addView(howItWorks);
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            boolean openNotificationSettings = !allowed
-                    && getPreferences(MODE_PRIVATE).getBoolean(NOTIFICATION_PERMISSION_DENIED_KEY, false)
-                    && !shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS);
-            String permissionAction = allowed ? "Continue  →"
-                    : openNotificationSettings ? "Open notification settings  →" : "Allow notifications  →";
-            content.addView(onboardingButton(permissionAction, palette.button, palette.buttonText,
-                    v -> requestOnboardingNotifications()), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView skip = text("Not now", 14, muted, Typeface.BOLD);
+            boolean settingsNeeded = !allowed &&
+                    getPreferences(MODE_PRIVATE).getBoolean(NOTIFICATION_PERMISSION_DENIED_KEY, false) &&
+                    !shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS);
+            String action = allowed ? "CONTINUE  ↗"
+                    : settingsNeeded ? "OPEN NOTIFICATION SETTINGS  ↗" : "ALLOW NOTIFICATIONS  ↗";
+            content.addView(onboardingButton(action, lime, 0xFF121212,
+                    v -> requestOnboardingNotifications()), topMargin(-1, dp(56), 22));
+            TextView skip = text("NOT NOW", 13, muted, Typeface.BOLD);
             skip.setGravity(android.view.Gravity.CENTER);
             skip.setMinHeight(dp(48));
             skip.setOnClickListener(v -> showOnboardingStep(2));
-            content.addView(skip);
+            content.addView(skip, topMargin(-1, dp(48), 8));
         } else if (step == 2) {
             onboardingChoiceTransitioning = false;
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(22)));
-            TextView headline = text("What should we focus on?", 32, ink, Typeface.NORMAL);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
-            content.addView(headline);
-            addOnboardingChoiceGroup(content, "What do you want help with first?",
-                    new String[]{"Keep attendance on track", "Find safe skips", "See my week at a glance"},
-                    new int[]{R.drawable.ic_onboarding_target, R.drawable.ic_nav_courses, R.drawable.ic_nav_week});
+            TextView title = text("WHAT'S YOUR\nFIRST MOVE?", 35, ink, Typeface.BOLD);
+            title.setLetterSpacing(-.055f);
+            content.addView(title, topMargin(-1, -2, 28));
+            TextView caption = text("Choose what you want Rollcall to put first.", 13, muted, Typeface.NORMAL);
+            content.addView(caption, topMargin(-1, -2, 10));
+            String[] choices = {"KEEP ATTENDANCE ON TRACK", "FIND SAFE SKIPS", "SEE MY WEEK AT A GLANCE"};
+            String[] captions = {"01 / YOUR TARGET", "02 / YOUR OPTIONS", "03 / YOUR SCHEDULE"};
+            for (int i = 0; i < choices.length; i++) {
+                final String choice = new String[]{"Keep attendance on track", "Find safe skips", "See my week at a glance"}[i];
+                final LinearLayout tile = new LinearLayout(this);
+                tile.setOrientation(LinearLayout.VERTICAL);
+                tile.setPadding(dp(17), dp(16), dp(17), dp(16));
+                final boolean selected = choice.equals(onboardingAttendanceStyle);
+                tile.setBackground(background(selected ? lime : panel, selected ? lime : border, 15));
+                tile.addView(text(captions[i], 10, selected ? 0xFF1B1B1B : muted, Typeface.BOLD));
+                tile.addView(text(choices[i] + "  ↗", 14, selected ? 0xFF1B1B1B : ink, Typeface.BOLD),
+                        topMargin(-1, -2, 10));
+                tile.setMinHeight(dp(88));
+                tile.setOnClickListener(v -> {
+                    if (onboardingChoiceTransitioning) return;
+                    onboardingAttendanceStyle = choice;
+                    onboardingChoiceTransitioning = true;
+                    tile.setBackground(background(lime, 0, 15));
+                    for (int j = 0; j < tile.getChildCount(); j++)
+                        if (tile.getChildAt(j) instanceof TextView)
+                            ((TextView) tile.getChildAt(j)).setTextColor(0xFF121212);
+                    if (animationsEnabled()) {
+                        tile.animate().scaleX(1.02f).scaleY(1.02f).setDuration(95)
+                                .withEndAction(() -> tile.animate().scaleX(1f).scaleY(1f)
+                                        .setDuration(140).start()).start();
+                    }
+                    onboardingAdvance = () -> showOnboardingStep(3);
+                    handler.postDelayed(onboardingAdvance, 300L);
+                });
+                content.addView(tile, topMargin(-1, -2, 10));
+            }
+            onboardingChoiceStatus = text("", 11, muted, Typeface.NORMAL);
+            onboardingChoiceStatus.setVisibility(View.GONE);
+            content.addView(onboardingChoiceStatus);
         } else {
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            TextView headline = text("Sign in to Rollcall", 32, ink, Typeface.BOLD);
-            content.addView(headline);
-            content.addView(onboardingArtifact(2), topMargin(-1, dp(112), 12));
-            TextView accountIntro = text("Keep your attendance and marks available on the web. Your Rollcall account uses its own password, separate from MyCamu.", 14, muted, Typeface.NORMAL);
-            accountIntro.setLineSpacing(dp(4), 1f);
-            content.addView(accountIntro, topMargin(-1, -2, 12));
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            content.addView(onboardingButton("Sign in to Rollcall  →", palette.button, palette.buttonText,
-                    v -> showCloudCredentials(false)), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView createAccount = text("No account yet? Create one", 14, ink, Typeface.BOLD);
-            createAccount.setGravity(android.view.Gravity.CENTER);
-            createAccount.setMinHeight(dp(48));
-            createAccount.setOnClickListener(v -> showCloudCredentials(true));
-            content.addView(createAccount, topMargin(-1, -2, 8));
+            TextView title = text("MAKE IT\nYOUR SPACE.", 35, ink, Typeface.BOLD);
+            title.setLetterSpacing(-.055f);
+            content.addView(title, topMargin(-1, -2, 28));
+            TextView caption = text("A Rollcall account is optional. Your MyCamu connection provides your actual academic data.", 13, muted, Typeface.NORMAL);
+            caption.setLineSpacing(dp(4), 1f);
+            content.addView(caption, topMargin(-1, -2, 12));
+
+            LinearLayout account = new LinearLayout(this);
+            account.setOrientation(LinearLayout.VERTICAL);
+            account.setPadding(dp(17), dp(19), dp(17), dp(19));
+            account.setBackground(background(lilac, 0, 16));
+            account.addView(text("ROLLCALL / WEB ACCOUNT", 11, 0xFF111111, Typeface.BOLD));
+            account.addView(text("YOUR MARKS.\nANYWHERE.", 28, 0xFF111111, Typeface.BOLD),
+                    topMargin(-1, -2, 14));
+            account.addView(text("Keep a read-only web mirror. Sign-in uses a password separate from MyCamu.", 12, 0xFF2A2A38, Typeface.NORMAL),
+                    topMargin(-1, -2, 12));
+            content.addView(account, topMargin(-1, -2, 20));
+
+            content.addView(onboardingButton("SIGN IN TO ROLLCALL  ↗", lime, 0xFF111111,
+                    v -> showCloudCredentials(false)), topMargin(-1, dp(54), 18));
+            TextView create = text("NEW HERE? CREATE ACCOUNT  ↗", 12, ink, Typeface.BOLD);
+            create.setMinHeight(dp(48));
+            create.setGravity(android.view.Gravity.CENTER);
+            create.setOnClickListener(v -> showCloudCredentials(true));
+            content.addView(create, topMargin(-1, dp(48), 5));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            content.addView(onboardingButton("Continue to MyCamu  →", palette.surface, ink,
-                    v -> startMyCamuConnection()), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView note = text("MyCamu provides your classes. Sign in there to build your dashboard.",
-                    12, muted, Typeface.NORMAL);
-            note.setGravity(android.view.Gravity.CENTER);
-            note.setLineSpacing(dp(3), 1f);
-            note.setPadding(0, dp(12), 0, 0);
-            content.addView(note);
+            content.addView(onboardingButton("CONTINUE TO MYCAMU  ↗", panel, ink,
+                    v -> startMyCamuConnection()), topMargin(-1, dp(56), 26));
+            TextView caveat = text("MYCAMU PROVIDES THE CLASSES. ROLLCALL MAKES THEM CLEAR.", 10, muted, Typeface.BOLD);
+            caveat.setGravity(android.view.Gravity.CENTER);
+            caveat.setLineSpacing(dp(3), 1f);
+            content.addView(caveat, topMargin(-1, -2, 10));
         }
-        if (step != 3) return scroll;
-        SignalShapeGridView grid = new SignalShapeGridView(this, palette);
-        FrameLayout frame = new FrameLayout(this);
-        frame.setBackgroundColor(paper);
-        frame.addView(grid, new FrameLayout.LayoutParams(-1, -1));
-        scroll.setBackgroundColor(Color.TRANSPARENT);
-        scroll.setOnTouchListener((v, event) -> { grid.setPointer(event.getX(), event.getY()); return false; });
-        frame.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
-        return frame;
+        return scroll;
     }
 
     private Button onboardingButton(String label, int fill, int textColor, View.OnClickListener action) {
