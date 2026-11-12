@@ -207,7 +207,10 @@ final class DashboardView extends FrameLayout {
     private TextView projectionView, projectionStatusView, plannerCountView;
     private final java.util.Map<String, Float> previousCourseProgress = new java.util.HashMap<>();
     private TextView welcomeView;
-    private TextView homeDateView, homeWeekNumberView, homeWeekMonthView, homeEncouragementView;
+    private TextView homeDateView, homeWeekNumberView, homeWeekMonthView, homeTicketLabelView, homeEncouragementView;
+    private FrameLayout homeTicketView;
+    private int homeTicketDestination = 2;
+    private final int linkInk;
     private boolean wasSyncing;
     private PlannerMeter plannerMeter;
     private TextView plannerFeedback;
@@ -284,7 +287,7 @@ final class DashboardView extends FrameLayout {
         surface = palette.surface; border = palette.border; soft = palette.soft;
         green = palette.green; red = palette.red; amber = palette.amber;
         hero = palette.hero; heroText = palette.heroText; heroMuted = palette.heroMuted;
-        lime = palette.highlight; track = palette.track;
+        lime = palette.highlight; linkInk = palette.canvas == 0xFFF5F4EC ? 0xFF365000 : lime; track = palette.track;
         focusSurface = palette.focusSurface;
         labBadgeBackground = palette.button; labBadgeForeground = palette.buttonText;
         setBackgroundColor(canvas);
@@ -350,9 +353,37 @@ final class DashboardView extends FrameLayout {
         welcomeView.setText(greeting + ",");
         SimpleDateFormat broadcastDate = new SimpleDateFormat("EEE / dd MMM", Locale.ENGLISH);
         homeDateView.setText(broadcastDate.format(new Date()).toUpperCase(Locale.ROOT));
-        Calendar currentWeek = Calendar.getInstance();
-        homeWeekNumberView.setText(String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)));
-        homeWeekMonthView.setText(new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT));
+        // The physical calendar represents a real date, not a decorative week number.
+        long now = System.currentTimeMillis();
+        long eventAt = Long.MAX_VALUE;
+        String eventLabel = "TODAY";
+        homeTicketDestination = 2;
+        for (ScheduleItem scheduled : next.timetable) {
+            if (!scheduled.cancelled && !scheduled.allDay && scheduled.startsAt >= now
+                    && scheduled.startsAt < eventAt) {
+                eventAt = scheduled.startsAt;
+                eventLabel = "NEXT CLASS";
+            }
+        }
+        boolean futureExam = next.upcomingExamAt > 0 && !next.upcomingExamTitle.isEmpty()
+                && (next.upcomingExamAt >= now || (!next.upcomingExamHasTime
+                && new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date(next.upcomingExamAt))
+                .equals(new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date(now)))));
+        if (futureExam && (eventAt == Long.MAX_VALUE || next.upcomingExamAt < eventAt)) {
+            eventAt = next.upcomingExamAt;
+            eventLabel = "EXAM DATE";
+            homeTicketDestination = 4;
+        }
+        Date displayedDate = new Date(eventAt == Long.MAX_VALUE ? now : eventAt);
+        homeTicketLabelView.setText(eventLabel);
+        homeWeekNumberView.setText(new SimpleDateFormat("dd", Locale.ENGLISH).format(displayedDate));
+        homeWeekMonthView.setText(new SimpleDateFormat("EEE · MMM", Locale.ENGLISH)
+                .format(displayedDate).toUpperCase(Locale.ROOT));
+        if (homeTicketView != null) {
+            homeTicketView.setContentDescription(eventLabel + ", "
+                    + new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH).format(displayedDate)
+                    + ". Open " + (homeTicketDestination == 4 ? "marks and exams" : "your week"));
+        }
         homeEncouragementView.setText(next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
                 : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
                 : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.");
@@ -712,19 +743,24 @@ final class DashboardView extends FrameLayout {
         face.setPadding(dp(8), dp(9), dp(8), dp(8));
         face.setBackground(shape(0xFFF1EEDA, 8, 0xFF121212));
         face.setRotation(-4f);
-        TextView weekLabel = text("THE / WEEK", 7, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView = text("46", 34, 0xFF121212, Typeface.BOLD);
+        homeTicketLabelView = text("TODAY", 8, 0xFF121212, Typeface.BOLD);
+        homeWeekNumberView = text("—", 34, 0xFF121212, Typeface.BOLD);
         homeWeekNumberView.setIncludeFontPadding(false);
         TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
-        homeWeekMonthView = text("NOVEMBER", 7, 0xFF121212, Typeface.BOLD);
-        face.addView(weekLabel);
+        homeWeekMonthView = text("—", 8, 0xFF121212, Typeface.BOLD);
+        face.addView(homeTicketLabelView);
         face.addView(homeWeekNumberView, topLp(-1, -2, 4));
         face.addView(ticketRule, topLp(-1, -2, 1));
         face.addView(homeWeekMonthView, topLp(-1, -2, 2));
         FrameLayout.LayoutParams faceParams = new FrameLayout.LayoutParams(dp(78), dp(100), Gravity.CENTER_VERTICAL | Gravity.RIGHT);
         faceParams.rightMargin = dp(10);
         ticket.addView(face, faceParams);
-        ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        homeTicketView = ticket;
+        ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        ticket.setFocusable(true);
+        ticket.setClickable(true);
+        ticket.setOnClickListener(v -> showPage(homeTicketDestination));
+        setTactileFeedback(ticket);
         return ticket;
     }
 
@@ -1046,7 +1082,7 @@ final class DashboardView extends FrameLayout {
         historyHeading.setGravity(Gravity.CENTER_VERTICAL);
         historyHeading.addView(text("Attendance history", 16, ink, Typeface.BOLD),
                 new LinearLayout.LayoutParams(0, -2, 1));
-        TextView leaveDetails = text("Leave & OD  →", 11, green, Typeface.BOLD);
+        TextView leaveDetails = text("Leave & OD  →", 11, linkInk, Typeface.BOLD);
         leaveDetails.setGravity(Gravity.CENTER);
         leaveDetails.setMinHeight(dp(44));
         leaveDetails.setPadding(dp(8), 0, 0, 0);
@@ -1058,7 +1094,7 @@ final class DashboardView extends FrameLayout {
         historyEmptyView = text("Go to Home and tap refresh to load attendance history.", 12, muted, Typeface.NORMAL);
         historyEmptyView.setPadding(dp(12), dp(12), dp(12), dp(12));
         historyEmptyView.setMinHeight(dp(48));
-        historyEmptyView.setTextColor(lime);
+        historyEmptyView.setTextColor(linkInk);
         historyEmptyView.setTypeface(uiTypeface, Typeface.BOLD);
         historyEmptyView.setBackground(shape(soft, 14, 0));
         historyEmptyView.setFocusable(true);
@@ -1968,7 +2004,7 @@ final class DashboardView extends FrameLayout {
 
     private View heading(String index, String title, String subtitle) {
         LinearLayout box = column();
-        box.addView(label(index, 9, lime, Typeface.BOLD));
+        box.addView(label(index, 9, linkInk, Typeface.BOLD));
         SpannableString titleText = new SpannableString(title + ".");
         titleText.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight), title.length(), titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         TextView heading = text(titleText.toString(), 32, ink, Typeface.BOLD);
@@ -1994,7 +2030,7 @@ final class DashboardView extends FrameLayout {
         copy.addView(targetView, topLp(-1, -2, 2));
         copy.addView(text("A goal that keeps you on track.", 10, muted, Typeface.NORMAL), topLp(-1, -2, 1));
         card.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView adjust = text("Adjust target  ↗", 10, hero, Typeface.BOLD);
+        TextView adjust = text("Adjust target  ↗", 10, linkInk, Typeface.BOLD);
         adjust.setOnClickListener(v -> actions.onTarget());
         card.addView(adjust);
         card.setOnClickListener(v -> actions.onTarget());
@@ -2332,9 +2368,9 @@ final class DashboardView extends FrameLayout {
     private void setChipSelected(View chip, boolean selected) {
         if (chip instanceof TextView) {
             boolean changed = chip.isSelected() != selected;
-            ((TextView) chip).setTextColor(selected && cyberpunk ? heroText : selected ? ink : muted);
+            ((TextView) chip).setTextColor(selected ? heroText : muted);
             chip.setBackground(cyberpunk && selected ? new CutCornerDrawable(hero, hero, green, dp(7), dp(2))
-                    : shape(selected ? surface : soft, 9, selected ? border : 0));
+                    : shape(selected ? hero : soft, 9, selected ? hero : 0));
             chip.setSelected(selected);
             if (changed && selected && chip.isShown()) settleFeedback(chip);
         }
@@ -3250,14 +3286,14 @@ final class DashboardView extends FrameLayout {
                     + ". Tap to expand course guidance.");
             root.addView(header);
 
-            LinearLayout meters = row();
+            // Full-width rows keep both attendance decisions readable, including lab/theory pairs.
+            LinearLayout meters = column();
             for (int i = 0; i < subjects.size(); i++) {
                 Course subject = subjects.get(i);
                 String kind = isLabCourse(subject.code) ? "LAB" : "THEORY";
                 if (isLabCourse(group.lecture.code) && subject == group.lecture) kind = "LAB";
                 LinearLayout metric = metric(subject, kind);
-                LinearLayout.LayoutParams metricParams = new LinearLayout.LayoutParams(0, -2, 1);
-                if (i > 0) metricParams.leftMargin = dp(7);
+                LinearLayout.LayoutParams metricParams = topLp(-1, -2, i == 0 ? 0 : 10);
                 meters.addView(metric, metricParams);
             }
             root.addView(meters, topLp(-1, -2, 4));
@@ -3267,7 +3303,7 @@ final class DashboardView extends FrameLayout {
                 guidance.setPadding(dp(2), dp(8), dp(2), 0);
                 guidance.setContentDescription(subject.status + ". " + subject.guidance);
                 root.addView(guidance);
-                TextView planner = text("Try in What if?  →", 12, green, Typeface.BOLD);
+                TextView planner = text("Try in What if?  →", 12, linkInk, Typeface.BOLD);
                 planner.setPadding(dp(2), dp(8), 0, dp(8));
                 planner.setMinHeight(dp(48));
                 planner.setGravity(Gravity.CENTER_VERTICAL);
@@ -3285,26 +3321,69 @@ final class DashboardView extends FrameLayout {
 
         private LinearLayout metric(Course subject, String kind) {
             LinearLayout box = column();
-            box.setPadding(0, dp(5), 0, dp(5));
+            box.setPadding(dp(2), dp(10), dp(2), dp(10));
             box.setFocusable(true);
-            TextView type = text(kind + (subject.code.isEmpty() ? "" : " · " + subject.code), 9, muted, Typeface.BOLD);
-            type.setMaxLines(1);
-            type.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            box.addView(type);
-            TextView allowance = text(subject.targetCount.isEmpty() ? "—" : subject.targetCount,
-                    21, ink, Typeface.BOLD);
-            allowance.setMaxLines(1);
-            allowance.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            box.addView(allowance, topLp(-1, -2, 3));
-            AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code, subject.percent, subject.color);
+            String identity = kind + (subject.code.isEmpty() ? "" : " / " + subject.code);
+            box.addView(label(identity, 10, muted, Typeface.BOLD));
+            TextView percent = text(subject.percentLabel, 20, subject.color, Typeface.BOLD);
+            box.addView(percent, topLp(-1, -2, 5));
+
+            final String canMiss;
+            final String mustAttend;
+            if (!subject.countsKnown || subject.total <= 0 || state.target <= 0) {
+                canMiss = "—";
+                mustAttend = "—";
+            } else {
+                double target = state.target;
+                int available = Math.max(0, (int) Math.floor(
+                        (100d * subject.attended - target * subject.total) / target + 1e-9d));
+                canMiss = Integer.toString(available);
+                if (100d * subject.attended >= target * subject.total - 1e-9d) {
+                    mustAttend = "0";
+                } else if (target >= 100d) {
+                    mustAttend = "N/A";
+                } else {
+                    mustAttend = Integer.toString(Math.max(0, (int) Math.ceil(
+                            (target * subject.total - 100d * subject.attended) / (100d - target) - 1e-9d)));
+                }
+            }
+            LinearLayout stats = row();
+            stats.addView(attendanceMetricTile("CAN MISS", canMiss, !subject.below && !"—".equals(canMiss),
+                    false), new LinearLayout.LayoutParams(0, -2, 1f));
+            LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1f);
+            second.leftMargin = dp(8);
+            stats.addView(attendanceMetricTile("MUST ATTEND", mustAttend, false, subject.below), second);
+            box.addView(stats, topLp(-1, -2, 9));
+            AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code,
+                    subject.percent, subject.color);
             meter.setContentDescription("Attendance " + subject.percentLabel);
-            box.addView(meter, topLp(-1, dp(7), 4));
-            String detail = subject.countsKnown ? subject.percentLabel + " · " + subject.attended + " / " + subject.total + " attended"
+            box.addView(meter, topLp(-1, dp(7), 12));
+            String detail = subject.countsKnown ? subject.attended + " / " + subject.total + " classes"
                     : "Attendance counts unavailable";
-            box.addView(text(detail, 10, muted, Typeface.NORMAL), topLp(-1, -2, 4));
-            box.setContentDescription(kind + " attendance for " + courseHeading(subject) + ": " + subject.percentLabel + ", " + subject.targetCount);
+            box.addView(text(detail, 11, muted, Typeface.NORMAL), topLp(-1, -2, 6));
+            box.setContentDescription(kind + " " + courseHeading(subject) + ". "
+                    + subject.percentLabel + ". Can miss " + canMiss
+                    + ". Must attend " + ("N/A".equals(mustAttend) ? "not recoverable at 100% target" : mustAttend)
+                    + ". " + detail);
             box.setOnClickListener(v -> actions.onCourse(subject.code));
             return box;
+        }
+
+        private LinearLayout attendanceMetricTile(String title, String value, boolean positive, boolean warning) {
+            LinearLayout tile = column();
+            tile.setGravity(Gravity.CENTER);
+            tile.setPadding(dp(8), dp(12), dp(8), dp(12));
+            int background = positive ? hero : surface;
+            int foreground = positive ? heroText : warning ? red : ink;
+            tile.setBackground(shape(background, 12, warning ? red : positive ? 0 : border));
+            TextView labelText = text(title, 10, foreground, Typeface.BOLD);
+            labelText.setGravity(Gravity.CENTER);
+            tile.addView(labelText);
+            TextView number = text(value, 28, foreground, Typeface.BOLD);
+            number.setGravity(Gravity.CENTER);
+            number.setIncludeFontPadding(false);
+            tile.addView(number, topLp(-1, -2, 6));
+            return tile;
         }
 
         boolean matches() {
