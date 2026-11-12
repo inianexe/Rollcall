@@ -277,7 +277,7 @@ function render(snapshot){
  document.body.classList.toggle('light-mode',!state.dark);
  document.documentElement.style.backgroundColor=state.dark?'#121212':'#f5f4ec';
  var meta=document.querySelector('meta[name=theme-color]');if(meta)meta.content=state.dark?'#121212':'#f5f4ec';
- document.querySelector('.app-header').innerHTML='<div class="logo"><b>[R]</b> rollcall</div><div class="header-actions"><button class="icon-button theme-switch" data-action="theme" type="button" aria-label="Toggle appearance">'+(state.dark?'☼':'◐')+'</button><button class="icon-button avatar" data-page="settings" type="button" aria-label="Open settings">'+html(state.initials||'R')+'</button></div>';
+ document.querySelector('.app-header').innerHTML='<div class="logo"><b>[R]</b> rollcall</div><div class="header-actions"><button class="icon-button" data-page="settings" type="button" aria-label="Open settings"><svg class="icon"><use href="#i-settings"></use></svg></button><button class="icon-button avatar" data-page="settings" type="button" aria-label="Open profile and settings">'+html(state.initials||'R')+'</button></div>';
  renderHome();renderCourses();renderWeek();renderPlanner();renderMarks();renderLeave();renderSettings();
  document.body.classList.add('native-ready');
  shellPage(page);
