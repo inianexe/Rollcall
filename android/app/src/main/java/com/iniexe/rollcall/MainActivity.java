@@ -715,7 +715,7 @@ public class MainActivity extends Activity {
                 tile.addView(text(captions[i], 10, selected ? 0xFF1B1B1B : muted, Typeface.BOLD));
                 tile.addView(text(choices[i] + "  ↗", 14, selected ? 0xFF1B1B1B : ink, Typeface.BOLD),
                         topMargin(-1, -2, 10));
-                tile.setMinHeight(dp(88));
+                tile.setMinimumHeight(dp(88));
                 tile.setOnClickListener(v -> {
                     if (onboardingChoiceTransitioning) return;
                     onboardingAttendanceStyle = choice;
