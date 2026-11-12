@@ -222,13 +222,33 @@ function renderPlanner(){
  od.innerHTML=c.odReconciled&&c.odCredit>0?'<div class="eyebrow" style="color:var(--muted);margin-top:18px">APPROVED OD / SCENARIO</div><div class="filter-row" style="margin-top:8px">'+
   ['recorded','present','excluded'].map(function(x){return '<button class="chip '+(odMode===x?'selected':'')+'" data-od-mode="'+x+'" type="button">'+(x==='recorded'?'RECORDED':x==='present'?'OD PRESENT':'OD EXCLUDED')+'</button>'}).join('')+'</div>':'';
 }
+var expandedLeaves={};
 function renderLeave(){
  if(!state)return;
- var all=state.leaves||[],rows=odFilter==='all'?all:all.filter(function(x){return x.currentSemester});
+ var all=state.leaves||[],rows=odFilter==='all'?all:all.filter(function(x){return x.currentSemester||!x.semesterKnown});
  document.querySelectorAll('[data-od-filter]').forEach(function(b){b.classList.toggle('selected',b.dataset.odFilter===odFilter)});
  var out=rows.map(function(x){
-  var status=x.status||'Unknown',tone=/approv/i.test(status)?'var(--green)':/reject/i.test(status)?'#ff8870':'#ffcb75';
-  return '<div class="torch-list-row"><div class="course-head"><h4>'+html(x.type||'Leave')+'</h4><span class="badge" style="color:'+tone+'">'+html(status.toUpperCase())+'</span></div><p>'+html(x.date||date(x.startsAt,{dateStyle:'medium'}))+'</p><div class="eyebrow" style="color:var(--lime);margin-top:12px">'+num(x.periods)+' PERIODS</div><p>'+html(x.details||'')+'</p></div>';
+  var key=x.id||String(x.startsAt),status=x.status||'Unknown';
+  var tone=/approv/i.test(status)?'var(--green)':/reject/i.test(status)?'#ff8870':'#ffcb75';
+  var slots=[];try{slots=JSON.parse(x.periodDetails||'[]');if(!Array.isArray(slots))slots=[]}catch(e){slots=[]}
+  var details='';
+  if(expandedLeaves[key]){
+   details='<div class="course-detail" style="display:block">';
+   if(slots.length){
+    details+='<div class="eyebrow" style="color:var(--lime)">MAPPED CLASS PERIODS</div>';
+    slots.slice(0,120).forEach(function(p){
+     details+='<div class="result-item"><div><strong>'+html(p.name||p.code||'Class')+'</strong><small>'+
+       html(p.date||'')+' · '+html(p.time||'')+(p.endTime?' – '+html(p.endTime):'')+
+       '</small></div><div class="grade">P'+num(p.period)+'</div></div>';
+    });
+   }else details+='<p>MyCamu did not return individual mapped class periods for this record.</p>';
+   details+='</div>';
+  }
+  return '<div class="torch-list-row"><div class="course-head"><h4>'+html(x.type||'Leave')+'</h4><span class="badge" style="color:'+tone+'">'+html(status.toUpperCase())+'</span></div>'+
+   '<p>'+html(x.date||date(x.startsAt,{dateStyle:'medium'}))+'</p>'+
+   '<div class="eyebrow" style="color:var(--lime);margin-top:12px">'+num(x.periods)+' PERIOD'+(num(x.periods)===1?'':'S')+'</div>'+
+   (!x.semesterKnown?'<p>SEMESTER / NOT CONFIRMED</p>':'')+
+   '<button class="detail-toggle" type="button" data-leave-toggle="'+html(key)+'" aria-expanded="'+!!expandedLeaves[key]+'">'+(expandedLeaves[key]?'HIDE PERIODS −':'VIEW PERIODS +')+'</button>'+details+'</div>';
  }).join('');
  if(!rows.length)out='<div class="blank-panel"><div class="eyebrow">LEAVE / OD</div><strong>NO RECORDS<br>FOUND.</strong><p>No '+(odFilter==='current'?'current semester ':'')+'leave or OD records were returned by MyCamu.</p></div>';
  byId('leaveRecords').innerHTML='<div class="eyebrow" style="color:var(--muted)">'+rows.length+' RECORD'+(rows.length===1?'':'S')+'</div>'+out;
@@ -270,6 +290,7 @@ document.addEventListener('click',function(e){
  if(node.dataset.week){weekMode=node.dataset.week;renderWeek();return}
  if(node.dataset.odFilter){odFilter=node.dataset.odFilter;renderLeave();return}
  if(node.dataset.odMode){odMode=node.dataset.odMode;renderPlanner();return}
+ if(node.dataset.leaveToggle){expandedLeaves[node.dataset.leaveToggle]=!expandedLeaves[node.dataset.leaveToggle];renderLeave();return}
  if(node.dataset.toggleCourse){expanded[node.dataset.toggleCourse]=!expanded[node.dataset.toggleCourse];renderCourses();return}
  if(node.dataset.plan){planCourse=node.dataset.plan;shellPage('what');return}
  if(node.hasAttribute('data-term')){var k=node.dataset.term;expandedTerms[k]=!expandedTerms[k];renderMarks();return}
