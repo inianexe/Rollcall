@@ -1,0 +1,6 @@
+<resources>
+    <color name="rollcall_splash_background">#121212</color>
+    <color name="rollcall_widget_surface">#292929</color>
+    <color name="rollcall_widget_primary">#CCFF00</color>
+    <color name="rollcall_widget_track">#525745</color>
+</resources>

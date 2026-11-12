@@ -1,0 +1,24 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@color/rollcall_widget_surface">
+
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_kicker" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/widget_attendance_title" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.12" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_attendance_percent" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginTop="5dp" android:text="—" android:textSize="38sp" android:textStyle="bold" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_attendance_target" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="-3dp" android:text="@string/widget_attendance_after_sync" android:textSize="12sp" />
+    <ProgressBar android:id="@+id/widget_attendance_progress" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="8dp" android:layout_marginTop="11dp"
+        android:max="100" android:progress="0" android:progressTint="@color/rollcall_widget_primary" android:progressBackgroundTint="@color/rollcall_widget_track" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_attendance_track" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="7dp" android:textSize="11sp" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_attention_courses" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:lineSpacingExtra="3dp" android:textSize="12sp" />
+    <TextView android:fontFamily="@font/jetbrains_mono_regular" android:id="@+id/widget_updated" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:text="@string/widget_waiting_for_sync" android:textSize="10sp" />
+</LinearLayout>
