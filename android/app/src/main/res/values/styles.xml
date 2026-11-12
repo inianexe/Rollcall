@@ -1,3 +1,23 @@
 <resources>
     <style name="RollcallTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <style name="RollcallDialogLight" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/rollcall_dialog_light</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:colorAccent">#365000</item>
+        <item name="android:textColorPrimary">#182019</item>
+        <item name="android:textColorSecondary">#586057</item>
+        <item name="android:colorControlNormal">#586057</item>
+    </style>
+    <style name="RollcallDialogDark" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/rollcall_dialog_dark</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:colorAccent">#CCFF00</item>
+        <item name="android:textColorPrimary">#F5F5EE</item>
+        <item name="android:textColorSecondary">#C2C6B7</item>
+        <item name="android:colorControlNormal">#C2C6B7</item>
+    </style>
+    <style name="RollcallSheetAnimation">
+        <item name="android:windowEnterAnimation">@anim/rollcall_sheet_in</item>
+        <item name="android:windowExitAnimation">@anim/rollcall_sheet_out</item>
+    </style>
 </resources>
