@@ -909,12 +909,12 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(false);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(24), dp(12), dp(24), dp(20));
+        content.setPadding(dp(23), dp(16), dp(23), dp(24));
         scroll.addView(content);
         layout.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-        TextView title = text("Review access", 29, INK, Typeface.BOLD);
-        title.setLetterSpacing(-.035f);
+        TextView title = text("Review access.", 35, INK, Typeface.BOLD);
+        title.setLetterSpacing(-.085f);
         content.addView(title);
         TextView intro = text("Your MyCamu sign-in worked. Choose whether Rollcall can read the student details below before it opens your dashboard.",
                 14, MUTED, Typeface.NORMAL);
@@ -924,7 +924,7 @@ public class MainActivity extends Activity {
         LinearLayout account = new LinearLayout(this);
         account.setGravity(android.view.Gravity.CENTER_VERTICAL);
         account.setPadding(dp(14), dp(13), dp(14), dp(13));
-        account.setBackground(background(SURFACE, BORDER, 16));
+        account.setBackground(background(palette.focusSurface, 0xFF121212, 16));
         LinearLayout.LayoutParams accountParams = new LinearLayout.LayoutParams(-1, -2);
         accountParams.topMargin = dp(20);
         content.addView(account, accountParams);
@@ -937,9 +937,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams accountCopyParams = new LinearLayout.LayoutParams(0, -2, 1f);
         accountCopyParams.leftMargin = dp(12);
         account.addView(accountCopy, accountCopyParams);
-        accountCopy.addView(text("MyCamu student account", 14, INK, Typeface.BOLD));
-        accountCopy.addView(text("Signed in on this device", 12, MUTED, Typeface.NORMAL), topMargin(-1, -2, 3));
-        TextView connected = text("CONNECTED", 10, GREEN, Typeface.BOLD);
+        accountCopy.addView(text("MyCamu student account", 14, 0xFF121212, Typeface.BOLD));
+        accountCopy.addView(text("Signed in on this device", 12, 0xFF343A26, Typeface.NORMAL), topMargin(-1, -2, 3));
+        TextView connected = text("CONNECTED", 10, 0xFF176146, Typeface.BOLD);
         account.addView(connected);
 
         TextView scopeHeading = text("Rollcall will read", 16, INK, Typeface.BOLD);
@@ -953,17 +953,17 @@ public class MainActivity extends Activity {
         LinearLayout privacy = new LinearLayout(this);
         privacy.setOrientation(LinearLayout.VERTICAL);
         privacy.setPadding(dp(14), dp(13), dp(14), dp(13));
-        privacy.setBackground(background(SECONDARY, 0, 14));
+        privacy.setBackground(background(palette.focusSurface, 0, 14));
         content.addView(privacy, topMargin(-1, -2, 14));
-        privacy.addView(text("Your password stays with MyCamu", 13, INK, Typeface.BOLD));
+        privacy.addView(text("Your password stays with MyCamu", 13, 0xFF121212, Typeface.BOLD));
         TextView privacyText = text("Rollcall does not read or store your password. The data above is saved on this device and can be removed from About & Settings.",
-                12, MUTED, Typeface.NORMAL);
+                12, 0xFF343A26, Typeface.NORMAL);
         privacyText.setLineSpacing(dp(2), 1f);
         privacy.addView(privacyText, topMargin(-1, -2, 4));
 
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.VERTICAL);
-        footer.setPadding(dp(24), dp(10), dp(24), dp(16));
+        footer.setPadding(dp(23), dp(10), dp(23), dp(16));
         footer.setBackgroundColor(CANVAS);
         layout.addView(footer, new LinearLayout.LayoutParams(-1, -2));
         myCamuConsentStatus = text("", 12, GREEN, Typeface.BOLD);
