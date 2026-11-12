@@ -83,7 +83,7 @@ public class MainActivity extends Activity {
     static final String EXTRA_WIDGET_DESTINATION = "widget_destination";
     private int INK, MUTED, CANVAS, GREEN, AMBER, RED, SURFACE, BORDER, SECONDARY, TRACK, BUTTON, BUTTON_TEXT;
     private int HIGHLIGHT, HERO, HERO_TEXT, HERO_MUTED;
-    private Typeface appTypeface;
+    private Typeface appTypeface, appBoldTypeface;
     private static final String HOME = "https://www.mycamu.co.in/v2/attendance";
     private static final long AUTO_SYNC_INTERVAL_MS = 30_000L;
     private static final long ACADEMIC_SYNC_INTERVAL_MS = 15 * 60_000L;
@@ -714,7 +714,7 @@ public class MainActivity extends Activity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextSize(15);
-        button.setTypeface(appTypeface(), Typeface.BOLD);
+        button.setTypeface(boldAppTypeface());
         button.setTextColor(textColor);
         button.setBackground(background(fill, 0, 8));
         button.setOnClickListener(action);
@@ -2382,7 +2382,7 @@ public class MainActivity extends Activity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextSize(15);
-        button.setTypeface(appTypeface(), Typeface.BOLD);
+        button.setTypeface(boldAppTypeface());
         button.setTextColor(BUTTON_TEXT);
         button.setBackground(background(BUTTON, 0, 10));
         return button;
@@ -2407,8 +2407,16 @@ public class MainActivity extends Activity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
-        view.setTypeface(appTypeface(), style);
+        view.setTypeface(style == Typeface.BOLD ? boldAppTypeface() : appTypeface());
         return view;
+    }
+
+    private Typeface boldAppTypeface() {
+        if (appBoldTypeface == null) {
+            try { appBoldTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
+            catch (RuntimeException ignored) { appBoldTypeface = Typeface.create(appTypeface(), Typeface.BOLD); }
+        }
+        return appBoldTypeface;
     }
 
     private Typeface appTypeface() {
