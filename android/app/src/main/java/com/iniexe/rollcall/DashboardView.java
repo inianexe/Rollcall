@@ -1,7 +1,9 @@
 package com.iniexe.rollcall;
 
 import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
+import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
 import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
+import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
@@ -201,8 +203,7 @@ final class DashboardView extends FrameLayout {
     private TextView overviewLeaveSummary;
     private View overviewCourseHeader;
     private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewAttendanceBlock, overviewExamSection;
-    private LinearLayout overviewExamBlock;
-    private TextView overviewExamTitle, overviewExamWhen, overviewExamDate, overviewExamDetails, overviewExamType, overviewExamSession;
+    private UpcomingExamCardView overviewExamBlock;
     private TextView overviewAttendanceTitle, overviewAttendanceCourse, overviewAttendanceStatus;
     private LinearLayout overviewScheduleRows;
     private TextView overviewWeekMeta;
@@ -577,46 +578,7 @@ final class DashboardView extends FrameLayout {
         radarHeading.addView(radarTitle, new LinearLayout.LayoutParams(0, -2, 1));
         radarHeading.addView(label("01 / EXAM", 9, palette.highlight, Typeface.BOLD));
         overviewExamSection.addView(radarHeading);
-        overviewExamBlock = column();
-        overviewExamBlock.setPadding(dp(16), dp(14), dp(16), dp(14));
-        overviewExamBlock.setBackground(industrialSurface(surface, 18, border));
-        overviewExamBlock.addView(label("UPCOMING EXAM", 10, lime, Typeface.BOLD));
-        overviewExamTitle = text("", 17, ink, Typeface.BOLD);
-        overviewExamTitle.setMaxLines(2);
-        overviewExamTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamBlock.addView(overviewExamTitle, topLp(-1, -2, 5));
-        LinearLayout examBadges = row();
-        examBadges.setGravity(Gravity.CENTER_VERTICAL);
-        overviewExamType = text("", 10, muted, Typeface.BOLD);
-        overviewExamType.setPadding(dp(9), dp(5), dp(9), dp(5));
-        overviewExamType.setBackground(shape(soft, 8, 0));
-        examBadges.addView(overviewExamType, lp(-2, -2));
-        overviewExamSession = text("", 10, ink, Typeface.BOLD);
-        overviewExamSession.setPadding(dp(9), dp(5), dp(9), dp(5));
-        LinearLayout.LayoutParams sessionParams = lp(-2, -2);
-        sessionParams.leftMargin = dp(6);
-        examBadges.addView(overviewExamSession, sessionParams);
-        overviewExamBlock.addView(examBadges, topLp(-1, -2, 7));
-        LinearLayout examTiming = row();
-        examTiming.setGravity(Gravity.CENTER_VERTICAL);
-        overviewExamWhen = text("", 13, heroText, Typeface.BOLD);
-        overviewExamWhen.setPadding(dp(11), dp(7), dp(11), dp(7));
-        overviewExamWhen.setBackground(shape(hero, 10, 0));
-        examTiming.addView(overviewExamWhen, lp(-2, -2));
-        overviewExamDate = text("", 13, ink, Typeface.BOLD);
-        overviewExamDate.setPadding(dp(10), dp(7), dp(10), dp(7));
-        overviewExamDate.setSingleLine(true);
-        overviewExamDate.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamDate.setBackground(shape(soft, 10, border));
-        LinearLayout.LayoutParams examDateParams = new LinearLayout.LayoutParams(0, -2, 1f);
-        examDateParams.leftMargin = dp(8);
-        examTiming.addView(overviewExamDate, examDateParams);
-        overviewExamBlock.addView(examTiming, topLp(-1, -2, 8));
-        overviewExamDetails = text("", 11, muted, Typeface.NORMAL);
-        overviewExamDetails.setMaxLines(2);
-        overviewExamDetails.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamBlock.addView(overviewExamDetails, topLp(-1, -2, 3));
-        overviewExamBlock.setVisibility(GONE);
+        overviewExamBlock = new UpcomingExamCardView(getContext());
         overviewExamSection.addView(overviewExamBlock, topLp(-1, -2, 8));
         addTop(body, overviewExamSection, 14);
 
@@ -1127,29 +1089,16 @@ final class DashboardView extends FrameLayout {
                 && !next.upcomingExamTitle.isEmpty();
         boolean connected = next.academicConnected || !next.academicCourses.isEmpty();
         overviewExamSection.setVisibility(connected ? VISIBLE : GONE);
-        overviewExamBlock.setVisibility(connected ? VISIBLE : GONE);
         if (!connected) return;
         if (!upcoming) {
-            overviewExamTitle.setText("No upcoming exam found");
-            overviewExamType.setVisibility(GONE);
-            overviewExamSession.setVisibility(GONE);
-            overviewExamWhen.setVisibility(GONE);
-            overviewExamDate.setVisibility(GONE);
-            overviewExamDetails.setText("Refresh KCT from Marks & academics to check the latest schedule.");
-            overviewExamDetails.setVisibility(VISIBLE);
-            overviewExamBlock.setContentDescription("No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.");
+            overviewExamBlock.setExamState(new UpcomingExamCardState(
+                    false, "No upcoming exam found", "", "", "", "",
+                    "Refresh KCT from Marks & academics to check the latest schedule.",
+                    "No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.",
+                    ink, muted, surface, soft, border, lime, heroText, muted, statusTint(amber), ink));
             return;
         }
-        overviewExamWhen.setVisibility(VISIBLE);
-        overviewExamDate.setVisibility(VISIBLE);
-        overviewExamTitle.setText(next.upcomingExamTitle);
-        overviewExamType.setText(next.upcomingExamType);
-        overviewExamType.setVisibility(next.upcomingExamType.isEmpty() ? GONE : VISIBLE);
-        overviewExamSession.setText(next.upcomingExamSession);
-        overviewExamSession.setVisibility(next.upcomingExamSession.isEmpty() ? GONE : VISIBLE);
         int sessionColor = "AN".equals(next.upcomingExamSession) ? palette.highlight : amber;
-        overviewExamSession.setTextColor(sessionColor);
-        overviewExamSession.setBackground(shape(statusTint(sessionColor), 8, 0));
         SimpleDateFormat format = new SimpleDateFormat(next.upcomingExamHasTime
                 ? "EEE, d MMM · h:mm a" : "EEE, d MMM", Locale.getDefault());
         java.util.Calendar day = java.util.Calendar.getInstance();
@@ -1169,18 +1118,19 @@ final class DashboardView extends FrameLayout {
             daysUntil++;
         }
         String countdown = daysUntil == 0 ? "Today" : daysUntil == 1 ? "Tomorrow" : "In " + daysUntil + " days";
-        overviewExamWhen.setText(countdown);
-        overviewExamDate.setText(format.format(new Date(next.upcomingExamAt)));
+        String examDate = format.format(new Date(next.upcomingExamAt));
         String details = next.upcomingExamCode;
         if (!next.upcomingExamDetails.isEmpty())
             details += (details.isEmpty() ? "" : " · ") + next.upcomingExamDetails;
-        overviewExamDetails.setText(details);
-        overviewExamDetails.setVisibility(details.isEmpty() ? GONE : VISIBLE);
-        overviewExamBlock.setContentDescription("Upcoming exam: " + next.upcomingExamTitle
+        String accessibleDescription = "Upcoming exam: " + next.upcomingExamTitle
                 + (next.upcomingExamType.isEmpty() ? "" : ", " + next.upcomingExamType)
                 + (next.upcomingExamSession.isEmpty() ? "" : ", session " + next.upcomingExamSession)
-                + ", " + overviewExamWhen.getText() + ", " + overviewExamDate.getText()
-                + (details.isEmpty() ? "" : ", " + details));
+                + ", " + countdown + ", " + examDate + (details.isEmpty() ? "" : ", " + details);
+        overviewExamBlock.setExamState(new UpcomingExamCardState(
+                true, next.upcomingExamTitle, next.upcomingExamType, next.upcomingExamSession,
+                countdown, examDate, details, accessibleDescription,
+                ink, muted, surface, soft, border, lime, heroText, muted,
+                statusTint(sessionColor), sessionColor));
     }
 
     private LinearLayout forecastTile(LinearLayout parent, String title) {

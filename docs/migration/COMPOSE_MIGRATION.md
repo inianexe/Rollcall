@@ -10,7 +10,8 @@
 ## Completed
 
 - Compose build support and `ComponentActivity` interop.
-- Home hero identity/calendar ticket in Compose, embedded in the existing Java dashboard.
+- Home hero identity/calendar ticket and Home upcoming-exam card in Compose, hosted by narrow Java View bridges inside the existing Java dashboard.
+- Upcoming exam date, countdown, visibility, session highlighting and accessibility text remain prepared by the existing Java dashboard logic; Compose only displays those values.
 - Functional inventory and architecture/design/animation notes.
 - Central Compose color, typography, spacing, shape and motion tokens based on current Rollcall Signal palette.
 - Immutable `HomeHeroIdentityState` and a thin `AbstractComposeView` bridge.
@@ -20,7 +21,7 @@
 ## Still legacy / not migrated
 
 - `MainActivity` remains the application controller and Java view builder.
-- Home screen content outside its hero identity remains Java Views.
+- Home screen content outside its hero identity and upcoming-exam card remains Java Views.
 - Courses, Week, What If, Marks, Settings, onboarding, consent, MyCamu/KCT WebViews, account dialogs and updater remain Java Views.
 - No screen ViewModels, Compose navigation, repository abstraction migration, multi-module split or DI framework.
 - Notifications, workers, widgets and update flows remain unchanged.

@@ -11,7 +11,8 @@ Android lifecycle / MainActivity (Java)
   ├─ Firebase / WorkManager / reminder and update components
   └─ DashboardView (Java custom View)
        ├─ Home / Courses / Week / What If / Marks
-       └─ RollcallHeroIdentityView (interop bridge) -> HomeHeroIdentity (Compose)
+       ├─ RollcallHeroIdentityView (interop bridge) -> HomeHeroIdentity (Compose)
+       └─ UpcomingExamCardView (interop bridge) -> UpcomingExamCard (Compose)
 ```
 
 `Attendance` owns course percentage, safe absence, recovery and guidance calculations. `LiveSnapshotStore` persists the MyCamu snapshot and notifies its listener. `MainActivity.render` maps snapshot and academic preferences into `DashboardView.State`. The UI displays that state. Keep that authority relationship during migration.
