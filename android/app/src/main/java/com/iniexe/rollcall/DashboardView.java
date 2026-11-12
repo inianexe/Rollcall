@@ -245,7 +245,7 @@ final class DashboardView extends FrameLayout {
     private String query = "";
     private boolean belowOnly;
     private boolean onTrackOnly;
-    private boolean plannerAttend;
+    private boolean plannerAttend = true;
     private TextView plannerMissView, plannerAttendView;
     private int plannerCount = 1, plannerCourse;
     private int selectedPage;
@@ -826,7 +826,7 @@ final class DashboardView extends FrameLayout {
 
     private void buildLabPage() {
         LinearLayout body = newPage(3);
-        addTop(body, heading("04 / ATTENDANCE LAB", "What if?", "See how attending or missing classes changes your target."), 8);
+        addTop(body, heading("04 / SCENARIO LAB", "What if?", "Try the possibilities. Your attendance records stay unchanged."), 8);
         addTop(body, plannerCard(), 2);
         addTop(body, targetCard(), 12);
         addTop(body, text("This is an estimate based on your latest MyCamu counts. It does not change your attendance record.",
@@ -2135,98 +2135,136 @@ final class DashboardView extends FrameLayout {
         return field;
     }
 
+    private TextView plannerCurrentValue;
+    private android.widget.SeekBar plannerCountSlider;
+
+    /** Torch Genesis lilac projection studio, backed entirely by the real What-if math. */
     private View plannerCard() {
-        LinearLayout card = card();
-        card.addView(label("Choose a course", 13, muted, Typeface.BOLD));
+        LinearLayout studio = column();
+        studio.addView(label("CHOOSE A COURSE", 10, muted, Typeface.BOLD));
         coursePicker = new FrameLayout(getContext());
-        coursePicker.setBackground(shape(surface, 12, border));
-        coursePickerText = text("Choose a course", 14, ink, Typeface.NORMAL);
+        coursePicker.setBackground(shape(soft, 10, border));
+        coursePicker.setFocusable(true);
+        coursePicker.setContentDescription("Choose a course to simulate");
+        coursePickerText = text("Choose a course", 13, ink, Typeface.BOLD);
         coursePickerText.setGravity(Gravity.CENTER_VERTICAL);
         coursePickerText.setMaxLines(2);
         coursePickerText.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        coursePickerText.setPadding(dp(12), 0, dp(40), 0);
+        coursePickerText.setPadding(dp(15), 0, dp(43), 0);
         coursePicker.addView(coursePickerText, new FrameLayout.LayoutParams(-1, -1));
-        TextView spinnerArrow = text("⌄", 18, muted, Typeface.NORMAL);
-        spinnerArrow.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams arrowParams = new FrameLayout.LayoutParams(dp(40), -1, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        coursePicker.addView(spinnerArrow, arrowParams);
+        TextView arrow = text("⌄", 21, ink, Typeface.BOLD);
+        arrow.setGravity(Gravity.CENTER);
+        coursePicker.addView(arrow, new FrameLayout.LayoutParams(dp(43), -1, Gravity.RIGHT));
         coursePicker.setOnClickListener(v -> showCoursePopup());
-        card.addView(coursePicker, topLp(-1, dp(72), 12));
-        plannerBaseline = text("", 12, muted, Typeface.NORMAL);
-        card.addView(plannerBaseline, topLp(-1, -2, 10));
-        odNotice = text("", 12, muted, Typeface.NORMAL);
-        card.addView(odNotice, topLp(-1, -2, 12));
+        studio.addView(coursePicker, topLp(-1, dp(56), 12));
+
+        LinearLayout projected = column();
+        projected.setPadding(dp(20), dp(20), dp(20), dp(19));
+        projected.setBackground(shape(palette.focusSurface, 17, 0));
+        projected.addView(label("YOUR ATTENDANCE / PROJECTED", 10, 0xFF121212, Typeface.BOLD));
+        LinearLayout stats = row();
+        stats.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout current = column();
+        current.addView(label("CURRENT", 10, 0xFF333333, Typeface.BOLD));
+        plannerCurrentValue = text("—", 34, 0xFF121212, Typeface.BOLD);
+        plannerCurrentValue.setLetterSpacing(-.09f);
+        current.addView(plannerCurrentValue, topLp(-1, -2, 7));
+        stats.addView(current, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView fromTo = text("→", 27, 0xFFAD3000, Typeface.BOLD);
+        fromTo.setGravity(Gravity.CENTER);
+        stats.addView(fromTo, lp(dp(46), -2));
+        LinearLayout future = column();
+        future.addView(label("AFTER PLAN", 10, 0xFF333333, Typeface.BOLD));
+        projectionView = text("—", 34, 0xFF121212, Typeface.BOLD);
+        projectionView.setLetterSpacing(-.09f);
+        future.addView(projectionView, topLp(-1, -2, 7));
+        stats.addView(future, new LinearLayout.LayoutParams(0, -2, 1f));
+        projected.addView(stats, topLp(-1, -2, 18));
+        projectionStatusView = text("Your projected attendance after this simulation.", 11,
+                0xFF343A26, Typeface.BOLD);
+        projected.addView(projectionStatusView, topLp(-1, -2, 12));
+        studio.addView(projected, topLp(-1, -2, 18));
+
+        plannerBaseline = text("", 11, muted, Typeface.NORMAL);
+        studio.addView(plannerBaseline, topLp(-1, -2, 13));
+
+        studio.addView(label("SIMULATE / CLASSES", 10, muted, Typeface.BOLD),
+                topLp(-1, -2, 24));
+        LinearLayout mode = row();
+        plannerAttendView = filterChip("ATTEND");
+        plannerMissView = filterChip("MISS");
+        plannerAttendView.setMinHeight(dp(48));
+        plannerMissView.setMinHeight(dp(48));
+        mode.addView(plannerAttendView, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        LinearLayout.LayoutParams missParams = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        missParams.leftMargin = dp(5);
+        mode.addView(plannerMissView, missParams);
+        plannerAttendView.setOnClickListener(v -> { plannerAttend = true; plannerFeedback(v); });
+        plannerMissView.setOnClickListener(v -> { plannerAttend = false; plannerFeedback(v); });
+        studio.addView(mode, topLp(-1, -2, 11));
+
+        LinearLayout sliderLabels = row();
+        sliderLabels.setGravity(Gravity.CENTER_VERTICAL);
+        sliderLabels.addView(label("NUMBER OF CLASSES", 10, muted, Typeface.BOLD),
+                new LinearLayout.LayoutParams(0, -2, 1f));
+        plannerCountView = text("01", 29, linkInk, Typeface.BOLD);
+        sliderLabels.addView(plannerCountView);
+        studio.addView(sliderLabels, topLp(-1, -2, 22));
+        plannerCountSlider = new android.widget.SeekBar(getContext());
+        plannerCountSlider.setMax(49);
+        plannerCountSlider.setProgress(plannerCount - 1);
+        plannerCountSlider.setProgressTintList(android.content.res.ColorStateList.valueOf(hero));
+        plannerCountSlider.setThumbTintList(android.content.res.ColorStateList.valueOf(hero));
+        plannerCountSlider.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(track));
+        plannerCountSlider.setContentDescription("Number of classes to simulate, from 1 to 50");
+        plannerCountSlider.setMinHeight(dp(48));
+        plannerCountSlider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar bar, int value, boolean fromUser) {
+                if (fromUser) { plannerCount = value + 1; updatePlanner(); }
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar bar) { }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar bar) {
+                bar.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            }
+        });
+        studio.addView(plannerCountSlider, topLp(-1, dp(48), 8));
+        LinearLayout limits = row();
+        limits.addView(text("01", 10, muted, Typeface.NORMAL), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView mid = text("25", 10, muted, Typeface.NORMAL);
+        mid.setGravity(Gravity.CENTER);
+        limits.addView(mid, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView maximum = text("50", 10, muted, Typeface.NORMAL);
+        maximum.setGravity(Gravity.RIGHT);
+        limits.addView(maximum, new LinearLayout.LayoutParams(0, -2, 1f));
+        studio.addView(limits);
+
+        plannerFeedback = text("Choose a course to explore your options.", 11, muted, Typeface.NORMAL);
+        plannerFeedback.setPadding(dp(15), dp(14), dp(15), dp(14));
+        plannerFeedback.setBackground(shape(soft, 11, border));
+        plannerFeedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        studio.addView(plannerFeedback, topLp(-1, -2, 22));
+
+        plannerMeter = new PlannerMeter(getContext());
+        studio.addView(plannerMeter, topLp(-1, dp(24), 9));
+
+        odNotice = text("", 11, muted, Typeface.NORMAL);
+        odNotice.setLineSpacing(dp(2), 1f);
+        studio.addView(odNotice, topLp(-1, -2, 18));
         odOptions = column();
-        String[] policies = {"Recorded", "OD present", "OD excluded"};
-        for (int i = 0; i < policies.length; i++) {
+        odOptions.addView(label("APPROVED OD / PREVIEW RULE", 10, linkInk, Typeface.BOLD));
+        String[] rules = {"Recorded", "OD present", "OD excluded"};
+        for (int i = 0; i < rules.length; i++) {
             final int policy = i;
-            TextView chip = filterChip(policies[i]);
+            TextView chip = filterChip(rules[i]);
             chip.setTextSize(12);
-            chip.setPadding(dp(14), 0, dp(14), 0);
+            chip.setGravity(Gravity.CENTER);
             chip.setMinHeight(dp(48));
             chip.setOnClickListener(v -> { odMode = policy; plannerFeedback(v); });
-            LinearLayout.LayoutParams chipParams = lp(-1, dp(48));
-            chipParams.bottomMargin = dp(6);
-            odOptions.addView(chip, chipParams);
+            odOptions.addView(chip, topLp(-1, dp(48), 7));
             odChips[i] = chip;
         }
-        card.addView(odOptions, topLp(-1, -2, 8));
-
-        LinearLayout mode = row();
-        TextView miss = filterChip("If I miss");
-        TextView attend = filterChip("If I attend");
-        plannerMissView = miss;
-        plannerAttendView = attend;
-        miss.setContentDescription("Project attendance if I miss the next classes");
-        attend.setContentDescription("Project attendance if I attend the next classes");
-        miss.setGravity(Gravity.CENTER);
-        attend.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams missParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        missParams.rightMargin = dp(5);
-        LinearLayout.LayoutParams attendParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        attendParams.leftMargin = dp(5);
-        mode.addView(miss, missParams);
-        mode.addView(attend, attendParams);
-        card.addView(label("Plan a scenario", 13, muted, Typeface.BOLD), topLp(-1, -2, 14));
-        card.addView(mode, topLp(-1, -2, 10));
-        miss.setOnClickListener(v -> { plannerAttend = false; plannerFeedback(v); });
-        attend.setOnClickListener(v -> { plannerAttend = true; plannerFeedback(v); });
-
-        LinearLayout stepper = row();
-        stepper.setGravity(Gravity.CENTER_VERTICAL);
-        Button minus = compactButton("−", soft, ink);
-        Button plus = compactButton("+", hero, heroText);
-        minus.setContentDescription("Decrease projected classes");
-        plus.setContentDescription("Increase projected classes");
-        plannerCountView = text("1 class", 20, ink, Typeface.NORMAL);
-        plannerCountView.setGravity(Gravity.CENTER);
-        stepper.addView(minus, lp(dp(48), dp(48)));
-        stepper.addView(plannerCountView, new LinearLayout.LayoutParams(0, dp(48), 1));
-        stepper.addView(plus, lp(dp(48), dp(48)));
-        card.addView(stepper, topLp(-1, -2, 16));
-        minus.setOnClickListener(v -> { plannerCount = Math.max(1, plannerCount - 1); plannerFeedback(v); });
-        plus.setOnClickListener(v -> { plannerCount = Math.min(50, plannerCount + 1); plannerFeedback(v); });
-
-        LinearLayout result = row();
-        result.setGravity(Gravity.CENTER_VERTICAL);
-        result.setPadding(dp(13), dp(12), dp(13), dp(12));
-        result.setBackground(shape(soft, 12, 0));
-        LinearLayout projection = column();
-        projection.addView(text("Projected attendance", 10, muted, Typeface.NORMAL));
-        projectionView = text("—", 36, ink, Typeface.BOLD);
-        projection.addView(projectionView, topLp(-1, -2, 3));
-        result.addView(projection, new LinearLayout.LayoutParams(0, -2, 1));
-        projectionStatusView = text("Counts unavailable", 9, muted, Typeface.NORMAL);
-        projectionStatusView.setPadding(dp(8), dp(7), dp(8), dp(7));
-        projectionStatusView.setBackground(shape(surface, 100, 0));
-        result.addView(projectionStatusView);
-        card.addView(result, topLp(-1, -2, 14));
-        plannerMeter = new PlannerMeter(getContext());
-        card.addView(plannerMeter, topLp(-1, 28, 12));
-        plannerFeedback = text("Choose a course to explore your options.", 12, muted, Typeface.NORMAL);
-        card.addView(plannerFeedback, topLp(-1, -2, 6));
-        
-        return card;
+        studio.addView(odOptions, topLp(-1, -2, 13));
+        return studio;
     }
 
     private void buildNavigation(LinearLayout shell) {
@@ -2815,10 +2853,14 @@ final class DashboardView extends FrameLayout {
 
     private void updatePlanner() {
         if (plannerCountView == null) return;
-        plannerCountView.setText(plannerCount + (plannerCount == 1 ? " class" : " classes"));
+        plannerCountView.setText(String.format(Locale.ROOT, "%02d", plannerCount));
+        if (plannerCountSlider != null && plannerCountSlider.getProgress() != plannerCount - 1)
+            plannerCountSlider.setProgress(plannerCount - 1);
         setChipSelected(plannerMissView, !plannerAttend);
         setChipSelected(plannerAttendView, plannerAttend);
         Course course = state.rows.isEmpty() ? null : state.rows.get(Math.min(plannerCourse, state.rows.size() - 1));
+        if (plannerCurrentValue != null)
+            plannerCurrentValue.setText(course == null || !course.countsKnown ? "—" : course.percentLabel);
         if (plannerBaseline != null) plannerBaseline.setText(course == null ? "" : course.percentLabel
                 + " now · " + course.counts + (course.targetCount.isEmpty() ? "" : "\n" + course.targetCount)
                 + odCoverageSummary(course));
@@ -2831,9 +2873,9 @@ final class DashboardView extends FrameLayout {
             plannerMeter.setVisibility(GONE);
             plannerFeedback.setText("Sync your class counts to explore your options.");
             projectionView.setText("—");
-            projectionView.setTextColor(ink);
+            projectionView.setTextColor(0xFF121212);
             projectionStatusView.setText("Counts unavailable");
-            projectionStatusView.setTextColor(muted);
+            projectionStatusView.setTextColor(0xFF343A26);
             return;
         }
         boolean canPreviewOd = course.odReconciled && course.odCredit > 0 && course.odCredit <= course.total - course.attended;
@@ -2874,10 +2916,10 @@ final class DashboardView extends FrameLayout {
                 : "After this plan, attend " + forecast.periodsToRecover(state.target)
                     + " consecutive classes to reach " + state.target + "%.");
         projectionView.setText(String.format(Locale.getDefault(), "%.1f%%", projected));
-        projectionView.setTextColor(projected < state.target ? red : ink);
+        projectionView.setTextColor(0xFF121212);
         projectionStatusView.setText(String.format(Locale.getDefault(), "%+.1f pts\n%s",
                 projected - course.percent, projected >= state.target ? "Above target" : "Below target"));
-        projectionStatusView.setTextColor(projected < state.target ? red : muted);
+        projectionStatusView.setTextColor(0xFF343A26);
     }
 
     private String odCoverageSummary(Course course) {
