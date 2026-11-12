@@ -4,6 +4,7 @@
 
 - Baseline branch: `codex/rollcall-torch-ui`
 - Baseline commit: `2c21ca0` (Rollcall 1.0.24, code 25)
+- Foundation commit: `7763bda`; Home exam card commit: `5683bfb` (pushed to the migration branch)
 - Prior rollback: `design-review/rollback/20261112-before-compose-migration` (kept intact)
 - This phase checkpoint: `design-review/rollback/20261112-pre-lottie-compose-foundation` (APK and source archive)
 
@@ -33,6 +34,7 @@
 - This phase `./gradlew assembleDebug`: PASS.
 - This phase `./gradlew assembleRelease`: PASS with the existing local signing setup; no release was published.
 - `git diff --check`: PASS.
+- Release APK size after this phase: 12,379,115 bytes; the pre-phase APK checkpoint is 11,399,990 bytes. The roughly 0.98 MB increase is a real size cost of adding Lottie/Compose support and should be reconsidered if Rollcall decides not to ship Lottie animations.
 - Device-specific MyCamu/KCT, notification, alarm, Firebase, update/install, large-font and performance tests remain NOT TESTED unless explicitly recorded in a later checkpoint.
 - There is no Lottie asset, so playback appearance, theme recoloring, and Lottie frame/memory performance are NOT TESTED.
 
