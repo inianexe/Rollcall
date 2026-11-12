@@ -421,7 +421,7 @@ final class DashboardView extends FrameLayout {
         targetHintView.setText(next.targetHint);
         updateDecision();
         onTrackView.setText(next.onTrack + " of " + next.courses + " courses on target");
-        overviewCourseHeader.setVisibility(next.below > 0 ? VISIBLE : GONE);
+        overviewCourseHeader.setVisibility(VISIBLE);
         courseLists[0].setVisibility(next.below > 0 ? VISIBLE : GONE);
         overviewEmptyView.setVisibility(next.below > 0 ? GONE : VISIBLE);
         overviewEmptyView.setTextColor(next.rows.isEmpty() ? muted : green);
@@ -486,8 +486,8 @@ final class DashboardView extends FrameLayout {
         addView(shell, new LayoutParams(-1, -1));
 
         LinearLayout header = column();
-        header.setPadding(dp(20), dp(12), dp(20), 0);
-        header.addView(topBar(true), lp(-1, dp(48)));
+        header.setPadding(dp(23), dp(12), dp(23), dp(3));
+        header.addView(topBar(true), lp(-1, dp(64)));
         shell.addView(header, new LinearLayout.LayoutParams(-1, -2));
         pages.setBackgroundColor(canvas);
         shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -788,6 +788,19 @@ final class DashboardView extends FrameLayout {
         homeWeekNumberView.setIncludeFontPadding(false);
         TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
         homeWeekMonthView = text("—", 8, 0xFF121212, Typeface.BOLD);
+        // Binder-like rings make the calendar an intentional illustration.
+        for (int i = 0; i < 2; i++) {
+            View ring = new View(getContext());
+            GradientDrawable rim = new GradientDrawable();
+            rim.setColor(Color.TRANSPARENT);
+            rim.setCornerRadius(dp(40));
+            rim.setStroke(dp(4), 0xFF707775);
+            ring.setBackground(rim);
+            FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(dp(16), dp(27));
+            rp.leftMargin = dp(i == 0 ? 35 : 86);
+            rp.topMargin = -dp(2);
+            ticket.addView(ring, rp);
+        }
         face.addView(homeTicketLabelView);
         face.addView(homeWeekNumberView, topLp(-1, -2, 4));
         face.addView(ticketRule, topLp(-1, -2, 1));
@@ -1252,9 +1265,20 @@ final class DashboardView extends FrameLayout {
                 : dateKey.format(new Date(next.upcomingExamAt)).compareTo(dateKey.format(new Date())) >= 0)
                 && !next.upcomingExamTitle.isEmpty();
         boolean connected = next.academicConnected || !next.academicCourses.isEmpty();
-        overviewExamSection.setVisibility(connected ? VISIBLE : GONE);
-        overviewExamBlock.setVisibility(connected ? VISIBLE : GONE);
-        if (!connected) return;
+        overviewExamSection.setVisibility(VISIBLE);
+        overviewExamBlock.setVisibility(VISIBLE);
+        if (!connected) {
+            overviewExamTitle.setText("CONNECT KCT FOR UPCOMING EXAMS");
+            overviewExamType.setVisibility(GONE);
+            overviewExamSession.setVisibility(GONE);
+            overviewExamWhen.setVisibility(GONE);
+            overviewExamDate.setVisibility(GONE);
+            overviewExamDetails.setText("Open Marks to connect your academic portal.");
+            overviewExamBlock.setOnClickListener(v -> actions.onAcademicsPortal());
+            overviewExamBlock.setContentDescription("Connect the KCT portal to see exams");
+            return;
+        }
+        overviewExamBlock.setOnClickListener(v -> showPage(4));
         if (!upcoming) {
             overviewExamTitle.setText("No upcoming exam found");
             overviewExamType.setVisibility(GONE);
@@ -1956,57 +1980,43 @@ final class DashboardView extends FrameLayout {
         return false;
     }
 
+    /** The HTML header uses a settings cog; appearance switching lives inside Settings. */
     private final class ModeSwitchButtonView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private boolean dark;
 
         ModeSwitchButtonView(Context context) {
             super(context);
-            setBackground(shape(surface, 10, border));
+            setBackground(shape(surface, 12, border));
             setFocusable(true);
             setClickable(true);
-            setElevation(dp(1));
-            setOnClickListener(v -> actions.onTheme());
+            setContentDescription("Open Rollcall settings");
+            setOnClickListener(v -> actions.onAbout());
             setTactileFeedback(this);
-            setDark(false);
         }
 
-        void setDark(boolean value) {
-            dark = value;
-            setSelected(value);
-            setContentDescription(value ? "Switch to light mode" : "Switch to dark mode");
-            invalidate();
-        }
+        void setDark(boolean value) { invalidate(); }
 
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            float cy = getHeight() / 2f;
-            float cx = getWidth() / 2f;
-            paint.setStyle(Paint.Style.FILL);
-            paint.setStrokeWidth(dp(1.6f));
+            float cx = getWidth() / 2f, cy = getHeight() / 2f;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(1.8f));
             paint.setStrokeCap(Paint.Cap.ROUND);
-            if (dark) {
-                paint.setColor(ink);
-                canvas.drawCircle(cx, cy, dp(6.2f), paint);
-                paint.setColor(surface);
-                canvas.drawCircle(cx + dp(3.8f), cy - dp(3.4f), dp(5.8f), paint);
-            } else {
-                paint.setColor(ink);
-                canvas.drawCircle(cx, cy, dp(3.8f), paint);
-                paint.setStyle(Paint.Style.STROKE);
-                for (int i = 0; i < 8; i++) {
-                    double angle = i * Math.PI / 4d;
-                    float x1 = cx + (float) Math.cos(angle) * dp(6.2f);
-                    float y1 = cy + (float) Math.sin(angle) * dp(6.2f);
-                    float x2 = cx + (float) Math.cos(angle) * dp(8.3f);
-                    float y2 = cy + (float) Math.sin(angle) * dp(8.3f);
-                    canvas.drawLine(x1, y1, x2, y2, paint);
-                }
+            paint.setColor(ink);
+            canvas.drawCircle(cx, cy, dp(8f), paint);
+            canvas.drawCircle(cx, cy, dp(2.9f), paint);
+            for (int i = 0; i < 8; i++) {
+                double angle = Math.PI * 2d * i / 8d;
+                float ax = (float) Math.cos(angle), ay = (float) Math.sin(angle);
+                canvas.drawLine(cx + ax * dp(9.4f), cy + ay * dp(9.4f),
+                        cx + ax * dp(12f), cy + ay * dp(12f), paint);
             }
             paint.setStyle(Paint.Style.FILL);
         }
 
-        @Override public CharSequence getAccessibilityClassName() { return Button.class.getName(); }
+        @Override public CharSequence getAccessibilityClassName() {
+            return Button.class.getName();
+        }
     }
 
     private View topBar(boolean showTheme) {
@@ -2014,7 +2024,7 @@ final class DashboardView extends FrameLayout {
         RollcallLogo logo = new RollcallLogo(getContext(), palette);
         logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         bar.addView(logo, lp(dp(34), dp(34)));
-        TextView brand = text("rollcall", 19, ink, Typeface.BOLD);
+        TextView brand = text("rollcall", 24, ink, Typeface.BOLD);
         brand.setPadding(dp(8), 0, 0, 0);
         brand.setGravity(Gravity.CENTER_VERTICAL);
         if (cyberpunk) {
@@ -2047,10 +2057,10 @@ final class DashboardView extends FrameLayout {
         box.addView(label(index, 9, linkInk, Typeface.BOLD));
         SpannableString titleText = new SpannableString(title + ".");
         titleText.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight), title.length(), titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        TextView heading = text(titleText.toString(), 32, ink, Typeface.BOLD);
+        TextView heading = text(titleText.toString(), 35, ink, Typeface.BOLD);
         heading.setText(titleText);
-        heading.setTypeface(displayTypeface, Typeface.BOLD);
-        heading.setLetterSpacing(-.055f);
+        heading.setTypeface(uiTypeface, Typeface.BOLD);
+        heading.setLetterSpacing(-.09f);
         box.addView(heading, topLp(-1, -2, 6));
         TextView sub = text(subtitle, 12, muted, Typeface.NORMAL);
         sub.setLineSpacing(dp(2), 1f);
@@ -2318,7 +2328,7 @@ final class DashboardView extends FrameLayout {
         // Update visibility synchronously so rapid taps cannot hide the newly selected page.
         int direction = page > selectedPage ? 1 : -1;
         selectedPage = page;
-        if (homeThemeButton != null) homeThemeButton.setVisibility(page == 0 ? VISIBLE : GONE);
+        if (homeThemeButton != null) homeThemeButton.setVisibility(VISIBLE);
         if (page == 2) updateTimetable();
         for (int i = 0; i < pageScrolls.length; i++) {
             ScrollView candidate = pageScrolls[i];
