@@ -34,7 +34,8 @@
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 /* Native app: preserve prototype visual geometry without desktop rails or simulated status bar. */
 @font-face{font-family:'JetBrains Mono';src:url('fonts/JetBrainsMono-Regular.ttf') format('truetype');font-style:normal;font-weight:400}
-@font-face{font-family:'JetBrains Mono';src:url('fonts/JetBrainsMono-Bold.ttf') format('truetype');font-style:normal;font-weight:700 800}
+@font-face{font-family:'JetBrains Mono';src:url('fonts/JetBrainsMono-Bold.ttf') format('truetype');font-style:normal;font-weight:700}
+@font-face{font-family:'JetBrains Mono';src:url('fonts/JetBrainsMono-Bold.ttf') format('truetype');font-style:normal;font-weight:800}
 html,body{background:#121212}.torch-app{display:block!important;background:var(--ink)!important;min-height:100svh}.phone-shell{width:100%;max-width:none;min-height:100svh;box-shadow:none;margin:0}.screen{min-height:calc(100svh - 66px);padding-bottom:128px}.navi{left:50%!important;bottom:max(10px,env(safe-area-inset-bottom))!important;width:min(calc(100% - 32px),398px)!important;transform:translateX(-50%)!important}
 html{overflow-x:hidden} .app-header{height:72px}.screen:not(.active){display:none!important}
 body:not(.native-ready) .screen{visibility:hidden}
@@ -89,6 +90,22 @@ body.light-mode .hero .eyebrow,body.light-mode .hero .hero-foot{color:#111}
 body.light-mode .page-title{color:var(--paper)}
 body.light-mode .navi{box-shadow:0 10px 28px #00000018}
 @media(prefers-reduced-motion:reduce){.screen{animation:none!important}}
+
+/* Functional calendar ticket, keyboard controls and readable light-state accents. */
+.ticket-art{pointer-events:auto;cursor:pointer;z-index:3}
+.ticket-art:focus-visible{outline:3px solid var(--orange);outline-offset:4px}
+body.light-mode .micro-card:not(.lilac) strong[style]{color:#365000!important}
+body.light-mode .countdown,body.light-mode .number-row strong{color:#365000!important}
+body.light-mode .risk-end strong{color:#B42335}
+body.light-mode .risk-end span{color:#A02F22}
+body.light-mode .risk-end strong[style]{color:#365000!important}
+body.light-mode .eyebrow[style*="var(--lime)"],body.light-mode .date-group[style*="var(--lime)"]{color:#365000!important}
+body.light-mode .course .course-metrics .metric strong{color:inherit}
+body.light-mode #page-week .present{background:#e4eee4}
+body.light-mode #page-home .broadcast-row .micro-card.lilac .eyebrow{color:#1B1B1B}
+body.light-mode .footer-label{color:#596057}
+button:focus-visible,[role="button"]:focus-visible{outline:3px solid var(--lilac);outline-offset:3px}
+
 </style>
 </head>
 <body>
