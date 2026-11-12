@@ -499,6 +499,37 @@ public class MainActivity extends Activity {
                 if (!expandedCourses.add(code)) expandedCourses.remove(code);
                 render(LiveSnapshotStore.get());
             }
+            @Override public void onReminderToggle() {
+                if (classRemindersEnabled) {
+                    android.widget.Switch dummy = new android.widget.Switch(MainActivity.this);
+                    onReminderSwitchChanged(dummy, false);
+                } else {
+                    setClassRemindersEnabled(true);
+                    render(LiveSnapshotStore.get());
+                }
+            }
+            @Override public void onNotifications() {
+                Intent intent = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                startActivity(intent);
+            }
+            @Override public void onCloudAccount() { showCloudAccountDialog(); }
+            @Override public void onUpdates() {
+                ReleaseUpdateNotifier.check(MainActivity.this);
+                Toast.makeText(MainActivity.this, "Checking GitHub for Rollcall updates…", Toast.LENGTH_SHORT).show();
+            }
+            @Override public void onClearSavedData() { confirmClearSavedData(); }
+            @Override public void onPrivacy() { openUrl("https://github.com/inianexe/Rollcall/blob/main/PRIVACY.md"); }
+            @Override public void onTerms() { openUrl("https://github.com/inianexe/Rollcall/blob/main/TERMS.md"); }
+            @Override public void onProject() { openUrl("https://github.com/inianexe/Rollcall"); }
+            @Override public void onTargetChanged(int target) {
+                attendanceTarget = target;
+                getPreferences(MODE_PRIVATE).edit().putInt("attendance_target", target).apply();
+                AttendanceEventNotifier.setTargetBaseline(MainActivity.this,
+                        LiveSnapshotStore.get().attendance, target);
+                expandedCourses.clear();
+                render(LiveSnapshotStore.get());
+            }
         }, palette);
         render(LiveSnapshotStore.get());
         return dashboardView;
@@ -1844,6 +1875,12 @@ public class MainActivity extends Activity {
     }
 
     private void showAbout() {
+        // The Torch HTML screen is the sole appearance for connected-app settings.
+        if (connectedOnce && dashboardView != null) {
+            showDashboard();
+            dashboardView.openSettings();
+            return;
+        }
         if (aboutPage != null && aboutPage.getParent() instanceof ViewGroup) {
             ViewGroup parent = (ViewGroup) aboutPage.getParent();
             int index = parent.indexOfChild(aboutPage);
@@ -2362,6 +2399,8 @@ public class MainActivity extends Activity {
         }
         DashboardView.State ui = new DashboardView.State();
         ui.dark = darkTheme;
+        ui.remindersEnabled = classRemindersEnabled;
+        ui.version = BuildConfig.VERSION_NAME;
         ui.name = studentName.isEmpty() ? "MyCamu student" : studentName;
         String[] nameParts = studentName.trim().split("\\s+");
         ui.initials = nameParts.length == 0 || nameParts[0].isEmpty() ? "R"
