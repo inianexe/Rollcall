@@ -2060,17 +2060,22 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(CANVAS);
 
-        TextView title = text("Connect your account", 26, INK, Typeface.NORMAL);
-        title.setTypeface(appTypeface(), Typeface.BOLD);
-        title.setPadding(dp(16), dp(12), dp(16), dp(4));
+        TextView overline = text("ROLLCALL / SECURE CONNECTION", 10, HIGHLIGHT, Typeface.BOLD);
+        overline.setLetterSpacing(.1f);
+        overline.setPadding(dp(22), dp(14), dp(22), dp(4));
+        page.addView(overline);
+        TextView title = text("Connect your account.", 27, INK, Typeface.BOLD);
+        title.setLetterSpacing(-.05f);
+        title.setPadding(dp(22), dp(4), dp(22), dp(4));
         page.addView(title);
         webStatus = text(connectedOnce ? "Attendance refreshes every minute while Rollcall is open."
                 : "Sign in below. After sign-in, review what Rollcall can read before the first sync.", 13, MUTED, Typeface.NORMAL);
-        webStatus.setPadding(dp(16), dp(4), dp(16), dp(8));
+        webStatus.setPadding(dp(22), dp(4), dp(22), dp(12));
         page.addView(webStatus);
 
         LinearLayout actions = new LinearLayout(this);
-        webSyncButton = button(connectedOnce ? "Sync attendance" : "Check sign-in");
+        actions.setPadding(dp(22), 0, dp(22), dp(14));
+        webSyncButton = button(connectedOnce ? "SYNC ATTENDANCE  ↗" : "CHECK SIGN-IN  ↗");
         webSyncButton.setAllCaps(false);
         webSyncButton.setTextColor(BUTTON_TEXT);
         webSyncButton.setBackgroundTintList(ColorStateList.valueOf(BUTTON));
@@ -2130,18 +2135,18 @@ public class MainActivity extends Activity {
         page.setBackgroundColor(CANVAS);
         LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(16), dp(8), dp(16), dp(4));
+        header.setPadding(dp(20), dp(12), dp(20), dp(9));
         TextView back = text("‹", 32, INK, Typeface.NORMAL);
         back.setGravity(android.view.Gravity.CENTER);
         back.setContentDescription("Back to Marks and academics");
         back.setOnClickListener(v -> showDashboard());
         header.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        TextView title = text("KCT portal", 19, INK, Typeface.BOLD);
+        TextView title = text("KCT / ACADEMICS  ↗", 18, INK, Typeface.BOLD);
         title.setPadding(dp(8), 0, 0, 0);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         page.addView(header);
         kctPortalStatus = text("Sign in on the KCT portal to view your academic record.", 12, MUTED, Typeface.NORMAL);
-        kctPortalStatus.setPadding(dp(20), dp(2), dp(20), dp(8));
+        kctPortalStatus.setPadding(dp(22), dp(2), dp(22), dp(12));
         page.addView(kctPortalStatus);
         kctWebView = new WebView(this);
         kctWebView.setBackgroundColor(Color.WHITE);
