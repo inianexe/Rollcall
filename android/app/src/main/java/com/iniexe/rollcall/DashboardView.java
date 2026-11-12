@@ -26,6 +26,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -306,6 +307,19 @@ final class DashboardView extends FrameLayout {
         }
         json.put("academicCourses", grades);
         return json;
+    }
+
+    // Used by the unchanged Android notification service for concise class titles.
+    static String shortCourseName(String name) {
+        if (name == null || name.trim().isEmpty()) return "Class";
+        name = name.trim();
+        if (name.indexOf(' ') < 0 && name.length() <= 20) return name;
+        StringBuilder shortName = new StringBuilder();
+        for (String part : name.toUpperCase(Locale.ROOT).split("[^A-Z0-9]+")) {
+            if (part.isEmpty() || "AND".equals(part) || "OF".equals(part) || "THE".equals(part)) continue;
+            shortName.append(part.charAt(0));
+        }
+        return shortName.length() == 0 ? name : shortName.toString();
     }
 
     private void navigate(String page) {
