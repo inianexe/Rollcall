@@ -287,6 +287,9 @@ final class DashboardView extends FrameLayout {
             item.put("id", m.id); item.put("type", m.type);
             item.put("date", m.date); item.put("status", m.status);
             item.put("details", m.details); item.put("periods", m.periods);
+            item.put("periodNumbers", m.periodNumbers);
+            item.put("periodDetails", m.periodDetails);
+            item.put("semesterKnown", m.semesterKnown);
             item.put("currentSemester", m.currentSemester);
             item.put("startsAt", m.startsAt); item.put("endsAt", m.endsAt);
             leaves.put(item);
