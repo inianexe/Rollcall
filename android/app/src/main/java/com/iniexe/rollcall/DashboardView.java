@@ -221,7 +221,7 @@ final class DashboardView extends FrameLayout {
         try {
             JSONObject data = toJson(state);
             String safeJson = data.toString();
-            web.evaluateJavascript("window.__rollcallRender(" + safeJson + ");", null);
+            web.evaluateJavascript("window.__rollcallRender(" + safeJson + ");window.__rollcallNavigate(" + JSONObject.quote(currentPage) + ");", null);
         } catch (JSONException ignored) {
             // A bad record must not crash Rollcall's native attendance service.
         }
@@ -319,6 +319,15 @@ final class DashboardView extends FrameLayout {
     private void navigate(String page) {
         currentPage = page;
         if (ready) web.evaluateJavascript("window.__rollcallNavigate(" + JSONObject.quote(page) + ");", null);
+    }
+    String getCurrentPage() { return currentPage; }
+    void destroy() {
+        ready = false;
+        web.removeJavascriptInterface("RollcallBridge");
+        web.stopLoading();
+        web.loadUrl("about:blank");
+        removeView(web);
+        web.destroy();
     }
     void openSettings() { navigate("settings"); }
     void openWidgetPage(int index) {
