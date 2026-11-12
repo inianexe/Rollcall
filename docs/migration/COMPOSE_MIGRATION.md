@@ -84,6 +84,6 @@ Phase 6A was run from `22d58c9` on `codex/rollcall-torch-ui`.
 
 ## Next safe slices
 
-1. Add a reproducible Courses performance scenario or profiler trace, including scroll/search and frame timing, on the same isolated AVD.
+1. Phase 6B.1 established a repeatable 48-row Courses interaction fixture, three `gfxinfo`/PSS runs, and a nonempty Perfetto trace on the isolated Android 16 AVD. See `docs/testing/PHASE6B_PERFORMANCE.md`. Debug-emulator jank was 69.92–73.44%; the trace does not yet isolate a safe production-code fix. Obtain a comparable release-like device trace before claiming performance parity or optimizing the screen.
 2. Perform manual TalkBack and process-death/relaunch checks; verify live external integrations separately with an authorized account only when required.
 3. Continue with Week only after a separate behavior inventory and migration gate.

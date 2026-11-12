@@ -9,12 +9,19 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipeDown
 import android.view.View
 import android.view.ViewGroup
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import android.os.SystemClock
 import android.animation.ValueAnimator
+import java.io.File
+import java.io.FileInputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -25,6 +32,76 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class DashboardViewIntegrationTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun profileCoursesInteractions() {
+        val rows = (0 until 24).flatMap { index ->
+            val code = "P%03d".format(index)
+            listOf(testCourse(code, "Long Course Name $index Applied Computing", if (index % 3 == 0) 60f else 82f, index % 3 == 0),
+                testCourse("${code}L", "Long Course Name $index Lab", if (index % 4 == 0) 55f else 80f, index % 4 == 0))
+        }
+        lateinit var dashboard: DashboardView
+        val state = DashboardView.State().apply {
+            attendanceLoaded = true
+            target = 75
+            courses = rows.size
+            below = rows.count { it.below }
+            this.rows = rows.toMutableList()
+        }
+        dashboard = DashboardView(compose.activity, object : DashboardView.Actions {
+            override fun onSync() = Unit
+            override fun onPortal() = Unit
+            override fun onAcademicsPortal() = Unit
+            override fun onTarget() = Unit
+            override fun onTheme() = Unit
+            override fun onPalette() = Unit
+            override fun onAbout() = Unit
+            override fun onFilter(belowOnly: Boolean) = Unit
+            override fun onQuery(value: String) = Unit
+            override fun onCourse(code: String) {
+                state.rows.firstOrNull { it.code == code }?.let { it.expanded = !it.expanded }
+                dashboard.update(state)
+            }
+        }, AppPalette.get(false, 0))
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            compose.activity.setContentView(dashboard)
+            dashboard.update(state)
+        }
+        captureProfile("before")
+        repeat(3) { pass ->
+            clickTab(dashboard, "Courses")
+            repeat(4) { compose.onNode(hasScrollAction()).performTouchInput { swipeUp() } }
+            repeat(8) { compose.onNode(hasScrollAction()).performTouchInput { swipeDown() } }
+            compose.onNodeWithContentDescription("Search by subject or code").performTextInput("Name 17")
+            compose.onNodeWithText("Long Course Name 17 Applied Computing").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Clear search").performClick()
+            compose.onNodeWithText("Below target · ${state.below}").performClick()
+            compose.onNodeWithText("All courses · ${state.courses}").performClick()
+            repeat(8) { compose.onNode(hasScrollAction()).performTouchInput { swipeDown() } }
+            instrumentation.runOnMainSync { state.rows.forEach { it.expanded = false }; dashboard.update(state) }
+            compose.onAllNodesWithText("LAB ·", substring = true).onFirst().performClick()
+            compose.onNodeWithText("Try in What if?  →").assertIsDisplayed()
+            clickTab(dashboard, "Home")
+            if (pass < 2) clickTab(dashboard, "Week")
+        }
+        clickTab(dashboard, "Courses")
+        captureProfile("after")
+    }
+
+    private fun captureProfile(stage: String) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val directory = File(compose.activity.getExternalFilesDir("phase6b-profile"), "")
+        directory.mkdirs()
+        for ((name, command) in listOf(
+            "memory" to "dumpsys meminfo com.iniexe.rollcall",
+            "frames" to "dumpsys gfxinfo com.iniexe.rollcall framestats")) {
+            automation.executeShellCommand(command).use { source ->
+                File(directory, "$stage-$name.txt").outputStream().use { target ->
+                    FileInputStream(source.fileDescriptor).use { it.copyTo(target) }
+                }
+            }
+        }
+    }
 
     @Test fun realDashboardHostsComposeCourseCardAndNavigatesAcrossTabs() {
         val clickedCourses = mutableListOf<String>()
