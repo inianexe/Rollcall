@@ -294,7 +294,9 @@ final class DashboardView extends FrameLayout {
         surface = palette.surface; border = palette.border; soft = palette.soft;
         green = palette.green; red = palette.red; amber = palette.amber;
         hero = palette.hero; heroText = palette.heroText; heroMuted = palette.heroMuted;
-        lime = palette.highlight; linkInk = palette.canvas == 0xFF121212 ? palette.button : palette.highlight; track = palette.track;
+        lime = palette.canvas == 0xFF121212 ? palette.button : 0xFF365000;
+        linkInk = palette.canvas == 0xFF121212 ? palette.button : palette.highlight;
+        track = palette.track;
         focusSurface = palette.focusSurface;
         labBadgeBackground = palette.button; labBadgeForeground = palette.buttonText;
         setBackgroundColor(canvas);
