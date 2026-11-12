@@ -705,6 +705,19 @@ public class MainActivity extends Activity {
         button.setTextColor(textColor);
         button.setBackground(background(fill, 0, 8));
         button.setOnClickListener(action);
+        button.setOnTouchListener((view, event) -> {
+            if (Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return false;
+            int type = event.getActionMasked();
+            if (type == android.view.MotionEvent.ACTION_DOWN) {
+                view.animate().cancel();
+                view.animate().scaleX(.975f).scaleY(.975f).setDuration(85).start();
+            } else if (type == android.view.MotionEvent.ACTION_UP
+                    || type == android.view.MotionEvent.ACTION_CANCEL) {
+                view.animate().scaleX(1f).scaleY(1f).setDuration(155)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator(1.7f)).start();
+            }
+            return false;
+        });
         return button;
     }
 
@@ -760,7 +773,7 @@ public class MainActivity extends Activity {
     }
 
     private void addOnboardingChoiceGroup(LinearLayout parent, String question, String[] choices, int[] icons) {
-        final int ink = palette.ink, paper = palette.buttonText;
+        final int ink = palette.ink, paper = palette.heroText;
         TextView heading = text(question, 14, ink, Typeface.BOLD);
         heading.setPadding(0, dp(6), 0, dp(8));
         parent.addView(heading);
@@ -782,8 +795,8 @@ public class MainActivity extends Activity {
             LinearLayout option = new LinearLayout(this);
             option.setGravity(android.view.Gravity.CENTER_VERTICAL);
             option.setPadding(dp(14), 0, dp(14), 0);
-            option.setBackground(background(chosen ? palette.button : palette.surface,
-                    chosen ? palette.button : palette.border, 14));
+            option.setBackground(background(chosen ? palette.hero : palette.surface,
+                    chosen ? palette.hero : palette.border, 14));
             ImageView mark = new ImageView(this);
             mark.setImageResource(icon);
             mark.setColorFilter(chosen ? paper : ink);
@@ -808,8 +821,8 @@ public class MainActivity extends Activity {
                 for (int itemIndex = 0; itemIndex < group.getChildCount(); itemIndex++) {
                     boolean isChosen = choices[itemIndex].equals(choice);
                     View item = group.getChildAt(itemIndex);
-                    item.setBackground(background(isChosen ? palette.button : palette.surface,
-                            isChosen ? palette.button : palette.border, 14));
+                    item.setBackground(background(isChosen ? palette.hero : palette.surface,
+                            isChosen ? palette.hero : palette.border, 14));
                     labels[itemIndex].setTextColor(isChosen ? paper : ink);
                     marks[itemIndex].setColorFilter(isChosen ? paper : ink);
                     checks[itemIndex].setVisibility(isChosen ? View.VISIBLE : View.INVISIBLE);
@@ -1085,8 +1098,7 @@ public class MainActivity extends Activity {
         hintParams.topMargin = dp(12);
         content.addView(hint, hintParams);
 
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         AlertDialog dialog = new AlertDialog.Builder(this, dialogTheme).setView(content).create();
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -1256,8 +1268,7 @@ public class MainActivity extends Activity {
                 recreate();
             });
         }
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         ScrollView paletteScroll = new ScrollView(this);
         paletteScroll.setFillViewport(true);
         paletteScroll.addView(content);
@@ -1326,7 +1337,7 @@ public class MainActivity extends Activity {
         appearanceSwitch.setSwitchMinWidth(dp(52));
         appearanceSwitch.setThumbTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, SURFACE}));
+                new int[]{0xFF121212, darkTheme ? 0xFFF5F5EE : 0xFFFFFFFF}));
         appearanceSwitch.setTrackTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
                 new int[]{HERO, BORDER}));
@@ -1373,7 +1384,7 @@ public class MainActivity extends Activity {
         reminderRow.addView(reminderCopy, new LinearLayout.LayoutParams(0, -2, 1));
         reminderBellIcon = new ImageView(this);
         reminderBellIcon.setImageResource(R.drawable.ic_notification_bell);
-        reminderBellIcon.setColorFilter(classRemindersEnabled ? HERO : MUTED);
+        reminderBellIcon.setColorFilter(classRemindersEnabled ? (darkTheme ? HERO : INK) : MUTED);
         reminderBellIcon.setContentDescription("Class reminder notifications");
         reminderRow.addView(reminderBellIcon, new LinearLayout.LayoutParams(dp(28), dp(28)));
         reminderSwitch = new Switch(this);
@@ -1382,7 +1393,7 @@ public class MainActivity extends Activity {
         reminderSwitch.setPadding(dp(8), 0, 0, 0);
         reminderSwitch.setThumbTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, SURFACE}));
+                new int[]{0xFF121212, darkTheme ? 0xFFF5F5EE : 0xFFFFFFFF}));
         reminderSwitch.setTrackTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
                 new int[]{HERO, BORDER}));
@@ -1501,29 +1512,84 @@ public class MainActivity extends Activity {
     }
 
     private int cloudDialogTheme() {
-        return darkTheme ? android.R.style.Theme_Material_Dialog_Alert : android.R.style.Theme_Material_Light_Dialog_Alert;
+        return darkTheme ? R.style.RollcallDialogDark : R.style.RollcallDialogLight;
     }
 
+    /** Rollcall-owned account actions use a tactile branded sheet; no provider pages are restyled. */
     private void showCloudAccountDialog() {
         FirebaseUser existing = FirebaseAuth.getInstance().getCurrentUser();
-        if (existing != null) {
-            String[] actions = existing.isEmailVerified()
-                    ? new String[]{"Connect this phone", "Replace recovery codes", "Delete Rollcall cloud account", "Sign out", "Close"}
-                    : new String[]{"Resend verification", "Delete Rollcall account", "Sign out", "Close"};
-            new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Rollcall web account")
-                    .setItems(actions, (d, which) -> {
-                        if (!existing.isEmailVerified()) {
-                            if (which == 0) existing.sendEmailVerification().addOnCompleteListener(task -> Toast.makeText(this, task.isSuccessful() ? "Verification email sent." : "Could not send verification email.", Toast.LENGTH_LONG).show());
-                            else if (which == 1) confirmCloudAccountDelete();
-                            else if (which == 2) signOutCloudAccount();
-                        } else if (which == 0) registerCloudDevice(null);
-                        else if (which == 1) showRecoveryCodes();
-                        else if (which == 2) confirmCloudAccountDelete();
-                        else if (which == 3) signOutCloudAccount();
-                    }).setNegativeButton("Cancel", null).show();
-            return;
+        if (existing == null) { showCloudCredentials(false); return; }
+        final boolean verified = existing.isEmailVerified();
+        String[] labels = verified
+                ? new String[]{"Connect this phone", "Replace recovery codes", "Delete Rollcall cloud account", "Sign out"}
+                : new String[]{"Resend verification", "Delete Rollcall account", "Sign out"};
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(22), dp(18), dp(22), dp(22));
+        sheet.setBackground(background(SURFACE, BORDER, 20));
+        View handle = new View(this);
+        handle.setBackground(background(MUTED, 0, 100));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(38), dp(4));
+        handleParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        sheet.addView(handle, handleParams);
+        sheet.addView(text("ROLLCALL / ACCOUNT", 11, darkTheme ? HERO : INK, Typeface.BOLD),
+                topMargin(-1, -2, 22));
+        sheet.addView(text("Your web account.", 22, INK, Typeface.BOLD),
+                topMargin(-1, -2, 6));
+        String accountAddress = existing.getEmail();
+        if (accountAddress != null && !accountAddress.isEmpty()) {
+            TextView account = text(accountAddress, 12, MUTED, Typeface.NORMAL);
+            account.setMaxLines(2);
+            sheet.addView(account, topMargin(-1, -2, 6));
         }
-        showCloudCredentials(false);
+        final AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet).create();
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            boolean destructive = labels[i].startsWith("Delete");
+            LinearLayout line = new LinearLayout(this);
+            line.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            line.setPadding(dp(14), 0, dp(14), 0);
+            line.setMinimumHeight(dp(56));
+            line.setBackground(background(destructive ? SECONDARY : SURFACE,
+                    destructive ? RED : BORDER, 12));
+            TextView name = text(labels[i], 14, destructive ? RED : INK, Typeface.BOLD);
+            line.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+            line.addView(text("↗", 17, destructive ? RED : MUTED, Typeface.BOLD));
+            LinearLayout.LayoutParams lineParams = topMargin(-1, -2, 8);
+            if (i == 0) lineParams.topMargin = dp(22);
+            sheet.addView(line, lineParams);
+            line.setClickable(true);
+            line.setFocusable(true);
+            line.setOnClickListener(view -> {
+                dialog.dismiss();
+                if (!verified) {
+                    if (index == 0) existing.sendEmailVerification().addOnCompleteListener(task ->
+                            Toast.makeText(this, task.isSuccessful() ? "Verification email sent."
+                                    : "Could not send verification email.", Toast.LENGTH_LONG).show());
+                    else if (index == 1) confirmCloudAccountDelete();
+                    else if (index == 2) signOutCloudAccount();
+                } else {
+                    if (index == 0) registerCloudDevice(null);
+                    else if (index == 1) showRecoveryCodes();
+                    else if (index == 2) confirmCloudAccountDelete();
+                    else if (index == 3) signOutCloudAccount();
+                }
+            });
+        }
+        TextView close = text("Close", 14, MUTED, Typeface.BOLD);
+        close.setGravity(android.view.Gravity.CENTER);
+        close.setMinHeight(dp(48));
+        close.setOnClickListener(v -> dialog.dismiss());
+        sheet.addView(close, topMargin(-1, -2, 12));
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setGravity(android.view.Gravity.BOTTOM);
+            dialog.getWindow().setBackgroundDrawable(background(SURFACE, BORDER, 20));
+            dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (Build.VERSION.SDK_INT < 26 || android.animation.ValueAnimator.areAnimatorsEnabled())
+                dialog.getWindow().setWindowAnimations(R.style.RollcallSheetAnimation);
+        }
     }
 
     private void showCloudCredentials(boolean create) {
@@ -1747,8 +1813,7 @@ public class MainActivity extends Activity {
     }
 
     private void confirmClearSavedData() {
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(20), dp(20), dp(16));
@@ -1884,7 +1949,7 @@ public class MainActivity extends Activity {
                     ? "Rollcall is set to remind you, but Android blocks notifications. Allow them below to receive reminders."
                     : "Reminders are off and Android blocks notifications. Turn them on and allow notifications to get class reminders.");
         if (reminderBellIcon != null) {
-            reminderBellIcon.setColorFilter(classRemindersEnabled ? HERO : MUTED);
+            reminderBellIcon.setColorFilter(classRemindersEnabled ? (darkTheme ? HERO : INK) : MUTED);
             reminderBellIcon.setContentDescription(classRemindersEnabled
                     ? "Class reminder notifications enabled" : "Class reminder notifications disabled");
         }
@@ -1912,8 +1977,7 @@ public class MainActivity extends Activity {
         button.setOnCheckedChangeListener(null);
         button.setChecked(true);
         button.setOnCheckedChangeListener(this::onReminderSwitchChanged);
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(20), dp(20), dp(16));
