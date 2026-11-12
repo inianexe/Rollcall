@@ -361,7 +361,8 @@ public class MainActivity extends Activity {
         });
         root.addView(content, new FrameLayout.LayoutParams(-1, -1));
         dashboard = buildDashboardView();
-        String returnPage = preferences.getString("torch_return_page", "");
+        String returnPage = saved == null ? preferences.getString("torch_return_page", "")
+                : saved.getString("torch_page", preferences.getString("torch_return_page", ""));
         if (!returnPage.isEmpty() && dashboardView != null) {
             dashboardView.openNotificationDestination(returnPage);
             preferences.edit().remove("torch_return_page").apply();
@@ -1249,6 +1250,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle outState) {
         outState.putBoolean("restore_about_settings", aboutPage != null && aboutPage.getVisibility() == View.VISIBLE);
+        if (dashboardView != null) outState.putString("torch_page", dashboardView.currentPage());
         super.onSaveInstanceState(outState);
     }
 
