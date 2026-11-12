@@ -16,6 +16,7 @@ var tnow=function(){return Date.now()};
 function bridge(method,arg){try{if(window.RollcallBridge&&typeof window.RollcallBridge[method]==='function')window.RollcallBridge[method](arg===undefined?'':String(arg))}catch(e){console.warn('Rollcall action unavailable',method)}}
 function shellPage(next){
   page=next;
+  bridge('page',next);
   document.querySelectorAll('.screen').forEach(function(node){node.classList.toggle('active',node.id==='page-'+page)});
   document.querySelectorAll('.nav-btn').forEach(function(btn){var yes=btn.dataset.page===page;btn.classList.toggle('active',yes);if(yes)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current')});
   var nav=document.querySelector('.navi');if(nav)nav.style.display=page==='settings'||page==='leave'?'none':'flex';
@@ -188,6 +189,7 @@ function renderMarks(){
 }
 function renderPlanner(){
  if(!state)return;
+ var subtitle=document.querySelector('#page-what .page-sub');if(subtitle)subtitle.textContent='Try a possible future using your actual synced class counts. Your attendance record is unchanged.';
  var all=nativeCourses(),sel=byId('courseSelect');
  if(!sel)return;
  if(!planCourse||!all.some(function(c){return c.code===planCourse}))planCourse=all.length?all[0].code:'';
