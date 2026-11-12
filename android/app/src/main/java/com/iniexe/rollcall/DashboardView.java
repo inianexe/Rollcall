@@ -3291,20 +3291,44 @@ final class DashboardView extends FrameLayout {
             type.setMaxLines(1);
             type.setEllipsize(android.text.TextUtils.TruncateAt.END);
             box.addView(type);
-            TextView allowance = text(subject.targetCount.isEmpty() ? "—" : subject.targetCount,
-                    21, ink, Typeface.BOLD);
-            allowance.setMaxLines(1);
-            allowance.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            box.addView(allowance, topLp(-1, -2, 3));
+            LinearLayout outcomes = row();
+            String canMiss = "—", mustAttend = "—";
+            if (subject.countsKnown && subject.total > 0) {
+                Attendance baseline = new Attendance(subject.code, subject.name, subject.attended, subject.total);
+                canMiss = String.valueOf(subject.below ? 0 : baseline.safeAbsences(state.target));
+                int recovery = subject.below ? baseline.periodsToRecover(state.target) : 0;
+                mustAttend = recovery == Integer.MAX_VALUE ? "NO RECOVERY" : String.valueOf(recovery);
+            }
+            outcomes.addView(outcome("CAN MISS", canMiss, subject.below ? muted : green, subject.below),
+                    new LinearLayout.LayoutParams(0, -2, 1));
+            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(0, -2, 1);
+            recoveryParams.leftMargin = dp(5);
+            outcomes.addView(outcome("MUST ATTEND", mustAttend, subject.below ? subject.color : muted, subject.below), recoveryParams);
+            box.addView(outcomes, topLp(-1, -2, 6));
             AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code, subject.percent, subject.color);
             meter.setContentDescription("Attendance " + subject.percentLabel);
-            box.addView(meter, topLp(-1, dp(7), 4));
+            box.addView(meter, topLp(-1, dp(7), 7));
             String detail = subject.countsKnown ? subject.percentLabel + " · " + subject.attended + " / " + subject.total + " attended"
                     : "Attendance counts unavailable";
             box.addView(text(detail, 10, muted, Typeface.NORMAL), topLp(-1, -2, 4));
-            box.setContentDescription(kind + " attendance for " + courseHeading(subject) + ": " + subject.percentLabel + ", " + subject.targetCount);
+            box.setContentDescription(kind + " attendance for " + courseHeading(subject) + ": " + subject.percentLabel
+                    + ", can miss " + canMiss + " classes, must attend " + mustAttend + " classes");
             box.setOnClickListener(v -> actions.onCourse(subject.code));
             return box;
+        }
+
+        private LinearLayout outcome(String title, String value, int valueColor, boolean atRisk) {
+            LinearLayout cell = column();
+            cell.setPadding(dp(7), dp(6), dp(5), dp(5));
+            cell.setBackground(shape(atRisk && valueColor != muted ? focusSurface : soft, 8, 0));
+            TextView label = text(title, 9, muted, Typeface.BOLD);
+            label.setMaxLines(2);
+            cell.addView(label);
+            TextView count = text(value, value.length() > 5 ? 10 : 18, valueColor, Typeface.BOLD);
+            count.setSingleLine(true);
+            count.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            cell.addView(count, topLp(-1, -2, 2));
+            return cell;
         }
 
         boolean matches() {

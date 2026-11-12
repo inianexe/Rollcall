@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.animation.Animator;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -1507,20 +1508,83 @@ public class MainActivity extends Activity {
     private void showCloudAccountDialog() {
         FirebaseUser existing = FirebaseAuth.getInstance().getCurrentUser();
         if (existing != null) {
-            String[] actions = existing.isEmailVerified()
+            boolean verified = existing.isEmailVerified();
+            Dialog dialog = new Dialog(this, cloudDialogTheme());
+            LinearLayout sheet = new LinearLayout(this);
+            sheet.setOrientation(LinearLayout.VERTICAL);
+            sheet.setPadding(dp(20), dp(12), dp(20), dp(16));
+            sheet.setBackground(background(SURFACE, BORDER, 20));
+            View handle = new View(this);
+            handle.setBackground(background(BORDER, 100, 0));
+            LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(38), dp(4));
+            handleParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+            handleParams.bottomMargin = dp(14);
+            sheet.addView(handle, handleParams);
+            sheet.addView(text("Rollcall web account", 20, INK, Typeface.BOLD));
+            TextView account = text(existing.getEmail() == null ? "Manage this device and your account." : existing.getEmail(),
+                    12, MUTED, Typeface.NORMAL);
+            sheet.addView(account, topMargin(-1, -2, 4));
+            TextView state = text(verified ? "VERIFIED ACCOUNT" : "EMAIL VERIFICATION NEEDED", 9,
+                    verified ? GREEN : AMBER, Typeface.BOLD);
+            state.setLetterSpacing(.08f);
+            sheet.addView(state, topMargin(-1, -2, 8));
+
+            String[] titles = verified
                     ? new String[]{"Connect this phone", "Replace recovery codes", "Delete Rollcall cloud account", "Sign out", "Close"}
                     : new String[]{"Resend verification", "Delete Rollcall account", "Sign out", "Close"};
-            new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Rollcall web account")
-                    .setItems(actions, (d, which) -> {
-                        if (!existing.isEmailVerified()) {
-                            if (which == 0) existing.sendEmailVerification().addOnCompleteListener(task -> Toast.makeText(this, task.isSuccessful() ? "Verification email sent." : "Could not send verification email.", Toast.LENGTH_LONG).show());
-                            else if (which == 1) confirmCloudAccountDelete();
-                            else if (which == 2) signOutCloudAccount();
-                        } else if (which == 0) registerCloudDevice(null);
-                        else if (which == 1) showRecoveryCodes();
-                        else if (which == 2) confirmCloudAccountDelete();
-                        else if (which == 3) signOutCloudAccount();
-                    }).setNegativeButton("Cancel", null).show();
+            String[] descriptions = verified
+                    ? new String[]{"Link this installation to your web account.", "Generate a new set of one-time codes.", "Remove the cloud account and its web snapshot.", "Sign out on this device.", "Return to Settings."}
+                    : new String[]{"Send a fresh verification email.", "Remove your Rollcall account.", "Sign out on this device.", "Return to Settings."};
+            String[] icons = verified ? new String[]{"⌁", "◇", "×", "↗", "←"} : new String[]{"✉", "×", "↗", "←"};
+            for (int i = 0; i < titles.length; i++) {
+                final int action = i;
+                LinearLayout item = new LinearLayout(this);
+                item.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                item.setPadding(dp(5), dp(7), dp(5), dp(7));
+                item.setMinimumHeight(dp(58));
+                TextView icon = text(icons[i], 20, (titles[i].startsWith("Delete")) ? RED : HIGHLIGHT, Typeface.BOLD);
+                icon.setGravity(android.view.Gravity.CENTER);
+                icon.setBackground(background(titles[i].startsWith("Delete") ? 0x332E1111 : SECONDARY, 10, 0));
+                item.addView(icon, new LinearLayout.LayoutParams(dp(40), dp(40)));
+                LinearLayout copy = new LinearLayout(this);
+                copy.setOrientation(LinearLayout.VERTICAL);
+                TextView label = text(titles[i], 14, titles[i].startsWith("Delete") ? RED : INK, Typeface.BOLD);
+                copy.addView(label);
+                copy.addView(text(descriptions[i], 11, MUTED, Typeface.NORMAL), topMargin(-1, -2, 2));
+                LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(0, -2, 1);
+                copyParams.leftMargin = dp(12);
+                item.addView(copy, copyParams);
+                if (!"Close".equals(titles[i])) item.addView(text("›", 20, MUTED, Typeface.NORMAL));
+                sheet.addView(item);
+                item.setFocusable(true);
+                item.setClickable(true);
+                item.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    if (!verified) {
+                        if (action == 0) existing.sendEmailVerification().addOnCompleteListener(task ->
+                                Toast.makeText(this, task.isSuccessful() ? "Verification email sent." : "Could not send verification email.", Toast.LENGTH_LONG).show());
+                        else if (action == 1) confirmCloudAccountDelete();
+                        else if (action == 2) signOutCloudAccount();
+                    } else if (action == 0) registerCloudDevice(null);
+                    else if (action == 1) showRecoveryCodes();
+                    else if (action == 2) confirmCloudAccountDelete();
+                    else if (action == 3) signOutCloudAccount();
+                });
+            }
+            dialog.setContentView(sheet);
+            dialog.setCanceledOnTouchOutside(true);
+            dialog.show();
+            android.view.Window window = dialog.getWindow();
+            if (window != null) {
+                window.setBackgroundDrawableResource(android.R.color.transparent);
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                android.view.WindowManager.LayoutParams params = window.getAttributes();
+                params.width = getResources().getDisplayMetrics().widthPixels - dp(24);
+                params.height = android.view.WindowManager.LayoutParams.WRAP_CONTENT;
+                params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
+                params.dimAmount = .58f;
+                window.setAttributes(params);
+            }
             return;
         }
         showCloudCredentials(false);
