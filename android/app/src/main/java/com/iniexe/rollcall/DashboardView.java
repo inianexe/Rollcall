@@ -304,6 +304,18 @@ final class DashboardView extends FrameLayout {
         return json;
     }
 
+    static String shortCourseName(String name) {
+        if (name == null || name.trim().isEmpty()) return "Class";
+        name = name.trim();
+        if (name.indexOf(' ') < 0 && name.length() <= 20) return name;
+        StringBuilder shortName = new StringBuilder();
+        for (String part : name.toUpperCase(java.util.Locale.ROOT).split("[^A-Z0-9]+")) {
+            if (part.isEmpty() || "AND".equals(part) || "OF".equals(part) || "THE".equals(part)) continue;
+            shortName.append(part.charAt(0));
+        }
+        return shortName.length() == 0 ? name : shortName.toString();
+    }
+
     private void navigate(String page) {
         currentPage = page;
         if (ready) web.evaluateJavascript("window.__rollcallNavigate(" + JSONObject.quote(page) + ");", null);
