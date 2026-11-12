@@ -89,6 +89,13 @@ body.light-mode .hero .eyebrow,body.light-mode .hero .hero-foot{color:#111}
 body.light-mode .page-title{color:var(--paper)}
 body.light-mode .navi{box-shadow:0 10px 28px #00000018}
 @media(prefers-reduced-motion:reduce){.screen{animation:none!important}}
+
+/* Packaged Android presentation: real system bars, not prototype fakes. */
+.status-bar{display:none!important}
+.hero .ticket-art{pointer-events:auto;cursor:pointer}
+.hero .ticket-art:focus-visible{outline:3px solid var(--lilac);outline-offset:2px}
+.screen{min-height:calc(100svh - 72px)}
+body.light-mode .hero .ticket-art:focus-visible{outline-color:#111}
 </style>
 </head>
 <body>
