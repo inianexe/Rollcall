@@ -195,6 +195,7 @@ final class DashboardView extends FrameLayout {
     private float attendForecast, skipForecast, currentCoursePercent;
     private final Handler classStartHandler = new Handler(Looper.getMainLooper());
     private final Runnable classStartRefresh = () -> { updateDecision(); updateOverviewSchedule(); };
+    private TextView overviewLiveStatus, overviewNextStep, overviewLiveMeta;
     private TextView overviewLeaveSummary;
     private View overviewCourseHeader;
     private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewAttendanceBlock, overviewExamSection;
@@ -347,7 +348,7 @@ final class DashboardView extends FrameLayout {
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
                         .replaceAll("\\.$", "");
-        headlineView.setText(displayName.toUpperCase(Locale.ROOT) + ".");
+        headlineView.setText(displayName.toUpperCase(Locale.ROOT) + ".\nYOU GOT THIS.");
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
         welcomeView.setText(greeting + ",");
@@ -384,9 +385,16 @@ final class DashboardView extends FrameLayout {
                     + new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH).format(displayedDate)
                     + ". Open " + (homeTicketDestination == 4 ? "marks and exams" : "your week"));
         }
-        homeEncouragementView.setText(next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
-                : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
-                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.");
+        homeEncouragementView.setText("ONE CLASS AT A TIME. YOUR ACADEMIC WEEK, DECODED.");
+        if (overviewLiveStatus != null) {
+            overviewLiveStatus.setText(next.syncing ? "SYNCING ↻" : next.rows.isEmpty() ? "CONNECT ↗"
+                    : next.below == 0 ? "ON TRACK ↗" : next.below + " NEED FOCUS ↗");
+            overviewLiveMeta.setText(next.syncing ? "Refreshing MyCamu"
+                    : next.rows.isEmpty() ? "Your first academic snapshot"
+                    : next.onTrack + " / " + next.courses + " courses at target");
+            overviewNextStep.setText(next.rows.isEmpty() ? "Your week.\nIn focus."
+                    : next.below == 0 ? "Keep the\nmomentum." : "Your next\nmove matters.");
+        }
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
@@ -479,7 +487,7 @@ final class DashboardView extends FrameLayout {
         addView(shell, new LayoutParams(-1, -1));
 
         LinearLayout header = column();
-        header.setPadding(dp(20), dp(12), dp(20), 0);
+        header.setPadding(dp(23), dp(12), dp(23), 0);
         header.addView(topBar(true), lp(-1, dp(48)));
         shell.addView(header, new LinearLayout.LayoutParams(-1, -2));
         pages.setBackgroundColor(canvas);
@@ -518,9 +526,9 @@ final class DashboardView extends FrameLayout {
         LinearLayout identity = column();
         welcomeView = text("Good afternoon,", 11, heroMuted, Typeface.NORMAL);
         identity.addView(welcomeView);
-        headlineView = text("MyCamu student", 24, heroText, Typeface.BOLD);
+        headlineView = text("ROLLCALL.\nYOU GOT THIS.", 26, heroText, Typeface.BOLD);
         headlineView.setLetterSpacing(-.04f);
-        headlineView.setMaxLines(1);
+        headlineView.setMaxLines(3);
         headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         identity.addView(headlineView, topLp(-1, -2, 4));
         homeEncouragementView = text("ONE CLASS AT A TIME. YOUR WEEK, DECODED.", 9, heroMuted, Typeface.BOLD);
@@ -546,6 +554,47 @@ final class DashboardView extends FrameLayout {
         syncLine.addView(dashboardSyncButton, lp(dp(48), dp(48)));
         heroCard.addView(syncLine, topLp(-1, -2, 8));
         addTop(body, heroCard, 10);
+
+        // Original prototype: lime hero, live broadcast tiles, radar, timetable and risks.
+        LinearLayout broadcasts = row();
+        LinearLayout live = column();
+        live.setGravity(Gravity.CENTER_VERTICAL);
+        live.setPadding(dp(14), dp(14), dp(12), dp(14));
+        live.setBackground(shape(surface, 15, border));
+        live.addView(label("STATUS / LIVE", 9, muted, Typeface.BOLD));
+        overviewLiveStatus = text("CONNECT ↗", 17, hero, Typeface.BOLD);
+        overviewLiveStatus.setMaxLines(2);
+        live.addView(overviewLiveStatus, topLp(-1, -2, 8));
+        overviewLiveMeta = text("Academic snapshot", 9, muted, Typeface.NORMAL);
+        live.addView(overviewLiveMeta, topLp(-1, -2, 5));
+        live.setContentDescription("Open your courses and attendance status");
+        live.setFocusable(true);
+        live.setOnClickListener(v -> showPage(1));
+        setTactileFeedback(live);
+        broadcasts.addView(live, new LinearLayout.LayoutParams(0, dp(112), 1f));
+
+        FrameLayout next = new FrameLayout(getContext());
+        next.setBackground(shape(palette.lilac, 15, 0xFF111111));
+        LinearLayout nextText = column();
+        nextText.setPadding(dp(14), dp(13), dp(8), dp(10));
+        nextText.addView(label("WHAT'S NEXT?", 9, 0xFF111111, Typeface.BOLD));
+        overviewNextStep = text("Your week.\nIn focus.", 15, 0xFF111111, Typeface.BOLD);
+        overviewNextStep.setLineSpacing(0, .97f);
+        nextText.addView(overviewNextStep, topLp(-1, -2, 8));
+        next.addView(nextText, new FrameLayout.LayoutParams(-1, -2));
+        TextView asterisk = text("✱", 38, palette.highlight, Typeface.BOLD);
+        asterisk.setRotation(-17);
+        FrameLayout.LayoutParams starParams = new FrameLayout.LayoutParams(dp(44), dp(48), Gravity.RIGHT | Gravity.BOTTOM);
+        starParams.rightMargin = dp(1);
+        next.addView(asterisk, starParams);
+        next.setContentDescription("Open your weekly schedule");
+        next.setFocusable(true);
+        next.setOnClickListener(v -> showPage(2));
+        setTactileFeedback(next);
+        LinearLayout.LayoutParams microParams = new LinearLayout.LayoutParams(0, dp(112), 1f);
+        microParams.leftMargin = dp(10);
+        broadcasts.addView(next, microParams);
+        addTop(body, broadcasts, 11);
         courseLists[0] = column();
         LinearLayout summary = column();
         summary.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -619,12 +668,12 @@ final class DashboardView extends FrameLayout {
         });
         setTactileFeedback(decisionAction);
         summary.addView(decisionAction, topLp(-1, -2, 14));
-        addTop(body, summary, 12);
+        // The next-class decision panel is retained below the broadcast summary.
 
         overviewExamSection = column();
         LinearLayout radarHeading = row();
         radarHeading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView radarTitle = text("On your radar", 17, ink, Typeface.BOLD);
+        TextView radarTitle = text("On your radar", 21, ink, Typeface.BOLD);
         radarTitle.setTypeface(displayTypeface, Typeface.BOLD);
         radarHeading.addView(radarTitle, new LinearLayout.LayoutParams(0, -2, 1));
         radarHeading.addView(label("01 / EXAM", 9, palette.highlight, Typeface.BOLD));
@@ -727,6 +776,10 @@ final class DashboardView extends FrameLayout {
         overviewLeaveBlock.setOnClickListener(v -> openOdDetails());
         overviewLeaveBlock.setVisibility(VISIBLE);
         addTop(body, overviewLeaveBlock, 14);
+        LinearLayout planningSection = column();
+        planningSection.addView(overviewSectionHeader("Next-class planner", "What if?", () -> showPage(3)));
+        planningSection.addView(summary, topLp(-1, -2, 6));
+        addTop(body, planningSection, 22);
         addBottom(body, 24);
     }
 
@@ -1122,11 +1175,11 @@ final class DashboardView extends FrameLayout {
     private View overviewSectionHeader(String title, String action, Runnable onAction) {
         LinearLayout header = row();
         header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 17, ink, Typeface.BOLD);
+        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 21, ink, Typeface.BOLD);
         heading.setTypeface(displayTypeface);
         heading.setLetterSpacing(cyberpunk ? .04f : -.02f);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView button = text(action + "  →", 11, green, Typeface.BOLD);
+        TextView button = text(action.toUpperCase(Locale.ROOT) + "  ↗", 11, linkInk, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setMinWidth(dp(48));
         button.setMinHeight(dp(48));
@@ -1895,7 +1948,7 @@ final class DashboardView extends FrameLayout {
         if (cyberpunk) scroll.setBackground(new ScanlineDrawable());
         else scroll.setBackgroundColor(canvas);
         LinearLayout body = column();
-        body.setPadding(dp(20), 0, dp(20), dp(24));
+        body.setPadding(dp(23), 0, dp(23), dp(24));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         pageScrolls[index] = scroll;
         pageBodies[index] = body;
@@ -1974,7 +2027,7 @@ final class DashboardView extends FrameLayout {
         RollcallLogo logo = new RollcallLogo(getContext(), palette);
         logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         bar.addView(logo, lp(dp(34), dp(34)));
-        TextView brand = text("rollcall", 19, ink, Typeface.BOLD);
+        TextView brand = text("rollcall", 24, ink, Typeface.BOLD);
         brand.setPadding(dp(8), 0, 0, 0);
         brand.setGravity(Gravity.CENTER_VERTICAL);
         if (cyberpunk) {
@@ -2004,13 +2057,13 @@ final class DashboardView extends FrameLayout {
 
     private View heading(String index, String title, String subtitle) {
         LinearLayout box = column();
-        box.addView(label(index, 9, linkInk, Typeface.BOLD));
+        box.addView(label(index, 10, linkInk, Typeface.BOLD));
         SpannableString titleText = new SpannableString(title + ".");
         titleText.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight), title.length(), titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        TextView heading = text(titleText.toString(), 32, ink, Typeface.BOLD);
+        TextView heading = text(titleText.toString(), 35, ink, Typeface.BOLD);
         heading.setText(titleText);
         heading.setTypeface(displayTypeface, Typeface.BOLD);
-        heading.setLetterSpacing(-.055f);
+        heading.setLetterSpacing(-.08f);
         box.addView(heading, topLp(-1, -2, 6));
         TextView sub = text(subtitle, 12, muted, Typeface.NORMAL);
         sub.setLineSpacing(dp(2), 1f);
@@ -2188,7 +2241,7 @@ final class DashboardView extends FrameLayout {
         holder.setGravity(Gravity.CENTER);
         holder.setPadding(dp(16), dp(8), dp(16), dp(8));
         shell.addView(holder, lp(-1, -2));
-        nav.setPadding(dp(4), dp(3), dp(4), dp(3));
+        nav.setPadding(dp(5), dp(5), dp(5), dp(5));
         nav.setGravity(Gravity.CENTER);
         navBackground = new NavBackgroundDrawable();
         nav.setBackground(navBackground);
@@ -2210,7 +2263,7 @@ final class DashboardView extends FrameLayout {
             icon.setImageResource(icons[i]);
             icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
             icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            TextView label = text(labels[i], 11, muted, Typeface.NORMAL);
+            TextView label = text(labels[i], 10, muted, Typeface.BOLD);
             label.setSingleLine(true);
             label.setEllipsize(android.text.TextUtils.TruncateAt.END);
             label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
