@@ -361,6 +361,11 @@ public class MainActivity extends Activity {
         });
         root.addView(content, new FrameLayout.LayoutParams(-1, -1));
         dashboard = buildDashboardView();
+        String returnPage = preferences.getString("torch_return_page", "");
+        if (!returnPage.isEmpty() && dashboardView != null) {
+            dashboardView.openNotificationDestination(returnPage);
+            preferences.edit().remove("torch_return_page").apply();
+        }
         dashboard.setVisibility(connectedOnce ? View.VISIBLE : View.GONE);
         content.addView(dashboard, new FrameLayout.LayoutParams(-1, -1));
         webPage = buildWebPage();
@@ -1236,7 +1241,9 @@ public class MainActivity extends Activity {
     private void toggleTheme() {
         if (!connectedOnce) return;
         darkTheme = !darkTheme;
-        getPreferences(MODE_PRIVATE).edit().putBoolean(DARK_KEY, darkTheme).apply();
+        getPreferences(MODE_PRIVATE).edit().putBoolean(DARK_KEY, darkTheme)
+                .putString("torch_return_page",
+                        dashboardView == null ? "home" : dashboardView.currentPage()).apply();
         recreate();
     }
 
