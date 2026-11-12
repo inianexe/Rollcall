@@ -1580,44 +1580,148 @@ public class MainActivity extends Activity {
         return darkTheme ? R.style.TorchDialogDark : R.style.TorchDialogLight;
     }
 
+    /** Rollcall-owned account dialogs use the same modal hierarchy as the Torch HTML. */
     private void showCloudAccountDialog() {
         FirebaseUser existing = FirebaseAuth.getInstance().getCurrentUser();
-        if (existing != null) {
-            String[] actions = existing.isEmailVerified()
-                    ? new String[]{"Connect this phone", "Replace recovery codes", "Delete Rollcall cloud account", "Sign out", "Close"}
-                    : new String[]{"Resend verification", "Delete Rollcall account", "Sign out", "Close"};
-            new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Rollcall web account")
-                    .setItems(actions, (d, which) -> {
-                        if (!existing.isEmailVerified()) {
-                            if (which == 0) existing.sendEmailVerification().addOnCompleteListener(task -> Toast.makeText(this, task.isSuccessful() ? "Verification email sent." : "Could not send verification email.", Toast.LENGTH_LONG).show());
-                            else if (which == 1) confirmCloudAccountDelete();
-                            else if (which == 2) signOutCloudAccount();
-                        } else if (which == 0) registerCloudDevice(null);
-                        else if (which == 1) showRecoveryCodes();
-                        else if (which == 2) confirmCloudAccountDelete();
-                        else if (which == 3) signOutCloudAccount();
-                    }).setNegativeButton("Cancel", null).show();
-            return;
+        if (existing == null) { showCloudCredentials(false); return; }
+        final boolean verified = existing.isEmailVerified();
+        final int panel = darkTheme ? 0xFF252525 : 0xFFFFFEFA;
+        final int ink = darkTheme ? 0xFFF5F5EE : 0xFF182019;
+        final int muted = darkTheme ? 0xFFA8AAA1 : 0xFF586057;
+        final int border = darkTheme ? 0xFF7D7D7D : 0xFFC6C8BC;
+        final int accent = darkTheme ? 0xFFCCFF00 : 0xFF365000;
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(23), dp(22), dp(23), dp(18));
+        sheet.setBackground(background(panel, border, 17));
+        TextView eyebrow = text("ROLLCALL / WEB ACCOUNT", 10, accent, Typeface.BOLD);
+        eyebrow.setLetterSpacing(.08f);
+        sheet.addView(eyebrow);
+        TextView heading = text("YOUR ACCOUNT.", 23, ink, Typeface.BOLD);
+        heading.setLetterSpacing(-.055f);
+        sheet.addView(heading, topMargin(-1, -2, 14));
+        String emailValue = existing.getEmail();
+        if (emailValue != null) sheet.addView(text(emailValue, 12, muted, Typeface.NORMAL),
+                topMargin(-1, -2, 4));
+        String[] options = verified
+                ? new String[]{"CONNECT THIS PHONE", "REPLACE RECOVERY CODES", "DELETE CLOUD ACCOUNT", "SIGN OUT"}
+                : new String[]{"RESEND VERIFICATION", "DELETE CLOUD ACCOUNT", "SIGN OUT"};
+        final AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet).create();
+        for (int i = 0; i < options.length; i++) {
+            final int index = i;
+            boolean destructive = options[i].startsWith("DELETE");
+            TextView row = text(options[i] + "  ↗", 13, destructive ? RED : ink, Typeface.BOLD);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14), dp(8), dp(12), dp(8));
+            row.setMinHeight(dp(54));
+            row.setBackground(background(panel, destructive ? RED : border, 10));
+            row.setFocusable(true);
+            row.setClickable(true);
+            sheet.addView(row, topMargin(-1, dp(54), 8));
+            row.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (verified) {
+                    if (index == 0) registerCloudDevice(null);
+                    else if (index == 1) showRecoveryCodes();
+                    else if (index == 2) confirmCloudAccountDelete();
+                    else if (index == 3) signOutCloudAccount();
+                } else {
+                    if (index == 0) existing.sendEmailVerification().addOnCompleteListener(task ->
+                            Toast.makeText(this, task.isSuccessful() ? "Verification email sent." :
+                                    "Verification email failed.", Toast.LENGTH_LONG).show());
+                    else if (index == 1) confirmCloudAccountDelete();
+                    else if (index == 2) signOutCloudAccount();
+                }
+            });
         }
-        showCloudCredentials(false);
+        TextView close = text("CLOSE", 13, muted, Typeface.BOLD);
+        close.setGravity(android.view.Gravity.CENTER);
+        close.setMinHeight(dp(48));
+        close.setOnClickListener(v -> dialog.dismiss());
+        sheet.addView(close, topMargin(-1, -2, 10));
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(background(panel, border, 17));
+            dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels - dp(34),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
     }
 
     private void showCloudCredentials(boolean create) {
-        if (FirebaseAuth.getInstance().getCurrentUser() != null) { showCloudAccountDialog(); return; }
+        if (FirebaseAuth.getInstance().getCurrentUser() != null) {
+            showCloudAccountDialog(); return;
+        }
+        final int ink = darkTheme ? 0xFFF5F5EE : 0xFF182019;
+        final int muted = darkTheme ? 0xFFA8AAA1 : 0xFF586057;
+        final int panel = darkTheme ? 0xFF252525 : 0xFFFFFEFA;
+        final int border = darkTheme ? 0xFF7D7D7D : 0xFFC6C8BC;
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
-        fields.setPadding(dp(24), dp(12), dp(24), dp(4));
-        EditText email = new EditText(this); email.setSingleLine(true); email.setInputType(33); email.setHint("Email address"); fields.addView(email);
-        EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Password · 8 characters minimum"); fields.addView(password);
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in to Rollcall")
-                .setMessage("This account brings your phone snapshot to the web. Use a separate password from MyCamu.")
-                .setView(fields)
-                .setPositiveButton(create ? "Create account" : "Sign in", (d, w) -> {
-                    if (create) cloudCreateAccount(email.getText().toString().trim(), password.getText().toString());
-                    else cloudSignIn(email.getText().toString().trim(), password.getText().toString());
-                })
-                .setNeutralButton(create ? "Have an account?" : "No account?", (d, w) -> showCloudCredentials(!create))
-                .setNegativeButton("Not now", null).show();
+        fields.setPadding(dp(23), dp(20), dp(23), dp(20));
+        fields.setBackground(background(panel, border, 17));
+        scroll.addView(fields);
+        TextView eyebrow = text("ROLLCALL / WEB ACCOUNT", 10,
+                darkTheme ? HERO : 0xFF365000, Typeface.BOLD);
+        eyebrow.setLetterSpacing(.08f);
+        fields.addView(eyebrow);
+        TextView heading = text(create ? "CREATE ACCOUNT." : "SIGN IN.", 25, ink, Typeface.BOLD);
+        heading.setLetterSpacing(-.055f);
+        fields.addView(heading, topMargin(-1, -2, 13));
+        TextView detail = text("A web mirror for your Rollcall snapshot. Use a password separate from MyCamu.",
+                12, muted, Typeface.NORMAL);
+        detail.setLineSpacing(dp(3), 1f);
+        fields.addView(detail, topMargin(-1, -2, 8));
+        TextView emailLabel = text("EMAIL ADDRESS", 10, muted, Typeface.BOLD);
+        fields.addView(emailLabel, topMargin(-1, -2, 22));
+        EditText email = new EditText(this);
+        email.setSingleLine(true);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+                android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setHint("you@example.com");
+        email.setTextSize(13); email.setTextColor(ink); email.setHintTextColor(muted);
+        email.setPadding(dp(12), 0, dp(12), 0);
+        email.setBackground(background(panel, border, 10));
+        fields.addView(email, topMargin(-1, dp(51), 8));
+        TextView passwordLabel = text("PASSWORD", 10, muted, Typeface.BOLD);
+        fields.addView(passwordLabel, topMargin(-1, -2, 17));
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setHint("At least 8 characters");
+        password.setTextSize(13); password.setTextColor(ink); password.setHintTextColor(muted);
+        password.setPadding(dp(12), 0, dp(12), 0);
+        password.setBackground(background(panel, border, 10));
+        fields.addView(password, topMargin(-1, dp(51), 8));
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(scroll).create();
+        Button submit = onboardingButton(create ? "CREATE ACCOUNT  ↗" : "SIGN IN  ↗",
+                0xFFCCFF00, 0xFF121212, v -> {
+                    String address = email.getText().toString().trim();
+                    String secret = password.getText().toString();
+                    dialog.dismiss();
+                    if (create) cloudCreateAccount(address, secret);
+                    else cloudSignIn(address, secret);
+                });
+        fields.addView(submit, topMargin(-1, dp(52), 24));
+        TextView switchMode = text(create ? "ALREADY REGISTERED? SIGN IN" : "NEW HERE? CREATE ACCOUNT",
+                12, ink, Typeface.BOLD);
+        switchMode.setGravity(android.view.Gravity.CENTER);
+        switchMode.setMinHeight(dp(48));
+        switchMode.setOnClickListener(v -> { dialog.dismiss(); showCloudCredentials(!create); });
+        fields.addView(switchMode, topMargin(-1, -2, 8));
+        TextView later = text("NOT NOW", 12, muted, Typeface.BOLD);
+        later.setGravity(android.view.Gravity.CENTER);
+        later.setMinHeight(dp(48));
+        later.setOnClickListener(v -> dialog.dismiss());
+        fields.addView(later);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(background(panel, border, 17));
+            dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels - dp(34),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
     }
 
     private void cloudCreateAccount(String email, String password) {
