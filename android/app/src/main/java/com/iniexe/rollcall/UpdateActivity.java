@@ -99,7 +99,7 @@ public final class UpdateActivity extends Activity {
         int statusInset = getResources().getDimensionPixelSize(getResources().getIdentifier("status_bar_height", "dimen", "android"));
         int navigationInset = getResources().getDimensionPixelSize(getResources().getIdentifier("navigation_bar_height", "dimen", "android"));
         root.setPadding(0, statusInset, 0, navigationInset + dp(24));
-        backLabel = text("‹   Rollcall", 14, palette.green, Typeface.BOLD);
+        backLabel = text("←  ROLLCALL / BACK", 12, palette.canvas == 0xFF121212 ? 0xFFCCFF00 : 0xFF365000, Typeface.BOLD);
         backLabel.setGravity(Gravity.CENTER_VERTICAL);
         backLabel.setPadding(dp(22), 0, dp(22), 0);
         backLabel.setOnClickListener(v -> finish());
@@ -155,24 +155,26 @@ public final class UpdateActivity extends Activity {
 
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
-        hero.setGravity(Gravity.CENTER);
-        hero.setPadding(dp(12), dp(14), dp(12), dp(10));
-        TextView mark = text(state == INSTALLED ? "✓" : state == FAILED ? "×" : "✦", 38,
-                state == FAILED ? palette.red : state == INSTALLED ? palette.green : palette.button, Typeface.BOLD);
-        mark.setGravity(Gravity.CENTER);
-        GradientDrawable badge = new GradientDrawable();
-        badge.setColor(palette.soft);
-        badge.setCornerRadius(dp(100));
-        mark.setBackground(badge);
-        hero.addView(mark, centered(dp(54), dp(54)));
-        TextView heading = text(heading(), 23, palette.ink, Typeface.BOLD);
-        heading.setGravity(Gravity.CENTER);
-        heading.setPadding(0, dp(10), 0, dp(3));
-        hero.addView(heading);
-        TextView version = text(state == INSTALLED ? "You’re on " + tag : "Version " + tag,
-                16, palette.muted, Typeface.BOLD);
-        version.setGravity(Gravity.CENTER);
-        hero.addView(version);
+        hero.setGravity(Gravity.LEFT);
+        hero.setPadding(dp(21), dp(20), dp(21), dp(24));
+        GradientDrawable heroShape = new GradientDrawable();
+        heroShape.setColor(0xFFCCFF00);
+        heroShape.setCornerRadius(dp(18));
+        hero.setBackground(heroShape);
+        TextView kicker = text("ROLLCALL / BROADCAST UPDATE", 10, 0xFF121212, Typeface.BOLD);
+        kicker.setLetterSpacing(.08f);
+        hero.addView(kicker);
+        TextView icon = text(state == INSTALLED ? "✓" : state == FAILED ? "×" : "✱", 48,
+                0xFFFF4400, Typeface.BOLD);
+        icon.setGravity(Gravity.RIGHT);
+        hero.addView(icon, topMargin(dp(8)));
+        TextView heading = text(heading().toUpperCase(java.util.Locale.ROOT) + ".", 29,
+                0xFF121212, Typeface.BOLD);
+        heading.setLetterSpacing(-.055f);
+        hero.addView(heading, topMargin(dp(12)));
+        TextView version = text(state == INSTALLED ? "INSTALLED / " + tag : "VERSION / " + tag,
+                12, 0xFF343A26, Typeface.BOLD);
+        hero.addView(version, topMargin(dp(12)));
         content.addView(hero);
 
         if (state == AVAILABLE || state == FAILED) {
@@ -527,13 +529,13 @@ public final class UpdateActivity extends Activity {
 
     private Button button(String value) {
         Button button = new Button(this);
-        button.setText(value);
+        button.setText(value.toUpperCase(java.util.Locale.ROOT) + "  ↗");
         button.setTextColor(palette.buttonText);
         button.setAllCaps(false);
         button.setTypeface(brandTypeface, Typeface.BOLD);
         GradientDrawable background = new GradientDrawable();
         background.setColor(palette.button);
-        background.setCornerRadius(dp(8));
+        background.setCornerRadius(dp(12));
         button.setBackground(background);
         button.setEnabled(state != DOWNLOADING && state != VERIFYING && state != INSTALLING);
         return button;
