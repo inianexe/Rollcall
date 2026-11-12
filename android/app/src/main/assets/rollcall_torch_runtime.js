@@ -2,7 +2,8 @@
 (function(){
 'use strict';
 var state=null, page='home', courseFilter='all', weekMode='attendance', planMode='attend',
-    odMode='recorded', odFilter='current', planCount=1, planCourse='', expanded={}, expandedTerms={};
+    odMode='recorded', odFilter='current', planCount=1, planCourse='', expanded={}, expandedTerms={},
+    expandedLeave={}, courseQuery='', historyLimit=30;
 var root=document.getElementById('app');
 var byId=function(id){return document.getElementById(id)};
 var html=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
@@ -59,6 +60,8 @@ function renderCourses(){
     btn.classList.toggle('selected',type===courseFilter);
   });
   var list=courseFilter==='below'?below:courseFilter==='safe'?safe:all;
+  var search=courseQuery.trim().toLocaleLowerCase();
+  if(search)list=list.filter(function(c){return (String(c.name||'')+' '+String(c.code||'')).toLocaleLowerCase().includes(search)});
   byId('courseList').innerHTML=list.length?list.map(courseMarkup).join(''):
      '<div class="blank-panel"><div class="eyebrow">COURSES / '+(all.length?'CLEAR':'NOT CONNECTED')+'</div><strong>'+
      (all.length?'NOTHING HERE.<br>YOU’RE CLEAR.':'YOUR COURSES<br>LAND HERE.')+'</strong><p>'+
@@ -126,7 +129,7 @@ function renderWeek(){
  if(weekMode==='attendance'){
   var items=(state.classMarks||[]).slice().sort(function(a,b){return b.startsAt-a.startsAt});
   var last='',out='<div class="eyebrow" style="color:var(--lilac)">ATTENDANCE LOG / '+html(state.status||'LIVE')+'</div>';
-  items.slice(0,100).forEach(function(item){
+  items.slice(0,historyLimit).forEach(function(item){
    var day=date(item.startsAt,{weekday:'long',day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
    if(day!==last){last=day;out+='<div class="date-group">'+html(day)+'</div>'}
    var status=String(item.status||'').toLowerCase();
@@ -135,6 +138,7 @@ function renderWeek(){
    out+='<div class="history-item"><div><h4>'+html(item.name)+'</h4><p>'+html(item.code)+' · '+html(hour(item.startsAt))+'</p></div><span class="present" style="color:'+color+'">'+desc+'</span></div>';
   });
   if(!items.length)out+='<div class="blank-panel"><div class="eyebrow">YOUR RECORD</div><strong>HISTORY<br>GOES HERE.</strong><p>Sync attendance to load your class history.</p></div>';
+  if(items.length>historyLimit)out+='<button type="button" class="button full" data-action="older">SHOW OLDER / '+(items.length-historyLimit)+' MORE ↗</button>';
   attendance.innerHTML=out+'<button type="button" class="section-action" data-page="leave">LEAVE & OD →</button>';
  } else {
   var rows=(state.timetable||[]).slice().sort(function(a,b){return a.startsAt-b.startsAt});
@@ -224,9 +228,21 @@ function renderLeave(){
  if(!state)return;
  var all=state.leaves||[],rows=odFilter==='all'?all:all.filter(function(x){return x.currentSemester});
  document.querySelectorAll('[data-od-filter]').forEach(function(b){b.classList.toggle('selected',b.dataset.odFilter===odFilter)});
- var out=rows.map(function(x){
+ var out=rows.map(function(x,index){
   var status=x.status||'Unknown',tone=/approv/i.test(status)?'var(--green)':/reject/i.test(status)?'#ff8870':'#ffcb75';
-  return '<div class="torch-list-row"><div class="course-head"><h4>'+html(x.type||'Leave')+'</h4><span class="badge" style="color:'+tone+'">'+html(status.toUpperCase())+'</span></div><p>'+html(x.date||date(x.startsAt,{dateStyle:'medium'}))+'</p><div class="eyebrow" style="color:var(--lime);margin-top:12px">'+num(x.periods)+' PERIODS</div><p>'+html(x.details||'')+'</p></div>';
+  var key=String(x.id||x.startsAt+'-'+x.type),isOpen=!!expandedLeave[key],details=[];
+  try{details=JSON.parse(x.periodDetails||'[]');if(!Array.isArray(details))details=[]}catch(e){details=[]}
+  var rowsHtml=isOpen?'<div class="course-detail" style="display:block">'+(details.length?
+    details.slice(0,90).map(function(d){return '<div class="history-item"><div><h4>'+html(d.name||d.code||'CLASS')+'</h4><p>'+
+      html(d.date||'')+(d.period?' · PERIOD '+html(d.period):'')+(d.time?' · '+html(d.time):'')+
+      (d.endTime?' – '+html(d.endTime):'')+'</p></div></div>'}).join(''):
+    '<p>MyCamu did not provide individual mapped class periods for this record.</p>')+'</div>':'';
+  return '<div class="torch-list-row"><div class="course-head"><h4>'+html(x.type||'Leave')+'</h4><span class="badge" style="color:'+tone+'">'+html(status.toUpperCase())+'</span></div>'+
+    '<p>'+html(x.date||date(x.startsAt,{dateStyle:'medium'}))+'</p>'+
+    '<div class="eyebrow" style="color:var(--lime);margin-top:12px">'+num(x.periods)+' PERIODS</div>'+
+    '<p>'+html(x.details||'')+'</p>'+
+    '<button type="button" class="detail-toggle" data-leave-expand="'+html(key)+'" aria-expanded="'+isOpen+'">MAPPED CLASSES '+(isOpen?'−':'+')+'</button>'+
+    rowsHtml+'</div>';
  }).join('');
  if(!rows.length)out='<div class="blank-panel"><div class="eyebrow">LEAVE / OD</div><strong>NO RECORDS<br>FOUND.</strong><p>No '+(odFilter==='current'?'current semester ':'')+'leave or OD records were returned by MyCamu.</p></div>';
  byId('leaveRecords').innerHTML='<div class="eyebrow" style="color:var(--muted)">'+rows.length+' RECORD'+(rows.length===1?'':'S')+'</div>'+out;
@@ -270,6 +286,7 @@ document.addEventListener('click',function(e){
  if(node.dataset.odMode){odMode=node.dataset.odMode;renderPlanner();return}
  if(node.dataset.toggleCourse){expanded[node.dataset.toggleCourse]=!expanded[node.dataset.toggleCourse];renderCourses();return}
  if(node.dataset.plan){planCourse=node.dataset.plan;shellPage('what');return}
+ if(node.dataset.leaveExpand){expandedLeave[node.dataset.leaveExpand]=!expandedLeave[node.dataset.leaveExpand];renderLeave();return}
  if(node.hasAttribute('data-term')){var k=node.dataset.term;expandedTerms[k]=!expandedTerms[k];renderMarks();return}
  if(node.id==='targetButton'||node.id==='settingsTargetButton'){showTarget();return}
  if(node.id==='cancelTarget'){hideTarget();return}
@@ -279,6 +296,7 @@ document.addEventListener('click',function(e){
   var act=node.dataset.action;
   if(act==='attend'||act==='miss'){planMode=act;renderPlanner();return}
   if(act==='target'){showTarget();return}
+  if(act==='older'){historyLimit+=30;renderWeek();return}
   bridge(({sync:'sync',theme:'toggleTheme',reminders:'toggleReminders',notifications:'notifications',cloud:'cloud',kct:'kct',updates:'updates',clear:'clear',privacy:'privacy',terms:'terms',github:'github'})[act]||act);
  }
 });
@@ -286,6 +304,7 @@ document.addEventListener('change',function(e){if(e.target.id==='courseSelect'){
 document.addEventListener('input',function(e){
  if(e.target.id==='classSlider'){planCount=Math.max(1,Math.min(50,Number(e.target.value)));renderPlanner()}
  if(e.target.id==='targetSlider')byId('targetValue').textContent=e.target.value+'%';
+ if(e.target.id==='torchCourseSearch'){courseQuery=e.target.value;renderCourses()}
 });
 document.addEventListener('keydown',function(e){
  if(e.key==='Escape'){if(byId('targetOverlay').classList.contains('show'))hideTarget();else if(page==='leave'||page==='settings')shellPage('home')}
@@ -299,5 +318,14 @@ window.__rollcallRender=function(o){try{render(typeof o==='string'?JSON.parse(o)
 window.__rollcallNavigate=function(to){shellPage(to||'home')};
 window.__rollcallBack=function(){if(byId('targetOverlay').classList.contains('show')){hideTarget();return true}if(page!=='home'){shellPage('home');return true}return false};
 window.__rollcallCurrentPage=function(){return page};
+var courseSearch=document.createElement('input');
+courseSearch.type='search';
+courseSearch.id='torchCourseSearch';
+courseSearch.className='field';
+courseSearch.setAttribute('aria-label','Search courses by name or code');
+courseSearch.placeholder='SEARCH COURSES / CODE';
+courseSearch.style.marginBottom='18px';
+var courseListNode=byId('courseList');
+if(courseListNode)courseListNode.parentNode.insertBefore(courseSearch,courseListNode);
 if(window.RollcallBridge)bridge('ready');
 })();
