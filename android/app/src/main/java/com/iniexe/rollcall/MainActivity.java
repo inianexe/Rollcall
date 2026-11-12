@@ -2,7 +2,6 @@ package com.iniexe.rollcall;
 
 import android.annotation.SuppressLint;
 import android.animation.Animator;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Intent;
@@ -43,6 +42,7 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
+import androidx.activity.ComponentActivity;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -67,7 +67,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.android.gms.tasks.Tasks;
 import java.util.concurrent.TimeUnit;
 
-public class MainActivity extends Activity {
+public class MainActivity extends ComponentActivity {
     private static final int REMINDER_PERMISSION_REQUEST = 7301;
     private static final int ONBOARDING_NOTIFICATION_REQUEST = 7302;
     private static final String CONNECTED_KEY = "mycamu_connected";

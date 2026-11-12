@@ -183,7 +183,7 @@ final class DashboardView extends FrameLayout {
     private ModeSwitchButtonView homeThemeButton;
     private final TextView[] navItems = new TextView[5];
 
-    private TextView headlineView, statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
+    private TextView statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
     private TextView allCoursesFilter, focusCoursesFilter;
     private TextView coursesEmptyView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
@@ -206,8 +206,7 @@ final class DashboardView extends FrameLayout {
     private WeekPulseView overviewWeekPulse;
     private TextView projectionView, projectionStatusView, plannerCountView;
     private final java.util.Map<String, Float> previousCourseProgress = new java.util.HashMap<>();
-    private TextView welcomeView;
-    private TextView homeDateView, homeWeekNumberView, homeWeekMonthView, homeEncouragementView;
+    private RollcallHeroIdentityView homeHeroIdentity;
     private boolean wasSyncing;
     private PlannerMeter plannerMeter;
     private TextView plannerFeedback;
@@ -340,22 +339,22 @@ final class DashboardView extends FrameLayout {
         historyDirty = true;
         query = next.query == null ? query : next.query;
         belowOnly = next.belowOnly;
-        if (headlineView == null) return;
+        if (homeHeroIdentity == null) return;
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
                         .replaceAll("\\.$", "");
-        headlineView.setText(displayName.toUpperCase(Locale.ROOT) + ".");
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-        welcomeView.setText(greeting + ",");
         SimpleDateFormat broadcastDate = new SimpleDateFormat("EEE / dd MMM", Locale.ENGLISH);
-        homeDateView.setText(broadcastDate.format(new Date()).toUpperCase(Locale.ROOT));
         Calendar currentWeek = Calendar.getInstance();
-        homeWeekNumberView.setText(String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)));
-        homeWeekMonthView.setText(new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT));
-        homeEncouragementView.setText(next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
+        String encouragement = next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
                 : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
-                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.");
+                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.";
+        homeHeroIdentity.setIdentity(greeting + ",", displayName.toUpperCase(Locale.ROOT) + ".",
+                broadcastDate.format(new Date()).toUpperCase(Locale.ROOT),
+                String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)),
+                new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT),
+                encouragement);
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
@@ -471,33 +470,9 @@ final class DashboardView extends FrameLayout {
         LinearLayout heroCard = column();
         heroCard.setPadding(dp(16), dp(14), dp(16), dp(14));
         heroCard.setBackground(shape(hero, 18, 0));
-        LinearLayout transmission = row();
-        transmission.setGravity(Gravity.CENTER_VERTICAL);
-        TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 9, heroMuted, Typeface.BOLD);
-        transmission.addView(transmissionLabel, new LinearLayout.LayoutParams(0, -2, 1));
-        homeDateView = text("THU / 12 NOV", 9, heroText, Typeface.BOLD);
-        homeDateView.setGravity(Gravity.CENTER);
-        homeDateView.setPadding(dp(8), dp(6), dp(8), dp(6));
-        homeDateView.setBackground(shape(hero, 100, heroText));
-        transmission.addView(homeDateView, lp(-2, -2));
-        heroCard.addView(transmission);
-
-        LinearLayout identityRow = row();
-        identityRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout identity = column();
-        welcomeView = text("Good afternoon,", 11, heroMuted, Typeface.NORMAL);
-        identity.addView(welcomeView);
-        headlineView = text("MyCamu student", 24, heroText, Typeface.BOLD);
-        headlineView.setLetterSpacing(-.04f);
-        headlineView.setMaxLines(1);
-        headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        identity.addView(headlineView, topLp(-1, -2, 4));
-        homeEncouragementView = text("ONE CLASS AT A TIME. YOUR WEEK, DECODED.", 9, heroMuted, Typeface.BOLD);
-        homeEncouragementView.setMaxLines(2);
-        identity.addView(homeEncouragementView, topLp(-1, -2, 3));
-        identityRow.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
-        identityRow.addView(homeWeekTicket(), lp(dp(104), dp(112)));
-        heroCard.addView(identityRow, topLp(-1, -2, 12));
+        homeHeroIdentity = new RollcallHeroIdentityView(getContext());
+        homeHeroIdentity.setColors(hero, heroText, heroMuted, 0xFFF1EEDA, ink, border);
+        heroCard.addView(homeHeroIdentity, lp(-1, -2));
 
         LinearLayout syncLine = row();
         syncLine.setGravity(Gravity.CENTER_VERTICAL);
@@ -697,35 +672,6 @@ final class DashboardView extends FrameLayout {
         overviewLeaveBlock.setVisibility(VISIBLE);
         addTop(body, overviewLeaveBlock, 14);
         addBottom(body, 24);
-    }
-
-    private FrameLayout homeWeekTicket() {
-        FrameLayout ticket = new FrameLayout(getContext());
-        View backing = new View(getContext());
-        backing.setBackground(shape(0xFFC8C8FF, 8, 0xFF121212));
-        backing.setRotation(9f);
-        FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(82), dp(102), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        backParams.rightMargin = dp(2);
-        ticket.addView(backing, backParams);
-        LinearLayout face = column();
-        face.setGravity(Gravity.CENTER_HORIZONTAL);
-        face.setPadding(dp(8), dp(9), dp(8), dp(8));
-        face.setBackground(shape(0xFFF1EEDA, 8, 0xFF121212));
-        face.setRotation(-4f);
-        TextView weekLabel = text("THE / WEEK", 7, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView = text("46", 34, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView.setIncludeFontPadding(false);
-        TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
-        homeWeekMonthView = text("NOVEMBER", 7, 0xFF121212, Typeface.BOLD);
-        face.addView(weekLabel);
-        face.addView(homeWeekNumberView, topLp(-1, -2, 4));
-        face.addView(ticketRule, topLp(-1, -2, 1));
-        face.addView(homeWeekMonthView, topLp(-1, -2, 2));
-        FrameLayout.LayoutParams faceParams = new FrameLayout.LayoutParams(dp(78), dp(100), Gravity.CENTER_VERTICAL | Gravity.RIGHT);
-        faceParams.rightMargin = dp(10);
-        ticket.addView(face, faceParams);
-        ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        return ticket;
     }
 
     private void buildCoursesPage() {
