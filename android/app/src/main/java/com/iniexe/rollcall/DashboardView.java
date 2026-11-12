@@ -233,6 +233,7 @@ final class DashboardView extends FrameLayout {
         json.put("name", s.name);
         json.put("initials", s.initials);
         json.put("status", s.status);
+        json.put("query", s.query);
         json.put("target", s.target);
         json.put("syncing", s.syncing);
         json.put("syncError", s.syncError);
@@ -288,6 +289,9 @@ final class DashboardView extends FrameLayout {
             item.put("date", m.date); item.put("status", m.status);
             item.put("details", m.details); item.put("periods", m.periods);
             item.put("currentSemester", m.currentSemester);
+            item.put("semesterKnown", m.semesterKnown);
+            item.put("periodNumbers", m.periodNumbers);
+            item.put("periodDetails", m.periodDetails);
             item.put("startsAt", m.startsAt); item.put("endsAt", m.endsAt);
             leaves.put(item);
         }
