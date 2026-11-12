@@ -1782,7 +1782,7 @@ public class MainActivity extends Activity {
                 complete[0] = true;
                 startedAt[0] = 0L;
                 label.setText("Confirmed");
-                label.setTextColor(Color.WHITE);
+                label.setTextColor(accent);
                 control.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
                 confirmed.run();
             } else handler.postDelayed(tick[0], 16L);
