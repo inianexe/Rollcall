@@ -2389,10 +2389,11 @@ final class DashboardView extends FrameLayout {
         page.setScaleY(1f);
         page.setAlpha(1f);
         if (android.os.Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
-        page.setTranslationX(direction * dp(40));
-        page.setAlpha(.72f);
-        page.animate().translationX(0f).alpha(1f).setStartDelay(0).setDuration(280)
-                .setInterpolator(new android.view.animation.PathInterpolator(.16f, 1f, .3f, 1f)).start();
+        // The source prototype fades from 50% and rises 10px; do not side-swipe screens.
+        page.setTranslationY(dp(10));
+        page.setAlpha(.5f);
+        page.animate().translationY(0f).alpha(1f).setStartDelay(0).setDuration(260)
+                .setInterpolator(new android.view.animation.PathInterpolator(.22f, .75f, .3f, 1f)).start();
     }
 
     /** Repairs page visibility after window reattachment or a background data refresh. */
