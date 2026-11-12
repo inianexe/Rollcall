@@ -1,5 +1,8 @@
 package com.iniexe.rollcall;
 
+import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
+import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
+
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -350,11 +353,12 @@ final class DashboardView extends FrameLayout {
         String encouragement = next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
                 : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
                 : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.";
-        homeHeroIdentity.setIdentity(greeting + ",", displayName.toUpperCase(Locale.ROOT) + ".",
+        homeHeroIdentity.setIdentity(new HomeHeroIdentityState(
+                greeting + ",", displayName.toUpperCase(Locale.ROOT) + ".",
                 broadcastDate.format(new Date()).toUpperCase(Locale.ROOT),
                 String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)),
                 new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT),
-                encouragement);
+                encouragement));
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
