@@ -515,6 +515,8 @@ final class DashboardView extends FrameLayout {
         heroStage.setBackground(shape(hero, 18, 0));
         heroStage.setMinimumHeight(dp(244));
         heroStage.setClipChildren(false);
+        heroStage.addView(new TorchOrbitView(getContext()),
+                new FrameLayout.LayoutParams(-1, -1));
         LinearLayout heroContent = column();
         heroContent.setPadding(dp(22), dp(19), dp(22), dp(18));
         heroStage.addView(heroContent, new FrameLayout.LayoutParams(-1, dp(244)));
@@ -770,6 +772,23 @@ final class DashboardView extends FrameLayout {
         addBottom(body, 30);
     }
 
+    /** Quiet hand-drawn orbit from the HTML hero's dashed circular accent. */
+    private final class TorchOrbitView extends View {
+        private final Paint orbit = new Paint(Paint.ANTI_ALIAS_FLAG);
+        TorchOrbitView(Context context) {
+            super(context);
+            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            orbit.setColor(0x33101010);
+            orbit.setStrokeWidth(dp(1f));
+            orbit.setStyle(Paint.Style.STROKE);
+            orbit.setPathEffect(new android.graphics.DashPathEffect(new float[]{dp(5), dp(6)}, 0));
+        }
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            canvas.drawCircle(getWidth() + dp(35), -dp(23), dp(115), orbit);
+        }
+    }
+
     private FrameLayout homeWeekTicket() {
         FrameLayout ticket = new FrameLayout(getContext());
         View backing = new View(getContext());
@@ -906,9 +925,9 @@ final class DashboardView extends FrameLayout {
         LinearLayout summary = column();
         summary.setPadding(dp(18), dp(16), dp(18), dp(16));
         summary.setBackground(shape(palette.hero, 18, 0));
-        summary.addView(label("CGPA", 10, palette.heroMuted, Typeface.BOLD));
+        summary.addView(label("CUMULATIVE GPA / CGPA", 10, palette.heroText, Typeface.BOLD));
         TextView value = text(Double.isNaN(cgpa) ? "—" : String.format(Locale.getDefault(), "%.2f", cgpa) + " / 10",
-                42, palette.heroText, Typeface.BOLD);
+                49, palette.heroText, Typeface.BOLD);
         value.setLetterSpacing(-.04f);
         summary.addView(value, topLp(-1, -2, 2));
         double earnedCredits = 0;
@@ -942,13 +961,13 @@ final class DashboardView extends FrameLayout {
         }
         Collections.sort(trend, (a, b) -> Integer.compare(semesterNumber(a.semester), semesterNumber(b.semester)));
         if (!trend.isEmpty()) {
-            addTop(academicsContent, text("Semester GPA trend", 18, ink, Typeface.BOLD), 20);
+            addTop(academicsContent, text("Semester trend", 21, ink, Typeface.BOLD), 28);
             SemesterGpaChart chart = new SemesterGpaChart(getContext(), palette.highlight, muted, uiTypeface);
             chart.setPoints(trend);
             academicsContent.addView(chart, topLp(-1, dp(168), 4));
         }
 
-        addTop(academicsContent, text("Semester results", 20, ink, Typeface.BOLD), 20);
+        addTop(academicsContent, text("Results", 21, ink, Typeface.BOLD), 28);
         for (String semester : semesters) {
             ArrayList<AcademicCourse> courses = grouped.get(semester);
             if (courses == null || courses.isEmpty()) continue;
@@ -994,7 +1013,7 @@ final class DashboardView extends FrameLayout {
                 TextView grade = text(course.grade, 13, ink, Typeface.BOLD);
                 grade.setGravity(Gravity.CENTER);
                 grade.setIncludeFontPadding(false);
-                grade.setBackground(shape(soft, 8, 0));
+                grade.setBackground(shape(soft, 10, 0));
                 line.addView(grade, lp(dp(44), dp(32)));
                 courseRows.addView(line);
                 View divider = new View(getContext());
@@ -1318,7 +1337,7 @@ final class DashboardView extends FrameLayout {
             day.add(java.util.Calendar.DAY_OF_YEAR, 1);
             daysUntil++;
         }
-        String countdown = daysUntil == 0 ? "Today" : daysUntil == 1 ? "Tomorrow" : "In " + daysUntil + " days";
+        String countdown = daysUntil == 0 ? "TODAY ↗" : daysUntil == 1 ? "TOMORROW ↗" : "IN " + daysUntil + " DAYS ↗";
         overviewExamWhen.setText(countdown);
         overviewExamDate.setText(format.format(new Date(next.upcomingExamAt)));
         String details = next.upcomingExamCode;
@@ -1475,7 +1494,7 @@ final class DashboardView extends FrameLayout {
             while (end < state.timetable.size() && date.equals(state.timetable.get(end).date)) end++;
 
             LinearLayout dayCard = column();
-            dayCard.setPadding(dp(16), dp(8), dp(16), dp(8));
+            dayCard.setPadding(dp(16), dp(12), dp(16), dp(12));
             dayCard.setBackground(industrialSurface(surface, 20, border));
             LinearLayout dayHeader = row();
             dayHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -1891,7 +1910,7 @@ final class DashboardView extends FrameLayout {
             }
             LinearLayout line = row();
             line.setGravity(Gravity.CENTER_VERTICAL);
-            line.setPadding(dp(10), dp(8), dp(10), dp(8));
+            line.setPadding(dp(13), dp(14), dp(13), dp(14));
             line.setBackground(shape(surface, 11, border));
             LinearLayout copy = column();
             TextView title = text(mark.name, 12, ink, Typeface.BOLD);
@@ -1908,14 +1927,16 @@ final class DashboardView extends FrameLayout {
                     : "absent".equals(mark.status) ? "Absent"
                     : "not_taken".equals(mark.status) ? "Not marked"
                     : "Unable to confirm";
-            TextView badge = text(status, 9, mark.color, Typeface.BOLD);
+            TextView badge = text(("present".equals(mark.status) ? "PRESENT ✓"
+                : "absent".equals(mark.status) ? "ABSENT ×"
+                : status.toUpperCase(Locale.ROOT)), 9, mark.color, Typeface.BOLD);
             badge.setGravity(Gravity.CENTER);
             badge.setPadding(dp(8), dp(5), dp(8), dp(5));
-            badge.setBackground(shape(soft, 9, 0));
+            badge.setBackground(shape(statusTint(mark.color), 9, 0));
             badge.setContentDescription(mark.name + ", " + status);
             line.addView(badge, lp(-2, -2));
             LinearLayout.LayoutParams params = lp(-1, -2);
-            params.bottomMargin = dp(5);
+            params.bottomMargin = dp(7);
             historyRows.addView(line, params);
         }
         if (shown < state.classMarks.size()) {
