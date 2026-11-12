@@ -2,9 +2,12 @@ package com.iniexe.rollcall;
 
 import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
 import com.iniexe.rollcall.ui.bridge.LatestClassAttendanceCardView;
+import com.iniexe.rollcall.ui.bridge.CourseCardView;
 import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
 import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
 import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState;
+import com.iniexe.rollcall.ui.screens.courses.CourseCardUiState;
+import com.iniexe.rollcall.ui.screens.courses.CourseMetricUiState;
 import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
 
 import android.animation.ValueAnimator;
@@ -111,6 +114,7 @@ final class DashboardView extends FrameLayout {
 
     static final class Course {
         String code = "", name = "", percentLabel = "", status = "", counts = "", guidance = "", targetCount = "";
+        String canMissText = "—", mustAttendText = "—";
         float percent;
         int attended, total, color, odCredit, odCount;
         boolean odReconciled;
@@ -3103,108 +3107,35 @@ final class DashboardView extends FrameLayout {
 
     private final class CourseGroupRow {
         final CourseGroup group;
-        final LinearLayout root;
+        final CourseCardView root;
         private final ArrayList<Course> subjects = new ArrayList<>();
 
         CourseGroupRow(CourseGroup group) {
             this.group = group;
-            root = card();
-            root.setPadding(dp(16), dp(14), dp(16), dp(14));
             subjects.add(group.lecture);
             subjects.addAll(group.labs);
-
-            LinearLayout header = row();
-            header.setGravity(Gravity.CENTER_VERTICAL);
-            TextView courseName = text(group.lecture.name, 17, ink, Typeface.BOLD);
-            courseName.setMaxLines(2);
-            courseName.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            header.addView(courseName, new LinearLayout.LayoutParams(0, -2, 1));
             boolean atRisk = group.priority() < state.target;
-            header.setOnClickListener(v -> actions.onCourse(group.lecture.code));
-            header.setContentDescription(courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
-                    + ". Tap to expand course guidance.");
-            root.addView(header);
-
-            LinearLayout meters = row();
+            ArrayList<CourseMetricUiState> metrics = new ArrayList<>();
+            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
             for (int i = 0; i < subjects.size(); i++) {
                 Course subject = subjects.get(i);
                 String kind = isLabCourse(subject.code) ? "LAB" : "THEORY";
                 if (isLabCourse(group.lecture.code) && subject == group.lecture) kind = "LAB";
-                LinearLayout metric = metric(subject, kind);
-                LinearLayout.LayoutParams metricParams = new LinearLayout.LayoutParams(0, -2, 1);
-                if (i > 0) metricParams.leftMargin = dp(7);
-                meters.addView(metric, metricParams);
-            }
-            root.addView(meters, topLp(-1, -2, 4));
-            for (Course subject : subjects) {
-                if (!subject.expanded) continue;
-                TextView guidance = text(subject.guidance, 10, muted, Typeface.NORMAL);
-                guidance.setPadding(dp(2), dp(8), dp(2), 0);
-                guidance.setContentDescription(subject.status + ". " + subject.guidance);
-                root.addView(guidance);
-                TextView planner = text("Try in What if?  →", 12, green, Typeface.BOLD);
-                planner.setPadding(dp(2), dp(8), 0, dp(8));
-                planner.setMinHeight(dp(48));
-                planner.setGravity(Gravity.CENTER_VERTICAL);
-                planner.setOnClickListener(v -> openPlannerFor(subject.code));
-                root.addView(planner);
-            }
-            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
-            for (Course subject : subjects) {
+                metrics.add(CourseCardStateMapper.map(subject, kind, courseHeading(subject)));
                 description.append(". ").append(isLabCourse(subject.code) ? "Lab" : "Theory")
                         .append(" ").append(subject.percentLabel).append(", ").append(subject.counts);
             }
-            root.setContentDescription(description.toString());
-            root.setFocusable(true);
+            CourseCardUiState cardState = new CourseCardUiState(
+                    group.lecture.name, group.lecture.code,
+                    courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
+                            + ". Tap to expand course guidance.",
+                    description.toString(), metrics);
+            root = new CourseCardView(getContext(), palette.toComposeColors(), cardState,
+                    code -> { actions.onCourse(code); return kotlin.Unit.INSTANCE; },
+                    code -> { openPlannerFor(code); return kotlin.Unit.INSTANCE; });
         }
 
-        private LinearLayout metric(Course subject, String kind) {
-            LinearLayout box = column();
-            box.setPadding(0, dp(5), 0, dp(5));
-            box.setFocusable(true);
-            TextView type = text(kind + (subject.code.isEmpty() ? "" : " · " + subject.code), 9, muted, Typeface.BOLD);
-            type.setMaxLines(1);
-            type.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            box.addView(type);
-            LinearLayout outcomes = row();
-            String canMiss = "—", mustAttend = "—";
-            if (subject.countsKnown && subject.total > 0) {
-                Attendance baseline = new Attendance(subject.code, subject.name, subject.attended, subject.total);
-                canMiss = String.valueOf(subject.below ? 0 : baseline.safeAbsences(state.target));
-                int recovery = subject.below ? baseline.periodsToRecover(state.target) : 0;
-                mustAttend = recovery == Integer.MAX_VALUE ? "NO RECOVERY" : String.valueOf(recovery);
-            }
-            outcomes.addView(outcome("CAN MISS", canMiss, subject.below ? muted : green, subject.below),
-                    new LinearLayout.LayoutParams(0, -2, 1));
-            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(0, -2, 1);
-            recoveryParams.leftMargin = dp(5);
-            outcomes.addView(outcome("MUST ATTEND", mustAttend, subject.below ? subject.color : muted, subject.below), recoveryParams);
-            box.addView(outcomes, topLp(-1, -2, 6));
-            AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code, subject.percent, subject.color);
-            meter.setContentDescription("Attendance " + subject.percentLabel);
-            box.addView(meter, topLp(-1, dp(7), 7));
-            String detail = subject.countsKnown ? subject.percentLabel + " · " + subject.attended + " / " + subject.total + " attended"
-                    : "Attendance counts unavailable";
-            box.addView(text(detail, 10, muted, Typeface.NORMAL), topLp(-1, -2, 4));
-            box.setContentDescription(kind + " attendance for " + courseHeading(subject) + ": " + subject.percentLabel
-                    + ", can miss " + canMiss + " classes, must attend " + mustAttend + " classes");
-            box.setOnClickListener(v -> actions.onCourse(subject.code));
-            return box;
-        }
-
-        private LinearLayout outcome(String title, String value, int valueColor, boolean atRisk) {
-            LinearLayout cell = column();
-            cell.setPadding(dp(7), dp(6), dp(5), dp(5));
-            cell.setBackground(shape(atRisk && valueColor != muted ? focusSurface : soft, 8, 0));
-            TextView label = text(title, 9, muted, Typeface.BOLD);
-            label.setMaxLines(2);
-            cell.addView(label);
-            TextView count = text(value, value.length() > 5 ? 10 : 18, valueColor, Typeface.BOLD);
-            count.setSingleLine(true);
-            count.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            cell.addView(count, topLp(-1, -2, 2));
-            return cell;
-        }
+        private void openPlannerFor(String code) { DashboardView.this.openPlannerFor(code); }
 
         boolean matches() {
             boolean hasMatch = false;

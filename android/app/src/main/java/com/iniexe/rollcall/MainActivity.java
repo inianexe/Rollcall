@@ -2526,10 +2526,14 @@ public class MainActivity extends ComponentActivity {
             if (row.countsKnown && row.total > 0) {
                 if (row.percentage() < attendanceTarget) {
                     int needed = row.periodsToRecover(attendanceTarget);
+                    item.canMissText = "0";
+                    item.mustAttendText = needed == Integer.MAX_VALUE ? "NO RECOVERY" : String.valueOf(needed);
                     item.targetCount = needed == Integer.MAX_VALUE ? "Target unreachable"
                             : "Attend " + needed + (needed == 1 ? " class" : " classes");
                 } else {
                     int safeAbsences = row.safeAbsences(attendanceTarget);
+                    item.canMissText = String.valueOf(safeAbsences);
+                    item.mustAttendText = "0";
                     item.targetCount = safeAbsences == 0 ? "Attend next class" : "Can miss " + safeAbsences;
                 }
             }

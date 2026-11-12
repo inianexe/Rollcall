@@ -13,10 +13,13 @@ Android lifecycle / MainActivity (Java)
        ├─ Home / Courses / Week / What If / Marks
        ├─ RollcallHeroIdentityView (interop bridge) -> HomeHeroIdentity (Compose)
        ├─ UpcomingExamCardView (interop bridge) -> UpcomingExamCard (Compose)
-       └─ LatestClassAttendanceCardView (interop bridge) -> LatestClassAttendanceCard (Compose)
+       ├─ LatestClassAttendanceCardView (interop bridge) -> LatestClassAttendanceCard (Compose)
+       └─ CourseCardView (interop bridge) -> CourseCard (Compose; Java still groups and filters)
 ```
 
 `Attendance` owns course percentage, safe absence, recovery and guidance calculations. `LiveSnapshotStore` persists the MyCamu snapshot and notifies its listener. `MainActivity.render` maps snapshot and academic preferences into `DashboardView.State`. The UI displays that state. `AppPalette` remains the Java source for the current light/dark choice and maps semantic values into `RollcallThemeColors`; do not duplicate palette values in Compose. The latest-class summary state and click action are still supplied by Java. Keep these authority relationships during migration.
+
+For the grouped Courses card, `MainActivity.render` supplies the existing Can miss / Must attend values, status and progress color. `CourseCardStateMapper` maps them into immutable `CourseCardUiState`. `DashboardView` still owns grouping, sorting, search/filter, expanded-course state, tab navigation and What If routing. Compose does not calculate attendance.
 
 ## Intended direction
 
@@ -46,4 +49,4 @@ From `android/`:
 ./gradlew assembleRelease
 ```
 
-Release builds require the existing local signing setup; never add signing properties or passwords to Git. Use `adb install -r` only when an install is explicitly requested and the device is connected. JVM tests characterize attendance calculations and Java-to-Compose palette mapping. `androidTest` contains isolated Compose component tests with fixed fixtures; they do not launch portal authentication.
+Release builds require the existing local signing setup; never add signing properties or passwords to Git. JVM tests characterize attendance calculations, course-state mapping and Java-to-Compose palette mapping. `androidTest` contains fixed-fixture component tests and a `DashboardView` host test; it does not launch `MainActivity`, portal authentication or live sync. The Phase 4 connected rerun was blocked by an installed-package signature mismatch, so the new card/dashboard UI tests are not marked passed.

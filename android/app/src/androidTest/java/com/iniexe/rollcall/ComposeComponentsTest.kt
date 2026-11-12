@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -28,6 +28,9 @@ import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceCard
 import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState
 import com.iniexe.rollcall.ui.screens.home.UpcomingExamCard
 import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState
+import com.iniexe.rollcall.ui.screens.courses.CourseCard
+import com.iniexe.rollcall.ui.screens.courses.CourseCardUiState
+import com.iniexe.rollcall.ui.screens.courses.CourseMetricUiState
 import com.iniexe.rollcall.ui.theme.RollcallTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -149,6 +152,40 @@ class ComposeComponentsTest {
         compose.onNodeWithText("Physics").assertIsDisplayed()
     }
 
+    @Test fun courseCardShowsExistingMetricsAndAccessibleMeaning() {
+        var expanded = false
+        var whatIf = ""
+        compose.setContent {
+            RollcallTheme(AppPalette.get(false, 0).toComposeColors()) {
+                CourseCard(courseState(), { expanded = true }, { whatIf = it })
+            }
+        }
+        compose.onNodeWithText("Data Structures and Algorithms").assertIsDisplayed()
+        compose.onNodeWithText("CAN MISS").assertIsDisplayed()
+        compose.onNodeWithText("2").assertIsDisplayed()
+        compose.onNodeWithText("MUST ATTEND").assertIsDisplayed()
+        compose.onNodeWithText("THEORY · CS101").performClick()
+        assertTrue(expanded)
+    }
+
+    @Test fun courseCardHandlesMissingCountsLongContentExpansionAndThemeChange() {
+        var colors by mutableStateOf(AppPalette.get(false, 0).toComposeColors())
+        var state by mutableStateOf(courseState().copy(
+            title = "Advanced Programming and Embedded Systems with a Very Long Course Name",
+            metrics = listOf(courseMetric().copy(percentLabel = "—", detail = "Attendance counts unavailable",
+                canMiss = "—", mustAttend = "—", expanded = true, guidance = "No attendance records are available yet"))))
+        var plannerCode = ""
+        compose.setContent {
+            RollcallTheme(colors) { CourseCard(state, {}, { plannerCode = it }) }
+        }
+        compose.onNodeWithText("Attendance counts unavailable").assertIsDisplayed()
+        compose.onNodeWithText("No attendance records are available yet", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Try in What if?  →").performClick()
+        assertEquals("CS101", plannerCode)
+        compose.runOnIdle { colors = AppPalette.get(true, 0).toComposeColors() }
+        compose.onNodeWithText("Advanced Programming and Embedded Systems with a Very Long Course Name").assertIsDisplayed()
+    }
+
     @Test fun lottieLoadsPlaysPausesWhenHiddenAndRestartsAfterCompletion() {
         var visible by mutableStateOf(false)
         var playing by mutableStateOf(true)
@@ -217,4 +254,13 @@ class ComposeComponentsTest {
         details = "CS101 · Embedded assessment",
         accessibleDescription = description,
     )
+
+    private fun courseMetric() = CourseMetricUiState(
+        "THEORY", "CS101", "Data Structures and Algorithms", 81.8f, "82%", "82% · 18 / 22 attended",
+        "Above target", "You can miss 2 more classes", "2", "0", false, false, 0xFF176146.toInt())
+
+    private fun courseState() = CourseCardUiState(
+        "Data Structures and Algorithms", "CS101",
+        "Data Structures and Algorithms, on track. Tap to expand course guidance.",
+        "Data Structures and Algorithms. Theory attendance 82%, 18 / 22 attended.", listOf(courseMetric()))
 }

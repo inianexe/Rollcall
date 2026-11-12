@@ -5,7 +5,7 @@
 - Baseline branch: `codex/rollcall-torch-ui`
 - Baseline commit: `2c21ca0` (Rollcall 1.0.24, code 25)
 - Foundation commit: `7763bda`; Home exam card commit: `5683bfb` (pushed to the migration branch)
-- Phase 3 starts from `c728211`; theme unification, one additional Home component, and Android component tests are staged in the current working tree.
+- Phase 4 starts from `95d621b` on `codex/rollcall-torch-ui`.
 - Prior rollback: `design-review/rollback/20261112-before-compose-migration` (kept intact)
 - This phase checkpoint: `design-review/rollback/20261112-pre-lottie-compose-foundation` (APK and source archive)
 
@@ -22,24 +22,29 @@
 - Attendance characterization tests expanded for zero, exact/above/below 75%, full attendance, alternate targets, rounding, parser/missing-count behavior, and invalid constructor counts. Production calculation code is unchanged.
 - Compose previews cover Home identity, upcoming exam and latest class in light/dark and long-content states where relevant.
 - Instrumentation tests cover Home components, empty exam, long content, accessible descriptions, live theme updates, state updates, card disposal/recreation, and Lottie load/pause/play/finish/remount/error behavior.
+- One grouped Courses card is now rendered by Compose inside the existing Java `DashboardView`; Java retains filtering, grouping, navigation, expansion state and source palette selection.
+- The current Java render mapping now supplies the same Can miss / Must attend values previously calculated while constructing the Java card. Compose only renders those strings, percent, status and progress color.
+- Added mapper characterization tests and a `DashboardView` host integration test covering the five-tab Java dashboard shell, Compose card state refresh, expanded guidance and What If routing.
 
 ## Still legacy / not migrated
 
 - `MainActivity` remains the application controller and Java view builder.
 - Home screen content outside its hero identity and upcoming-exam card remains Java Views.
-- Courses, Week, What If, Marks, Settings, onboarding, consent, MyCamu/KCT WebViews, account dialogs and updater remain Java Views.
+- Courses grouping, search, filtering and screen shell remain Java Views; only the grouped course card is Compose. Week, What If, Marks, Settings, onboarding, consent, MyCamu/KCT WebViews, account dialogs and updater remain Java Views.
 - No screen ViewModels, Compose navigation, repository abstraction migration, multi-module split or DI framework.
 - Notifications, workers, widgets and update flows remain unchanged.
 
 ## Verification status
 
-- Baseline `testDebugUnitTest`: passed before this phase.
-- Phase 3 `./gradlew testDebugUnitTest`: PASS, 14 JVM tests (3 palette mapping/contrast, 6 attendance, 2 notifier, 3 widget metrics).
-- Phase 3 `./gradlew connectedDebugAndroidTest`: PASS, 9 instrumentation tests on physical Android 16 device `A001 - 16`.
-- Phase 3 `./gradlew assembleDebug assembleRelease assembleDebugAndroidTest`: PASS with existing local signing setup; no release was published or installed.
+- Phase 4 `./gradlew testDebugUnitTest`: PASS, including the two new course state-mapper tests.
+- Phase 4 `./gradlew assembleDebug assembleRelease assembleDebugAndroidTest`: PASS with existing local signing setup; no release was published or installed.
+- Phase 4 `ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest`: PASS, all 12 instrumentation tests on a newly created isolated Android 16 (API 36, x86_64) AVD. The three earlier test issues were assertion/setup mistakes and are corrected. The physical phone was not targeted.
+- The physical phone's installed package is `com.iniexe.rollcall`, version 1.0.23 / versionCode 24, signed with SHA-256 `a1d35509…c703ba2`. The debug APK uses the same application ID, version 1.0.24 / versionCode 25, but a different debug certificate (`c51624e4…8747da`). Android correctly rejected an in-place update. Instrumentation manifest targets `com.iniexe.rollcall`. No attempt was made to bypass signature enforcement or uninstall the phone app.
 - Release APK after Phase 3: 12,395,490 bytes; checkpoint APK before this phase: 11,399,990 bytes. Difference: 995,500 bytes. This is the combined size cost of the existing Compose/Lottie support since the checkpoint, not a measurement of this phase's incremental change. The debug-only test animation was confirmed absent from the release APK.
-- Theme tokens and a visible Compose card were tested in light/dark. Java preference persistence remains unchanged but was not exercised through a full Activity recreation in this component suite.
-- MyCamu/KCT authentication, notification/alarm, Firebase, update/install, large-font, startup/frame/memory profiling and production-screen visual QA remain NOT TESTED in this phase.
+- Phase 4 release APK: 12,411,861 bytes, +16,371 bytes from the Phase 3 release APK. This is artifact size only; it does not establish runtime performance.
+- Theme repaint and light/dark rendering were verified in isolated component tests from Phase 3. Phase 4 card, refresh and dashboard-host tests pass on the isolated AVD. Theme preference persistence and full `MainActivity` recreation remain NOT VERIFIED; the host test exercises `DashboardView`, not portal startup or lifecycle restoration.
+- Startup time, frame timing, scroll smoothness, main-thread stalls, runtime memory, large-font/narrow-screen screenshot coverage and production-screen visual QA remain NOT MEASURED / NOT TESTED.
+- MyCamu/KCT authentication, fresh/cached synchronization, notification/alarm, Firebase, background workers, widgets and update/install integrations remain NOT TESTED by Phase 4.
 - The debug Lottie fixture verifies adapter playback mechanics only; no production Lottie artwork was visually reviewed or enabled.
 
 ## Functional regression snapshot
@@ -51,14 +56,15 @@
 | Upcoming exam | Java computes current exam content; Compose maps semantic tokens | Present/empty/long-title/accessibility/theme tests on phone | PASS for isolated component |
 | Latest class attendance | Java supplies mapped status, wording and history action; Compose renders semantic status | Present/absent/accessibility/click/recreation tests on phone | PASS for isolated component |
 | Lottie adapter | Java app data is unaffected; adapter owns rendering only | Debug fixture load, visibility pause, playback, finish, remount and missing-resource test on phone | PASS; production asset and resource cost not tested |
+| Courses card | Grouped Java card replaced by Compose card; Java data and interaction pipeline retained | Mapper JVM tests and Compose card tests PASS on isolated Android 16 AVD | VERIFIED for fixed fixtures and tested interactions; not live-data parity |
+| Five dashboard tabs | Navigation logic remains Java | `DashboardView` host test traverses all five tabs and returns to Home | PASS on isolated Android 16 AVD; Activity recreation not tested |
 | MyCamu/KCT, sync, preferences, Firebase, reminders, widgets, updates | No production code change | Not exercised by this phase's tests | NOT TESTED |
-| Lottie | Added reusable local-resource adapter only; no asset or call site added | Debug and release compile | API/build verified; playback not tested |
 
 This is a foundation slice, not a completed Compose migration. The app remains predominantly Java Views and must not be described as fully migrated.
 
 ## Next safe slices
 
-1. Add targeted test fixtures for the existing parse/model boundaries before moving them.
-2. Move one data-display screen at a time to Compose, keeping `MainActivity.render`/existing domain outputs authoritative until that screen has parity tests.
-3. Continue with one read-only Home display component at a time; verify system back, Activity state restoration, themes and accessibility before migrating navigation.
-4. Migrate WebView/auth/settings only after their current behavior is covered by integration tests; do not fold auth or persistence refactors into a visual migration.
+1. Extend card parity fixtures for at-target, unknown-count and no-recovery cases before replacing the full Courses screen.
+2. Add `MainActivity` lifecycle/theme persistence tests in an isolated test install; avoid portal credentials and existing user data.
+3. Gather startup/frame/memory profiling before migrating the complete Courses screen.
+4. Migrate the remaining Courses screen only after its Java filter/grouping behavior has parity coverage.

@@ -20,6 +20,8 @@ Screen components accept immutable UI data and a `Modifier`. The Java bridge may
 
 Provide previews for standalone Compose screens/components where their data can be represented without production services. Preview examples are not production data.
 
+The grouped Courses card is the first Courses component in Compose. It receives Java-computed percentage, Can miss, Must attend, status, progress color and expanded state through `CourseCardUiState`. Search, grouping, filters and event routing stay in `DashboardView`; do not add attendance math to the composable.
+
 ## Theme switching
 
 The current Activity still owns theme choice and persistence. Compose components receive the colors produced by that existing choice. Compose tests cover live palette updates and mapped light/dark tokens. Actual preference survival through Activity recreation remains owned by the unchanged Java preference flow and was not exercised by these isolated component tests. Verify both Compose and legacy screens before removing `AppPalette` or its preference keys.
