@@ -594,29 +594,35 @@ public class MainActivity extends Activity {
         content.addView(progress);
 
         if (step == 0) {
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            content.addView(onboardingArtifact(0), new LinearLayout.LayoutParams(-1, dp(128)));
-            TextView headline = text("A little clarity.\nA better week.", 40, ink, Typeface.NORMAL);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
-            headline.setGravity(android.view.Gravity.CENTER);
-            content.addView(headline);
-            TextView intro = text("Your attendance, classes and next steps.\nTogether, in a place that feels like yours.", 15, muted, Typeface.NORMAL);
-            intro.setGravity(android.view.Gravity.CENTER);
-            intro.setLineSpacing(dp(5), 1f);
-            intro.setPadding(0, dp(20), 0, dp(30));
-            content.addView(intro);
-            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
+            LinearLayout spotlight = new LinearLayout(this);
+            spotlight.setOrientation(LinearLayout.VERTICAL);
+            spotlight.setPadding(dp(17), dp(20), dp(17), dp(23));
+            spotlight.setBackground(background(HERO, 0, 18));
+            spotlight.addView(text("ACADEMIC TRANSMISSION / WELCOME", 10,
+                    0xFF121212, Typeface.BOLD));
+            spotlight.addView(onboardingArtifact(0), topMargin(-1, dp(126), 12));
+            TextView headline = text("A little clarity.\\nA better week.", 31,
+                    0xFF121212, Typeface.BOLD);
+            headline.setLetterSpacing(-.08f);
+            headline.setLineSpacing(-dp(2), 1f);
+            spotlight.addView(headline, topMargin(-1, -2, 9));
+            TextView intro = text("Your attendance, classes and next steps.\\nTogether, in a place that feels like yours.",
+                    12, 0xFF343A26, Typeface.NORMAL);
+            intro.setLineSpacing(dp(4), 1f);
+            spotlight.addView(intro, topMargin(-1, -2, 14));
+            content.addView(spotlight, new LinearLayout.LayoutParams(-1, -2));
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
             TextView label = text("MADE FOR YOUR ACTUAL CLASS WEEK", 10, muted, Typeface.BOLD);
             label.setLetterSpacing(.1f);
             label.setGravity(android.view.Gravity.CENTER);
-            label.setPadding(0, dp(22), 0, dp(12));
+            label.setPadding(0, dp(20), 0, dp(14));
             content.addView(label);
-            content.addView(onboardingButton("Get started  →", palette.button, palette.buttonText,
-                    v -> showOnboardingStep(1)),
-                    new LinearLayout.LayoutParams(-1, dp(56)));
+            content.addView(onboardingButton("GET STARTED ↗", palette.button, palette.buttonText,
+                    v -> showOnboardingStep(1)), new LinearLayout.LayoutParams(-1, dp(56)));
         } else if (step == 1) {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(42)));
-            TextView headline = text("Class reminders", 36, ink, Typeface.NORMAL);
+            TextView headline = text("Class reminders.", 35, ink, Typeface.BOLD);
             headline.setTypeface(appTypeface(), Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(1), topMargin(-1, dp(126), 12));
@@ -630,9 +636,9 @@ public class MainActivity extends Activity {
             detail.setPadding(0, dp(14), 0, dp(18));
             content.addView(detail);
             LinearLayout howItWorks = onboardingCard();
-            howItWorks.addView(text("HOW IT WORKS", 10, ink, Typeface.BOLD));
+            howItWorks.addView(text("HOW IT WORKS", 10, 0xFF121212, Typeface.BOLD));
             TextView note = text("Rollcall checks for updates while open and refreshes in the background when Android allows. Class reminders use your saved timetable; event alerts follow Android notification settings.",
-                    13, muted, Typeface.NORMAL);
+                    12, 0xFF343A26, Typeface.NORMAL);
             note.setLineSpacing(dp(3), 1f);
             note.setPadding(0, dp(8), 0, 0);
             howItWorks.addView(note);
@@ -653,7 +659,7 @@ public class MainActivity extends Activity {
         } else if (step == 2) {
             onboardingChoiceTransitioning = false;
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(22)));
-            TextView headline = text("What should we focus on?", 32, ink, Typeface.NORMAL);
+            TextView headline = text("What should we\\nfocus on?", 35, ink, Typeface.BOLD);
             headline.setTypeface(appTypeface(), Typeface.BOLD);
             content.addView(headline);
             addOnboardingChoiceGroup(content, "What do you want help with first?",
@@ -661,7 +667,7 @@ public class MainActivity extends Activity {
                     new int[]{R.drawable.ic_onboarding_target, R.drawable.ic_nav_courses, R.drawable.ic_nav_week});
         } else {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            TextView headline = text("Sign in to Rollcall", 32, ink, Typeface.BOLD);
+            TextView headline = text("Your Rollcall.\\nYour way.", 35, ink, Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(2), topMargin(-1, dp(112), 12));
             TextView accountIntro = text("Keep your attendance and marks available on the web. Your Rollcall account uses its own password, separate from MyCamu.", 14, muted, Typeface.NORMAL);
@@ -725,7 +731,7 @@ public class MainActivity extends Activity {
         FrameLayout art = new FrameLayout(this);
         art.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         View backing = new View(this);
-        backing.setBackground(background(palette.focusSurface, palette.ink, 12));
+        backing.setBackground(background(palette.focusSurface, 0xFF121212, 12));
         backing.setRotation(5f);
         FrameLayout.LayoutParams back = new FrameLayout.LayoutParams(dp(190), dp(94), android.view.Gravity.CENTER);
         back.leftMargin = dp(12);
@@ -733,27 +739,27 @@ public class MainActivity extends Activity {
         LinearLayout face = new LinearLayout(this);
         face.setGravity(android.view.Gravity.CENTER_VERTICAL);
         face.setPadding(dp(16), dp(12), dp(16), dp(12));
-        face.setBackground(background(palette.surface, palette.ink, 12));
+        face.setBackground(background(0xFFF1EEDA, 0xFF121212, 12));
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
-        String kicker = kind == 0 ? "THE WEEK / LIVE" : kind == 1 ? "CLASS ALERT" : "ROLLCALL ACCOUNT";
+        String kicker = kind == 0 ? "TODAY / LIVE" : kind == 1 ? "CLASS ALERT" : "ROLLCALL ACCOUNT";
         String value = kind == 0 ? new SimpleDateFormat("EEE · d MMM", Locale.getDefault()).format(new Date()).toUpperCase(Locale.getDefault())
                 : kind == 1 ? "10 MIN BEFORE" : "YOUR DATA, IN SYNC";
-        copy.addView(text(kicker, 9, palette.highlight, Typeface.BOLD));
-        TextView detail = text(value, 14, palette.ink, Typeface.BOLD);
+        copy.addView(text(kicker, 9, 0xFFAD3000, Typeface.BOLD));
+        TextView detail = text(value, 14, 0xFF121212, Typeface.BOLD);
         detail.setMaxLines(2);
         copy.addView(detail, topMargin(-1, -2, 6));
         face.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
         if (kind == 1) {
             ImageView icon = new ImageView(this);
             icon.setImageResource(R.drawable.ic_notification_bell);
-            icon.setColorFilter(palette.ink);
+            icon.setColorFilter(0xFF121212);
             face.addView(icon, new LinearLayout.LayoutParams(dp(30), dp(30)));
         } else if (kind == 2) {
             RollcallLogo mark = new RollcallLogo(this, palette);
             face.addView(mark, new LinearLayout.LayoutParams(dp(36), dp(36)));
         } else {
-            TextView marker = text(new SimpleDateFormat("ww", Locale.getDefault()).format(new Date()), 34, palette.ink, Typeface.BOLD);
+            TextView marker = text(new SimpleDateFormat("dd", Locale.getDefault()).format(new Date()), 34, 0xFF121212, Typeface.BOLD);
             marker.setIncludeFontPadding(false);
             face.addView(marker);
         }
@@ -768,7 +774,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(background(palette.surface, palette.border, 16));
+        card.setBackground(background(palette.focusSurface, 0, 16));
         return card;
     }
 
