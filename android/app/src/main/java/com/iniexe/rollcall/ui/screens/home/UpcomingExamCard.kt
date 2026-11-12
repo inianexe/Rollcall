@@ -68,7 +68,7 @@ fun UpcomingExamCard(state: UpcomingExamCardState, modifier: Modifier = Modifier
                         Column(Modifier.weight(1f)) {
                             Text(state.countdown.uppercase(), style = TextStyle(
                                 fontFamily = RollcallMono, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp, color = Color(state.accent)))
+                                fontSize = 11.sp, color = Color(state.accentInk)))
                             Text(state.date, Modifier.padding(top = 5.dp), maxLines = 2,
                                 overflow = TextOverflow.Ellipsis, style = TextStyle(
                                     fontFamily = RollcallMono, fontWeight = FontWeight.Medium,
@@ -76,7 +76,7 @@ fun UpcomingExamCard(state: UpcomingExamCardState, modifier: Modifier = Modifier
                         }
                         Text("↗", style = TextStyle(fontFamily = RollcallMono,
                             fontWeight = FontWeight.ExtraBold, fontSize = 24.sp,
-                            color = Color(state.accent)))
+                            color = Color(state.accentInk)))
                     }
                 }
                 if (state.details.isNotEmpty()) {
