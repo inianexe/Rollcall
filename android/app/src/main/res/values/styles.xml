@@ -1,3 +1,25 @@
 <resources>
     <style name="RollcallTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <style name="TorchDialogDark" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/torch_dialog_dark</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:colorAccent">#CCFF00</item>
+        <item name="android:textColorPrimary">#F5F5EE</item>
+        <item name="android:textColorSecondary">#A8AAA1</item>
+        <item name="android:colorControlNormal">#A8AAA1</item>
+        <item name="android:windowAnimationStyle">@style/TorchDialogMotion</item>
+    </style>
+    <style name="TorchDialogLight" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/torch_dialog_light</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:colorAccent">#365000</item>
+        <item name="android:textColorPrimary">#182019</item>
+        <item name="android:textColorSecondary">#586057</item>
+        <item name="android:colorControlNormal">#586057</item>
+        <item name="android:windowAnimationStyle">@style/TorchDialogMotion</item>
+    </style>
+    <style name="TorchDialogMotion">
+        <item name="android:windowEnterAnimation">@anim/torch_dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/torch_dialog_exit</item>
+    </style>
 </resources>
