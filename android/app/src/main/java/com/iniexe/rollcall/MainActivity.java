@@ -1817,7 +1817,11 @@ public class MainActivity extends Activity {
     private void confirmCloudAccountDelete() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null) return;
         EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Rollcall account password");
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Delete Rollcall cloud account")
+        password.setTextColor(INK);
+        password.setHintTextColor(MUTED);
+        password.setPadding(dp(14), dp(12), dp(14), dp(12));
+        password.setBackground(background(SURFACE, BORDER, 10));
+        AlertDialog deleteDialog = new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Delete Rollcall cloud account")
                 .setMessage("This deletes your Rollcall web account, synced cloud snapshot and recovery codes. MyCamu and your phone’s local snapshot remain unchanged. This cannot be undone.")
                 .setView(password).setPositiveButton("Delete account", (d, w) -> {
                     if (user.getEmail() == null) return;
@@ -1835,7 +1839,10 @@ public class MainActivity extends Activity {
                             } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "Could not delete the account. Try again while online.", Toast.LENGTH_LONG).show()); }
                         }, "rollcall-delete-account").start();
                     });
-                }).setNegativeButton("Cancel", null).show();
+                }).setNegativeButton("Cancel", null).create();
+        deleteDialog.show();
+        if (deleteDialog.getButton(AlertDialog.BUTTON_POSITIVE) != null)
+            deleteDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(RED);
     }
 
     private List<String> jsonArrayStrings(JSONArray values) {
