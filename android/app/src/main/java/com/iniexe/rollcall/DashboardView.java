@@ -233,7 +233,7 @@ final class DashboardView extends FrameLayout {
     private final TextView[] odChips = new TextView[3];
     private int odMode;
     private TextView scheduleTab, historyTab;
-    private boolean showingHistory;
+    private boolean showingHistory = true;
     private int historyLimit = 30;
     private boolean scheduleDirty = true;
     private boolean historyDirty = true;
@@ -288,7 +288,7 @@ final class DashboardView extends FrameLayout {
         surface = palette.surface; border = palette.border; soft = palette.soft;
         green = palette.green; red = palette.red; amber = palette.amber;
         hero = palette.hero; heroText = palette.heroText; heroMuted = palette.heroMuted;
-        lime = palette.highlight; linkInk = palette.canvas == 0xFFF5F4EC ? 0xFF365000 : lime; track = palette.track;
+        lime = palette.highlight; linkInk = palette.canvas == 0xFF121212 ? palette.button : palette.highlight; track = palette.track;
         focusSurface = palette.focusSurface;
         labBadgeBackground = palette.button; labBadgeForeground = palette.buttonText;
         setBackgroundColor(canvas);
@@ -836,7 +836,7 @@ final class DashboardView extends FrameLayout {
 
     private void buildLabPage() {
         LinearLayout body = newPage(3);
-        addTop(body, heading("04 / ATTENDANCE LAB", "What if?", "See how attending or missing classes changes your target."), 8);
+        addTop(body, heading("04 / SCENARIO LAB", "What if?", "Try the possibilities. Your attendance records never change."), 18);
         addTop(body, plannerCard(), 2);
         addTop(body, targetCard(), 12);
         addTop(body, text("This is an estimate based on your latest MyCamu counts. It does not change your attendance record.",
@@ -1071,9 +1071,9 @@ final class DashboardView extends FrameLayout {
 
         LinearLayout selector = row();
         selector.setPadding(dp(3), dp(3), dp(3), dp(3));
-        selector.setBackground(shape(soft, 13, border));
-        scheduleTab = text("Schedule", 12, ink, Typeface.BOLD);
-        historyTab = text("Attendance", 12, muted, Typeface.BOLD);
+        selector.setBackground(shape(soft, 12, border));
+        scheduleTab = text("SCHEDULE", 11, muted, Typeface.BOLD);
+        historyTab = text("ATTENDANCE", 11, ink, Typeface.BOLD);
         scheduleTab.setGravity(Gravity.CENTER);
         historyTab.setGravity(Gravity.CENTER);
         scheduleTab.setMinHeight(dp(48));
@@ -1082,8 +1082,8 @@ final class DashboardView extends FrameLayout {
         historyTab.setContentDescription("Show attendance history");
         scheduleTab.setOnClickListener(v -> { showingHistory = false; updateTimetable(); });
         historyTab.setOnClickListener(v -> { showingHistory = true; updateTimetable(); });
-        selector.addView(scheduleTab, new LinearLayout.LayoutParams(0, -2, 1));
         selector.addView(historyTab, new LinearLayout.LayoutParams(0, -2, 1));
+        selector.addView(scheduleTab, new LinearLayout.LayoutParams(0, -2, 1));
         addTop(body, selector, 10);
         addTop(body, scheduleExtras, 10);
         addTop(body, scheduleUpdatedView, 8);
@@ -1384,12 +1384,12 @@ final class DashboardView extends FrameLayout {
         scheduleContent.setVisibility(showingHistory ? GONE : VISIBLE);
         historyContent.setVisibility(showingHistory ? VISIBLE : GONE);
         scheduleExtras.setVisibility(showingHistory ? GONE : VISIBLE);
-        scheduleTab.setTextColor(showingHistory ? muted : ink);
-        historyTab.setTextColor(showingHistory ? ink : muted);
+        scheduleTab.setTextColor(showingHistory ? muted : heroText);
+        historyTab.setTextColor(showingHistory ? heroText : muted);
         scheduleTab.setSelected(!showingHistory);
         historyTab.setSelected(showingHistory);
-        scheduleTab.setBackground(showingHistory ? null : shape(surface, 10, border));
-        historyTab.setBackground(showingHistory ? shape(surface, 10, border) : null);
+        scheduleTab.setBackground(showingHistory ? null : shape(hero, 9, 0));
+        historyTab.setBackground(showingHistory ? shape(hero, 9, 0) : null);
         if (weekPulse != null) {
             int total = weekPulse.setSchedule(state.timetable);
             int campusDays = 0;
@@ -2054,13 +2054,13 @@ final class DashboardView extends FrameLayout {
 
     private View heading(String index, String title, String subtitle) {
         LinearLayout box = column();
-        box.addView(label(index, 9, linkInk, Typeface.BOLD));
+        box.addView(label(index, 10, linkInk, Typeface.BOLD));
         SpannableString titleText = new SpannableString(title + ".");
         titleText.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight), title.length(), titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        TextView heading = text(titleText.toString(), 32, ink, Typeface.BOLD);
+        TextView heading = text(titleText.toString(), 35, ink, Typeface.BOLD);
         heading.setText(titleText);
         heading.setTypeface(displayTypeface, Typeface.BOLD);
-        heading.setLetterSpacing(-.055f);
+        heading.setLetterSpacing(-.075f);
         box.addView(heading, topLp(-1, -2, 6));
         TextView sub = text(subtitle, 12, muted, Typeface.NORMAL);
         sub.setLineSpacing(dp(2), 1f);
@@ -2111,7 +2111,7 @@ final class DashboardView extends FrameLayout {
         chip.setPadding(dp(11), dp(8), dp(11), dp(8));
         chip.setGravity(Gravity.CENTER);
         chip.setMinHeight(dp(34));
-        chip.setBackground(shape(soft, 6, 0));
+        chip.setBackground(shape(soft, 10, border));
         return chip;
     }
 
@@ -2126,7 +2126,7 @@ final class DashboardView extends FrameLayout {
         field.setTypeface(uiTypeface);
         field.setContentDescription(hint);
         field.setPadding(dp(12), 0, dp(12), 0);
-        field.setBackground(shape(soft, 5, 0));
+        field.setBackground(shape(soft, 9, border));
         field.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -2141,9 +2141,9 @@ final class DashboardView extends FrameLayout {
 
     private View plannerCard() {
         LinearLayout card = card();
-        card.addView(label("Choose a course", 13, muted, Typeface.BOLD));
+        card.addView(label("CHOOSE A COURSE", 10, muted, Typeface.BOLD));
         coursePicker = new FrameLayout(getContext());
-        coursePicker.setBackground(shape(surface, 12, border));
+        coursePicker.setBackground(shape(soft, 9, border));
         coursePickerText = text("Choose a course", 14, ink, Typeface.NORMAL);
         coursePickerText.setGravity(Gravity.CENTER_VERTICAL);
         coursePickerText.setMaxLines(2);
@@ -2155,7 +2155,7 @@ final class DashboardView extends FrameLayout {
         FrameLayout.LayoutParams arrowParams = new FrameLayout.LayoutParams(dp(40), -1, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         coursePicker.addView(spinnerArrow, arrowParams);
         coursePicker.setOnClickListener(v -> showCoursePopup());
-        card.addView(coursePicker, topLp(-1, dp(72), 12));
+        card.addView(coursePicker, topLp(-1, dp(56), 12));
         plannerBaseline = text("", 12, muted, Typeface.NORMAL);
         card.addView(plannerBaseline, topLp(-1, -2, 10));
         odNotice = text("", 12, muted, Typeface.NORMAL);
@@ -2177,8 +2177,8 @@ final class DashboardView extends FrameLayout {
         card.addView(odOptions, topLp(-1, -2, 8));
 
         LinearLayout mode = row();
-        TextView miss = filterChip("If I miss");
-        TextView attend = filterChip("If I attend");
+        TextView miss = filterChip("MISS");
+        TextView attend = filterChip("ATTEND");
         plannerMissView = miss;
         plannerAttendView = attend;
         miss.setContentDescription("Project attendance if I miss the next classes");
@@ -2191,7 +2191,7 @@ final class DashboardView extends FrameLayout {
         attendParams.leftMargin = dp(5);
         mode.addView(miss, missParams);
         mode.addView(attend, attendParams);
-        card.addView(label("Plan a scenario", 13, muted, Typeface.BOLD), topLp(-1, -2, 14));
+        card.addView(label("SIMULATE / CLASSES", 10, muted, Typeface.BOLD), topLp(-1, -2, 18));
         card.addView(mode, topLp(-1, -2, 10));
         miss.setOnClickListener(v -> { plannerAttend = false; plannerFeedback(v); });
         attend.setOnClickListener(v -> { plannerAttend = true; plannerFeedback(v); });
@@ -2202,7 +2202,7 @@ final class DashboardView extends FrameLayout {
         Button plus = compactButton("+", hero, heroText);
         minus.setContentDescription("Decrease projected classes");
         plus.setContentDescription("Increase projected classes");
-        plannerCountView = text("1 class", 20, ink, Typeface.NORMAL);
+        plannerCountView = text("1 class", 25, linkInk, Typeface.BOLD);
         plannerCountView.setGravity(Gravity.CENTER);
         stepper.addView(minus, lp(dp(48), dp(48)));
         stepper.addView(plannerCountView, new LinearLayout.LayoutParams(0, dp(48), 1));
@@ -2213,21 +2213,21 @@ final class DashboardView extends FrameLayout {
 
         LinearLayout result = row();
         result.setGravity(Gravity.CENTER_VERTICAL);
-        result.setPadding(dp(13), dp(12), dp(13), dp(12));
-        result.setBackground(shape(soft, 12, 0));
+        result.setPadding(dp(20), dp(20), dp(20), dp(20));
+        result.setBackground(shape(0xFFC8C8FF, 17, 0));
         LinearLayout projection = column();
-        projection.addView(text("Projected attendance", 10, muted, Typeface.NORMAL));
-        projectionView = text("—", 36, ink, Typeface.BOLD);
+        projection.addView(text("YOUR ATTENDANCE / PROJECTED", 10, 0xFF111111, Typeface.BOLD));
+        projectionView = text("—", 38, 0xFF111111, Typeface.BOLD);
         projection.addView(projectionView, topLp(-1, -2, 3));
         result.addView(projection, new LinearLayout.LayoutParams(0, -2, 1));
-        projectionStatusView = text("Counts unavailable", 9, muted, Typeface.NORMAL);
+        projectionStatusView = text("Counts unavailable", 10, 0xFF333333, Typeface.BOLD);
         projectionStatusView.setPadding(dp(8), dp(7), dp(8), dp(7));
-        projectionStatusView.setBackground(shape(surface, 100, 0));
+        projectionStatusView.setBackground(shape(0x66FFFFFF, 9, 0));
         result.addView(projectionStatusView);
-        card.addView(result, topLp(-1, -2, 14));
+        card.addView(result, topLp(-1, -2, 16));
         plannerMeter = new PlannerMeter(getContext());
         card.addView(plannerMeter, topLp(-1, 28, 12));
-        plannerFeedback = text("Choose a course to explore your options.", 12, muted, Typeface.NORMAL);
+        plannerFeedback = text("Choose a course to explore your options.", 11, ink, Typeface.NORMAL);
         card.addView(plannerFeedback, topLp(-1, -2, 6));
         
         return card;
@@ -2236,12 +2236,13 @@ final class DashboardView extends FrameLayout {
     private void buildNavigation(LinearLayout shell) {
         LinearLayout holder = new LinearLayout(getContext());
         holder.setGravity(Gravity.CENTER);
-        holder.setPadding(dp(16), dp(8), dp(16), dp(8));
+        holder.setPadding(dp(16), dp(7), dp(16), dp(10));
         shell.addView(holder, lp(-1, -2));
-        nav.setPadding(dp(4), dp(3), dp(4), dp(3));
+        nav.setPadding(dp(5), dp(5), dp(5), dp(5));
         nav.setGravity(Gravity.CENTER);
         navBackground = new NavBackgroundDrawable();
         nav.setBackground(navBackground);
+        nav.setElevation(dp(8));
         holder.addView(nav, lp(-1, -2));
         int[] icons = {R.drawable.ic_nav_home, R.drawable.ic_nav_courses, R.drawable.ic_nav_week,
                 R.drawable.ic_nav_lab, R.drawable.ic_nav_academics};
@@ -2252,7 +2253,7 @@ final class DashboardView extends FrameLayout {
             tab.setOrientation(LinearLayout.VERTICAL);
             tab.setGravity(Gravity.CENTER);
             tab.setFocusable(true);
-            tab.setMinimumHeight(dp(56));
+            tab.setMinimumHeight(dp(66));
             tab.setPadding(dp(4), dp(6), dp(4), dp(6));
             tab.setOnClickListener(v -> showPage(page));
             setTactileFeedback(tab);
@@ -2260,7 +2261,7 @@ final class DashboardView extends FrameLayout {
             icon.setImageResource(icons[i]);
             icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
             icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            TextView label = text(labels[i], 11, muted, Typeface.NORMAL);
+            TextView label = text(labels[i], 10, muted, Typeface.BOLD);
             label.setSingleLine(true);
             label.setEllipsize(android.text.TextUtils.TruncateAt.END);
             label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -2827,9 +2828,9 @@ final class DashboardView extends FrameLayout {
             plannerMeter.setVisibility(GONE);
             plannerFeedback.setText("Sync your class counts to explore your options.");
             projectionView.setText("—");
-            projectionView.setTextColor(ink);
+            projectionView.setTextColor(0xFF111111);
             projectionStatusView.setText("Counts unavailable");
-            projectionStatusView.setTextColor(muted);
+            projectionStatusView.setTextColor(0xFF333333);
             return;
         }
         boolean canPreviewOd = course.odReconciled && course.odCredit > 0 && course.odCredit <= course.total - course.attended;
@@ -2870,10 +2871,10 @@ final class DashboardView extends FrameLayout {
                 : "After this plan, attend " + forecast.periodsToRecover(state.target)
                     + " consecutive classes to reach " + state.target + "%.");
         projectionView.setText(String.format(Locale.getDefault(), "%.1f%%", projected));
-        projectionView.setTextColor(projected < state.target ? red : ink);
+        projectionView.setTextColor(0xFF111111);
         projectionStatusView.setText(String.format(Locale.getDefault(), "%+.1f pts\n%s",
                 projected - course.percent, projected >= state.target ? "Above target" : "Below target"));
-        projectionStatusView.setTextColor(projected < state.target ? red : muted);
+        projectionStatusView.setTextColor(0xFF333333);
     }
 
     private String odCoverageSummary(Course course) {
@@ -2897,7 +2898,7 @@ final class DashboardView extends FrameLayout {
     private LinearLayout card() {
         LinearLayout card = column();
         card.setPadding(dp(16), dp(14), dp(16), dp(14));
-        card.setBackground(industrialSurface(surface, 20, border));
+        card.setBackground(industrialSurface(surface, 16, border));
         return card;
     }
 
@@ -3078,7 +3079,7 @@ final class DashboardView extends FrameLayout {
         private float position;
 
         NavBackgroundDrawable() {
-            fill.setColor(surface);
+            fill.setColor(palette.canvas == 0xFF121212 ? 0xFF292929 : surface);
             outline.setColor(border);
             outline.setStyle(Paint.Style.STROKE);
             outline.setStrokeWidth(dp(1));
@@ -3111,7 +3112,7 @@ final class DashboardView extends FrameLayout {
             canvas.drawRoundRect(outer, dp(21), dp(21), fill);
             canvas.drawRoundRect(outer, dp(21), dp(21), outline);
             if (cyberpunk || bounds.width() == 0) return;
-            float inset = dp(4);
+            float inset = dp(5);
             float cellWidth = (bounds.width() - 2f * inset) / navTabs.length;
             float left = bounds.left + inset + cellWidth * position;
             selected.set(left, bounds.top + dp(3), left + cellWidth, bounds.bottom - dp(3));
@@ -3320,21 +3321,34 @@ final class DashboardView extends FrameLayout {
         CourseGroupRow(CourseGroup group) {
             this.group = group;
             root = card();
-            root.setPadding(dp(16), dp(14), dp(16), dp(14));
+            root.setPadding(dp(17), dp(17), dp(17), dp(17));
             subjects.add(group.lecture);
             subjects.addAll(group.labs);
 
             LinearLayout header = row();
             header.setGravity(Gravity.CENTER_VERTICAL);
-            TextView courseName = text(group.lecture.name, 17, ink, Typeface.BOLD);
+            TextView courseName = text(group.lecture.name, 16, ink, Typeface.BOLD);
             courseName.setMaxLines(2);
             courseName.setEllipsize(android.text.TextUtils.TruncateAt.END);
             header.addView(courseName, new LinearLayout.LayoutParams(0, -2, 1));
             boolean atRisk = group.priority() < state.target;
+            TextView percentage = text(group.lecture.percentLabel, 13,
+                    0xFF111111, Typeface.BOLD);
+            percentage.setGravity(Gravity.CENTER);
+            percentage.setPadding(dp(10), dp(8), dp(10), dp(8));
+            percentage.setBackground(shape(atRisk ? 0xFFFF8C73 : 0xFFCCFF00, 9, 0));
+            LinearLayout.LayoutParams percentageParams = lp(-2, -2);
+            percentageParams.leftMargin = dp(10);
+            header.addView(percentage, percentageParams);
             header.setOnClickListener(v -> actions.onCourse(group.lecture.code));
             header.setContentDescription(courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
                     + ". Tap to expand course guidance.");
             root.addView(header);
+            View tape = new View(getContext());
+            tape.setBackground(shape(atRisk ? palette.highlight : palette.button, 0, 0));
+            LinearLayout.LayoutParams tapeParams = topLp(dp(48), dp(6), 7);
+            tapeParams.gravity = Gravity.RIGHT;
+            root.addView(tape, tapeParams);
 
             // Full-width rows keep both attendance decisions readable, including lab/theory pairs.
             LinearLayout meters = column();
@@ -3375,8 +3389,8 @@ final class DashboardView extends FrameLayout {
             box.setFocusable(true);
             String identity = kind + (subject.code.isEmpty() ? "" : " / " + subject.code);
             box.addView(label(identity, 10, muted, Typeface.BOLD));
-            TextView percent = text(subject.percentLabel, 20, subject.color, Typeface.BOLD);
-            box.addView(percent, topLp(-1, -2, 5));
+            TextView percent = text(subject.percentLabel, 15, subject.color, Typeface.BOLD);
+            box.addView(percent, topLp(-1, -2, 4));
 
             final String canMiss;
             final String mustAttend;
@@ -3422,14 +3436,15 @@ final class DashboardView extends FrameLayout {
         private LinearLayout attendanceMetricTile(String title, String value, boolean positive, boolean warning) {
             LinearLayout tile = column();
             tile.setGravity(Gravity.CENTER);
-            tile.setPadding(dp(8), dp(12), dp(8), dp(12));
-            int background = positive ? hero : surface;
-            int foreground = positive ? heroText : warning ? red : ink;
-            tile.setBackground(shape(background, 12, warning ? red : positive ? 0 : border));
+            tile.setPadding(dp(8), dp(13), dp(8), dp(13));
+            int background = positive ? hero : warning
+                    ? (palette.canvas == 0xFF121212 ? 0xFFFF4400 : 0xFFFF8C73) : surface;
+            int foreground = positive || warning ? 0xFF111111 : ink;
+            tile.setBackground(shape(background, 10, positive || warning ? 0 : border));
             TextView labelText = text(title, 10, foreground, Typeface.BOLD);
             labelText.setGravity(Gravity.CENTER);
             tile.addView(labelText);
-            TextView number = text(value, 28, foreground, Typeface.BOLD);
+            TextView number = text(value, 35, foreground, Typeface.BOLD);
             number.setGravity(Gravity.CENTER);
             number.setIncludeFontPadding(false);
             tile.addView(number, topLp(-1, -2, 6));
