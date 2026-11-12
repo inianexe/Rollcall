@@ -244,6 +244,7 @@ final class DashboardView extends FrameLayout {
     private State state = new State();
     private String query = "";
     private boolean belowOnly;
+    private boolean onTrackOnly;
     private boolean plannerAttend;
     private TextView plannerMissView, plannerAttendView;
     private int plannerCount = 1, plannerCourse;
@@ -342,7 +343,7 @@ final class DashboardView extends FrameLayout {
         scheduleDirty = true;
         historyDirty = true;
         query = next.query == null ? query : next.query;
-        belowOnly = next.belowOnly;
+        belowOnly = next.belowOnly && !onTrackOnly;
         if (headlineView == null) return;
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
@@ -805,12 +806,12 @@ final class DashboardView extends FrameLayout {
 
     private void buildCoursesPage() {
         LinearLayout body = newPage(1);
-        addTop(body, heading("02 / YOUR PROGRESS", "Courses", "Attendance, stripped down to what matters. Can miss. Must attend. No guessing."), 18);
+        addTop(body, heading("02 / YOUR PROGRESS", "Courses", "Attendance, stripped down to what matters.\nCan miss. Must attend. No guessing."), 18);
         courseSummary = text("", 12, muted, Typeface.NORMAL);
         addTop(body, courseSummary, 0);
         coursesSearch = searchField("Search by subject or code");
         addTop(body, coursesSearch, 8);
-        addTop(body, filters(), 6);
+        addTop(body, filters(), 13);
         courseLists[1] = column();
         body.addView(courseLists[1], lp(-1, -2));
         coursesEmptyView = text("", 13, muted, Typeface.NORMAL);
@@ -2080,18 +2081,24 @@ final class DashboardView extends FrameLayout {
     private View filters() {
         LinearLayout filters = row();
         filters.setGravity(Gravity.CENTER_VERTICAL);
-        filters.setPadding(dp(3), dp(3), dp(3), dp(3));
-        filters.setBackground(shape(soft, 12, 0));
-        TextView all = filterChip("All courses · " + state.courses);
-        TextView focus = filterChip("Below target · " + state.below);
+        TextView all = filterChip("ALL / " + state.courses);
+        TextView below = filterChip("BELOW TARGET");
+        TextView safe = filterChip("ON TRACK");
         allCoursesFilter = all;
-        focusCoursesFilter = focus;
+        focusCoursesFilter = below;
         all.setTag("allFilter");
-        focus.setTag("focusFilter");
-        all.setOnClickListener(v -> setFilter(false));
-        focus.setOnClickListener(v -> setFilter(true));
+        below.setTag("focusFilter");
+        safe.setTag("safeFilter");
+        all.setOnClickListener(v -> setFilterMode(0));
+        below.setOnClickListener(v -> setFilterMode(1));
+        safe.setOnClickListener(v -> setFilterMode(2));
         filters.addView(all, new LinearLayout.LayoutParams(0, dp(48), 1));
-        filters.addView(focus, new LinearLayout.LayoutParams(0, dp(48), 1));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(48), 1.3f);
+        p.leftMargin = dp(7);
+        filters.addView(below, p);
+        p = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        p.leftMargin = dp(7);
+        filters.addView(safe, p);
         return filters;
     }
 
@@ -2387,12 +2394,16 @@ final class DashboardView extends FrameLayout {
         if (navBackground != null) navBackground.moveTo(selectedPage, selectionChanged && nav.isShown());
     }
 
-    private void setFilter(boolean focus) {
-        belowOnly = focus;
+    private void setFilter(boolean focus) { setFilterMode(focus ? 1 : 0); }
+
+    private void setFilterMode(int mode) {
+        belowOnly = mode == 1;
+        onTrackOnly = mode == 2;
         refreshVisibleRows();
-        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !focus);
-        for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, focus);
-        actions.onFilter(focus);
+        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, mode == 0);
+        for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, mode == 1);
+        for (View chip : findTaggedViews("safeFilter")) setChipSelected(chip, mode == 2);
+        actions.onFilter(belowOnly);
     }
 
     private void settleFeedback(View view) {
@@ -2501,11 +2512,10 @@ final class DashboardView extends FrameLayout {
     }
 
     private void rebuildGroupedCourseRows(LinearLayout list) {
-        for (CourseGroup group : groupedCourses()) {
-            CourseGroupRow item = new CourseGroupRow(group);
-            courseGroupViews.add(item);
-            list.addView(item.root, topLp(-1, -2, 8));
-        }
+        // The prototype displays each course independently, including labs.
+        ArrayList<Course> sorted = new ArrayList<>(state.rows);
+        Collections.sort(sorted, (a, b) -> Float.compare(a.percent, b.percent));
+        for (Course course : sorted) addCourseRow(list, course, null, 13);
     }
 
     private void addCourseRow(LinearLayout list, Course course, Course pairedLecture, int topMargin) {
@@ -2536,8 +2546,12 @@ final class DashboardView extends FrameLayout {
     private void refreshVisibleRows() {
         boolean anyVisible = false;
         for (CourseRow row : courseViews) {
-            boolean visible = row.overviewPreview || ((!belowOnly || row.course.below) && matches(row.course, query));
+            boolean visible = row.overviewPreview
+                    || ((!belowOnly || row.course.below)
+                    && (!onTrackOnly || !row.course.below)
+                    && matches(row.course, query));
             row.root.setVisibility(visible ? VISIBLE : GONE);
+            if (!row.overviewPreview) anyVisible |= visible;
         }
         for (CourseGroupRow row : courseGroupViews) {
             boolean visible = row.matches();
@@ -3714,88 +3728,143 @@ final class DashboardView extends FrameLayout {
         private float sp(float value) { return value * getResources().getDisplayMetrics().scaledDensity; }
     }
 
+    /** Torch Genesis course card: one course, two decisions, no ambiguous single metric. */
     private final class CourseRow {
         final Course course;
         final LinearLayout root;
         final LinearLayout detail;
         final boolean overviewPreview;
+
         CourseRow(Course course, Course pairedLecture, boolean overviewPreview) {
             this.course = course;
             this.overviewPreview = overviewPreview;
-            root = card();
-            root.setPadding(dp(10), dp(10), dp(10), dp(10));
-            LinearLayout line = row();
-            TextView icon = text(course.below ? "!" : "▤", 15, course.color, Typeface.BOLD);
-            icon.setGravity(Gravity.CENTER);
-            icon.setBackground(shape(course.below ? focusSurface : soft, 9, 0));
-            line.addView(icon, lp(dp(34), dp(36)));
-            LinearLayout names = column();
-            names.setPadding(dp(8), 0, dp(3), 0);
-            LinearLayout courseTitle = row();
-            String suffix = isLabCourse(course.code) ? "   LAB" : "";
-            SpannableString titleText = new SpannableString(course.name + suffix);
-            if (!suffix.isEmpty()) {
-                int labStart = titleText.length() - 3;
-                titleText.setSpan(new LabBadgeSpan(), labStart, titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            root = column();
+            root.setPadding(dp(17), dp(16), dp(17), dp(14));
+            root.setBackground(shape(surface, overviewPreview ? 14 : 16, border));
+            root.setFocusable(true);
+            if (overviewPreview) {
+                LinearLayout line = row();
+                line.setGravity(Gravity.CENTER_VERTICAL);
+                TextView bang = text("!", 29, palette.highlight, Typeface.BOLD);
+                bang.setGravity(Gravity.CENTER);
+                line.addView(bang, lp(dp(28), dp(56)));
+                LinearLayout identity = column();
+                identity.setPadding(dp(10), 0, dp(6), 0);
+                TextView name = text(course.name, 12, ink, Typeface.BOLD);
+                name.setMaxLines(2);
+                identity.addView(name);
+                identity.addView(text(course.counts, 10, muted, Typeface.NORMAL), topLp(-1, -2, 5));
+                AttendanceProgressBar bar = new AttendanceProgressBar(getContext(), course.code,
+                        course.percent, course.below ? red : lime);
+                identity.addView(bar, topLp(-1, dp(7), 9));
+                line.addView(identity, new LinearLayout.LayoutParams(0, -2, 1f));
+                LinearLayout outcome = column();
+                outcome.setGravity(Gravity.RIGHT);
+                TextView percent = text(course.percentLabel, 19, course.below ? red : lime, Typeface.BOLD);
+                percent.setGravity(Gravity.RIGHT);
+                outcome.addView(percent);
+                String consequence = course.targetCount.isEmpty() ? "AWAITING DATA"
+                        : course.below ? course.targetCount.toUpperCase(Locale.ROOT) : course.targetCount.toUpperCase(Locale.ROOT);
+                TextView count = text(consequence, 10, course.below ? red : green, Typeface.BOLD);
+                count.setMaxLines(2);
+                count.setGravity(Gravity.RIGHT);
+                outcome.addView(count, topLp(-1, -2, 7));
+                line.addView(outcome, lp(dp(110), -2));
+                root.addView(line);
+            } else {
+                LinearLayout top = row();
+                top.setGravity(Gravity.TOP);
+                LinearLayout heading = column();
+                String code = course.code.isEmpty() ? "COURSE / LIVE" : course.code.toUpperCase(Locale.ROOT);
+                heading.addView(label(code, 10, muted, Typeface.BOLD));
+                TextView name = text(course.name, 16, ink, Typeface.BOLD);
+                name.setLetterSpacing(-.05f);
+                name.setMaxLines(3);
+                name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                heading.addView(name, topLp(-1, -2, 9));
+                if (pairedLecture != null) heading.addView(
+                        label("LAB / PAIRED WITH " + pairedLecture.code, 9, muted, Typeface.BOLD),
+                        topLp(-1, -2, 5));
+                top.addView(heading, new LinearLayout.LayoutParams(0, -2, 1f));
+                TextView percentage = text(course.percentLabel, 13, heroText, Typeface.BOLD);
+                percentage.setGravity(Gravity.CENTER);
+                percentage.setMinHeight(dp(43));
+                percentage.setPadding(dp(10), 0, dp(10), 0);
+                percentage.setBackground(shape(course.below ? 0xFFFF8C73 : hero, 9, 0));
+                LinearLayout.LayoutParams percentageParams = lp(-2, dp(43));
+                percentageParams.leftMargin = dp(9);
+                top.addView(percentage, percentageParams);
+                root.addView(top);
+                int canMiss = 0;
+                String mustAttend = "—", missLabel = "—";
+                if (course.countsKnown && course.total > 0 && state.target > 0) {
+                    canMiss = Math.max(0, (int) Math.floor(
+                            (100d * course.attended - state.target * course.total) / state.target + 1e-9));
+                    missLabel = Integer.toString(canMiss);
+                    if (100d * course.attended >= state.target * course.total - 1e-9) mustAttend = "0";
+                    else if (state.target >= 100) mustAttend = "∞";
+                    else mustAttend = Integer.toString(Math.max(0, (int) Math.ceil(
+                            (state.target * course.total - 100d * course.attended)
+                                    / (100d - state.target) - 1e-9)));
+                }
+                LinearLayout metrics = row();
+                metrics.addView(courseMetric("CAN MISS", missLabel, !course.below && course.countsKnown,
+                                0xFFCCFF00),
+                        new LinearLayout.LayoutParams(0, -2, 1f));
+                LinearLayout.LayoutParams attendParams = new LinearLayout.LayoutParams(0, -2, 1f);
+                attendParams.leftMargin = dp(9);
+                metrics.addView(courseMetric("MUST ATTEND", mustAttend, course.below && course.countsKnown,
+                        0xFFFF4400), attendParams);
+                root.addView(metrics, topLp(-1, -2, 18));
+                LinearLayout foot = row();
+                foot.setGravity(Gravity.CENTER_VERTICAL);
+                foot.addView(text(course.countsKnown ? course.attended + " / " + course.total + " CLASSES"
+                        : "COUNTS UNAVAILABLE", 10, muted, Typeface.BOLD),
+                        new LinearLayout.LayoutParams(0, -2, 1f));
+                AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), course.code,
+                        course.percent, course.below ? red : lime);
+                foot.addView(meter, lp(dp(115), dp(7)));
+                root.addView(foot, topLp(-1, -2, 16));
             }
-            TextView subjectName = text(titleText.toString(), 14, ink, Typeface.BOLD);
-            subjectName.setText(titleText);
-            subjectName.setMaxLines(2);
-            subjectName.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            courseTitle.addView(subjectName, new LinearLayout.LayoutParams(-1, -2));
-            names.addView(courseTitle);
-            String subtitle = courseSubtitle(course);
-            if (!subtitle.isEmpty()) names.addView(text(subtitle, 9, muted, Typeface.NORMAL), topLp(-1, -2, 3));
-            line.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
-            LinearLayout percent = column();
-            percent.setGravity(Gravity.RIGHT);
-            percent.setMinimumWidth(dp(72));
-            percent.setLayoutParams(new LinearLayout.LayoutParams(dp(72), -2));
-            TextView pct = text(course.percentLabel, 15, course.color, Typeface.BOLD);
-            pct.setGravity(Gravity.RIGHT);
-            pct.setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
-            percent.addView(pct);
-            AttendanceProgressBar bar = new AttendanceProgressBar(getContext(), course.code, course.percent, course.color);
-            bar.setContentDescription("Attendance " + course.percentLabel);
-            LinearLayout.LayoutParams barParams = topLp(dp(64), dp(7), 4);
-            barParams.gravity = Gravity.RIGHT;
-            percent.addView(bar, barParams);
-            if (!course.targetCount.isEmpty()) {
-                TextView targetCount = text(course.targetCount, 10, course.below ? course.color : green, Typeface.BOLD);
-                targetCount.setGravity(Gravity.RIGHT);
-                targetCount.setMaxLines(2);
-                percent.addView(targetCount, topLp(-1, -2, 4));
-            }
-            line.addView(percent);
-            TextView arrow = text("›", 20, muted, Typeface.NORMAL);
-            arrow.setPadding(dp(8), 0, dp(3), 0);
-            line.addView(arrow);
-            root.addView(line);
             detail = column();
-            detail.setPadding(dp(43), dp(10), dp(4), dp(2));
-            if (pairedLecture != null) {
-                detail.addView(text("Lab section · paired with " + pairedLecture.code, 11, green, Typeface.BOLD));
-            }
-            detail.addView(text(course.status, 10, course.color, Typeface.BOLD));
-            detail.addView(text(course.counts + ". " + course.guidance, 10, muted, Typeface.NORMAL), topLp(-1, -2, 4));
-            TextView lab = text("Explore in attendance lab  ↗", 9, green, Typeface.BOLD);
-            lab.setPadding(0, dp(6), 0, 0);
-            lab.setOnClickListener(v -> openPlannerFor(course.code));
-            detail.addView(lab);
+            detail.setPadding(0, dp(12), 0, dp(6));
+            View divider = new View(getContext());
+            divider.setBackgroundColor(border);
+            detail.addView(divider, lp(-1, dp(1)));
+            detail.addView(text("TARGET / " + state.target + "% · " + course.status.toUpperCase(Locale.ROOT),
+                    11, course.below ? red : green, Typeface.BOLD), topLp(-1, -2, 13));
+            detail.addView(text(course.guidance, 11, muted, Typeface.NORMAL), topLp(-1, -2, 6));
+            TextView planner = text("TRY IN WHAT IF? ↗", 12, linkInk, Typeface.BOLD);
+            planner.setMinHeight(dp(48));
+            planner.setGravity(Gravity.CENTER_VERTICAL);
+            planner.setOnClickListener(v -> openPlannerFor(course.code));
+            detail.addView(planner, topLp(-1, -2, 5));
             detail.setVisibility(course.expanded ? VISIBLE : GONE);
-            line.setFocusable(true);
-            line.setContentDescription((pairedLecture == null ? "Course: " : "Lab course: ") + course.name
-                    + (pairedLecture == null ? "" : ", paired with " + pairedLecture.name)
-                    + ", attendance " + course.percentLabel + ". Double tap for details.");
-            if (course.expanded && (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled())) {
-                detail.setAlpha(0f);
-                detail.setTranslationY(dp(6));
-                detail.animate().alpha(1f).translationY(0).setStartDelay(35).setDuration(180)
-                        .setInterpolator(new DecelerateInterpolator(1.5f)).start();
-            }
+            TextView expand = text(course.expanded ? "DETAILS −" : "DETAILS +",
+                    10, linkInk, Typeface.BOLD);
+            expand.setGravity(Gravity.CENTER_VERTICAL);
+            expand.setMinHeight(dp(44));
+            expand.setContentDescription("Toggle details for " + course.name);
+            expand.setOnClickListener(v -> actions.onCourse(course.code));
+            if (!overviewPreview) root.addView(expand, topLp(-1, -2, 3));
             root.addView(detail);
-            line.setOnClickListener(v -> actions.onCourse(course.code));
-            detail.setOnClickListener(v -> actions.onCourse(course.code));
+            root.setContentDescription(course.name + ", " + course.percentLabel + ". " + course.guidance);
+            root.setOnClickListener(v -> actions.onCourse(course.code));
+        }
+
+        private LinearLayout courseMetric(String title, String amount, boolean active, int activeFill) {
+            LinearLayout tile = column();
+            tile.setGravity(Gravity.CENTER_VERTICAL);
+            tile.setPadding(dp(13), dp(13), dp(11), dp(12));
+            tile.setMinimumHeight(dp(102));
+            tile.setBackground(shape(active ? activeFill : surface, 10, active ? 0 : border));
+            int foreground = active ? 0xFF111111 : ink;
+            tile.addView(label(title, 10, foreground, Typeface.BOLD));
+            TextView number = text(amount, 34, foreground, Typeface.BOLD);
+            number.setIncludeFontPadding(false);
+            number.setLetterSpacing(-.08f);
+            tile.addView(number, topLp(-1, -2, 7));
+            return tile;
         }
     }
 
