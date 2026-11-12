@@ -186,7 +186,7 @@ final class DashboardView extends FrameLayout {
     private final class Bridge {
         private void ui(Runnable task) { mainHandler.post(task); }
         @JavascriptInterface public void ready(String unused) {
-            ui(() -> { ready = true; publish(); });
+            ui(() -> { ready = true; publish(); navigate(currentPage); });
         }
         @JavascriptInterface public void page(String destination) {
             currentPage = destination;
@@ -346,6 +346,7 @@ final class DashboardView extends FrameLayout {
         navigate("home");
         return true;
     }
+    String currentPage() { return currentPage; }
     void restoreSelectedPage() { navigate(currentPage); }
     void animateCurrentPageEntry() { web.animate().alpha(1f).setDuration(120).start(); }
 }
