@@ -686,9 +686,9 @@ final class DashboardView extends FrameLayout {
         overviewExamBlock.addView(overviewExamTitle, topLp(-1, -2, 5));
         LinearLayout examBadges = row();
         examBadges.setGravity(Gravity.CENTER_VERTICAL);
-        overviewExamType = text("", 10, muted, Typeface.BOLD);
+        overviewExamType = text("", 10, ink, Typeface.BOLD);
         overviewExamType.setPadding(dp(9), dp(5), dp(9), dp(5));
-        overviewExamType.setBackground(shape(soft, 8, 0));
+        overviewExamType.setBackground(shape(0xFF34352B, 7, 0));
         examBadges.addView(overviewExamType, lp(-2, -2));
         overviewExamSession = text("", 10, ink, Typeface.BOLD);
         overviewExamSession.setPadding(dp(9), dp(5), dp(9), dp(5));
@@ -698,15 +698,15 @@ final class DashboardView extends FrameLayout {
         overviewExamBlock.addView(examBadges, topLp(-1, -2, 7));
         LinearLayout examTiming = row();
         examTiming.setGravity(Gravity.CENTER_VERTICAL);
-        overviewExamWhen = text("", 13, heroText, Typeface.BOLD);
+        overviewExamWhen = text("", 13, linkInk, Typeface.BOLD);
         overviewExamWhen.setPadding(dp(11), dp(7), dp(11), dp(7));
-        overviewExamWhen.setBackground(shape(hero, 10, 0));
+        overviewExamWhen.setBackground(shape(soft, 8, 0));
         examTiming.addView(overviewExamWhen, lp(-2, -2));
         overviewExamDate = text("", 13, ink, Typeface.BOLD);
         overviewExamDate.setPadding(dp(10), dp(7), dp(10), dp(7));
         overviewExamDate.setSingleLine(true);
         overviewExamDate.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        overviewExamDate.setBackground(shape(soft, 10, border));
+        overviewExamDate.setBackground(shape(soft, 8, 0));
         LinearLayout.LayoutParams examDateParams = new LinearLayout.LayoutParams(0, -2, 1f);
         examDateParams.leftMargin = dp(8);
         examTiming.addView(overviewExamDate, examDateParams);
@@ -1172,11 +1172,11 @@ final class DashboardView extends FrameLayout {
     private View overviewSectionHeader(String title, String action, Runnable onAction) {
         LinearLayout header = row();
         header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 17, ink, Typeface.BOLD);
+        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 21, ink, Typeface.BOLD);
         heading.setTypeface(displayTypeface);
-        heading.setLetterSpacing(cyberpunk ? .04f : -.02f);
+        heading.setLetterSpacing(cyberpunk ? .04f : -.065f);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView button = text(action + "  →", 11, green, Typeface.BOLD);
+        TextView button = text(action.toUpperCase(Locale.ROOT) + "  ↗", 10, linkInk, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setMinWidth(dp(48));
         button.setMinHeight(dp(48));
@@ -2024,7 +2024,11 @@ final class DashboardView extends FrameLayout {
         RollcallLogo logo = new RollcallLogo(getContext(), palette);
         logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         bar.addView(logo, lp(dp(34), dp(34)));
-        TextView brand = text("rollcall", 19, ink, Typeface.BOLD);
+        TextView brand = text("rollcall.", 24, ink, Typeface.BOLD);
+        SpannableString wordmark = new SpannableString("rollcall.");
+        wordmark.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                8, 9, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        brand.setText(wordmark);
         brand.setPadding(dp(8), 0, 0, 0);
         brand.setGravity(Gravity.CENTER_VERTICAL);
         if (cyberpunk) {
@@ -2036,13 +2040,20 @@ final class DashboardView extends FrameLayout {
         }
         bar.addView(brand, new LinearLayout.LayoutParams(0, -1, 1));
         if (showTheme) {
-            homeThemeButton = new ModeSwitchButtonView(getContext());
-            homeThemeButton.setDark(state.dark);
-            bar.addView(homeThemeButton, lp(dp(48), dp(48)));
+            ImageView settings = new ImageView(getContext());
+            settings.setImageResource(R.drawable.ic_nav_settings);
+            settings.setColorFilter(ink);
+            settings.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            settings.setPadding(dp(12), dp(12), dp(12), dp(12));
+            settings.setBackground(shape(surface, 12, border));
+            settings.setContentDescription("Open Rollcall settings");
+            settings.setOnClickListener(v -> actions.onAbout());
+            setTactileFeedback(settings);
+            bar.addView(settings, lp(dp(46), dp(46)));
         }
         TextView avatar = text("R", 12, ink, Typeface.BOLD);
         avatar.setGravity(Gravity.CENTER);
-        avatar.setBackground(new android.graphics.drawable.InsetDrawable(shape(soft, 100, 0), dp(4)));
+        avatar.setBackground(new android.graphics.drawable.InsetDrawable(shape(0xFF3A3C2F, 100, 0), dp(4)));
         avatar.setContentDescription("About Rollcall and student profile");
         avatar.setFocusable(true);
         avatar.setOnClickListener(v -> actions.onAbout());
