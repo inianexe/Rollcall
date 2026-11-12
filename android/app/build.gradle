@@ -21,6 +21,7 @@ android {
         applicationId 'com.iniexe.rollcall'
         minSdk 23
         targetSdk 35
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         versionCode 25
         versionName '1.0.24'
         buildConfigField 'String', 'ROLLCALL_API_BASE_URL', '"' + (project.findProperty('rollcallApiBaseUrl') ?: 'https://rollcall-campus-companion.pages.dev/api') + '"'
@@ -80,4 +81,9 @@ dependencies {
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-auth'
     testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation platform('androidx.compose:compose-bom:2024.09.03')
+    androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }

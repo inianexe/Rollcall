@@ -2,17 +2,17 @@
 
 ## Scope
 
-Compose design tokens are centralized in `ui/theme`. The legacy Java UI still receives its palette through `AppPalette`; the two systems are not yet a single shared source. `RollcallHeroIdentityView` receives the active hero values from `DashboardView`, preserving the existing theme behavior.
+`AppPalette.get(dark, legacyTheme)` remains authoritative for Java palette selection and persistence. Its `toComposeColors()` mapping supplies the Compose semantic tokens, so Compose does not keep a second copy of the active palette. The legacy theme argument is currently ignored by the existing palette implementation; this phase does not add or reinterpret theme variants. Bridges are initialized with the active mapping when `DashboardView` is rebuilt, matching the current Activity recreation behavior on appearance changes.
 
 ## Tokens
 
-- `RollcallThemeColors`: app and semantic colors for canvas, surfaces, text, brand accents, borders and attendance states.
+- `RollcallThemeColors`: semantic colors mapped from `AppPalette` for canvas, surfaces, text, brand accents, borders, focus, ticket art and attendance states.
 - `RollcallTypography`: shared JetBrains Mono text styles for the Compose slice.
 - `RollcallSpacing`: 4dp-based spacing values.
 - `RollcallShapes`: shared card, control and pill shapes.
 - `RollcallMotion`: shared Compose timing and easing defaults.
 
-These tokens begin with the existing Rollcall Signal palette. They do not create a new theme picker or alter persisted theme preferences. When another screen moves to Compose, map the exact active `AppPalette` values into `RollcallThemeColors`; do not hardcode a second theme inside the screen.
+These tokens retain the existing Rollcall Signal light and dark appearance. They do not create a new theme picker or alter persisted theme preferences. Add colors to the Java palette and mapping together only when a real semantic role is missing; do not hardcode a second theme inside a composable.
 
 ## Components
 
@@ -22,4 +22,4 @@ Provide previews for standalone Compose screens/components where their data can 
 
 ## Theme switching
 
-The current Activity still owns theme choice and persistence. Compose components receive the colors produced by that existing choice. A future complete theme migration must verify both light and dark modes alongside legacy screens before removing `AppPalette` or its preference keys.
+The current Activity still owns theme choice and persistence. Compose components receive the colors produced by that existing choice. Compose tests cover live palette updates and mapped light/dark tokens. Actual preference survival through Activity recreation remains owned by the unchanged Java preference flow and was not exercised by these isolated component tests. Verify both Compose and legacy screens before removing `AppPalette` or its preference keys.

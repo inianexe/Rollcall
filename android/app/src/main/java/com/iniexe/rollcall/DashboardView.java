@@ -1,8 +1,10 @@
 package com.iniexe.rollcall;
 
 import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
+import com.iniexe.rollcall.ui.bridge.LatestClassAttendanceCardView;
 import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
 import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
+import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState;
 import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
 
 import android.animation.ValueAnimator;
@@ -202,9 +204,9 @@ final class DashboardView extends FrameLayout {
     private final Runnable classStartRefresh = () -> { updateDecision(); updateOverviewSchedule(); };
     private TextView overviewLeaveSummary;
     private View overviewCourseHeader;
-    private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewAttendanceBlock, overviewExamSection;
+    private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewExamSection;
     private UpcomingExamCardView overviewExamBlock;
-    private TextView overviewAttendanceTitle, overviewAttendanceCourse, overviewAttendanceStatus;
+    private LatestClassAttendanceCardView overviewAttendanceBlock;
     private LinearLayout overviewScheduleRows;
     private TextView overviewWeekMeta;
     private WeekPulseView overviewWeekPulse;
@@ -409,15 +411,9 @@ final class DashboardView extends FrameLayout {
             String statusLabel = "present".equals(next.latestClassStatus) ? "Present"
                     : "absent".equals(next.latestClassStatus) ? "Absent"
                     : "not_taken".equals(next.latestClassStatus) ? "Not marked yet" : "Unable to confirm";
-            int statusColor = "present".equals(next.latestClassStatus) ? green
-                    : "absent".equals(next.latestClassStatus) ? red
-                    : "not_taken".equals(next.latestClassStatus) ? amber : muted;
-            overviewAttendanceTitle.setText("LATEST CLASS");
-            overviewAttendanceTitle.setTextColor(muted);
-            overviewAttendanceCourse.setText(next.latestClassName);
-            overviewAttendanceStatus.setText(statusLabel);
-            overviewAttendanceStatus.setTextColor(statusColor);
-            overviewAttendanceStatus.setBackground(shape(statusTint(statusColor), 9, 0));
+            overviewAttendanceBlock.setAttendanceState(new LatestClassAttendanceState(
+                    next.latestClassName, statusLabel, next.latestClassStatus,
+                    "Latest class attendance. " + next.latestClassName + ": " + statusLabel + ". Open attendance history"));
         }
         updateSyncIndicator(next.syncing, next.syncError || next.sessionExpired || next.partialSync, next.syncSucceeded);
         updateSearchFields();
@@ -475,8 +471,7 @@ final class DashboardView extends FrameLayout {
         LinearLayout heroCard = column();
         heroCard.setPadding(dp(16), dp(14), dp(16), dp(14));
         heroCard.setBackground(shape(hero, 18, 0));
-        homeHeroIdentity = new RollcallHeroIdentityView(getContext());
-        homeHeroIdentity.setColors(hero, heroText, heroMuted, 0xFFF1EEDA, ink, border);
+        homeHeroIdentity = new RollcallHeroIdentityView(getContext(), palette.toComposeColors());
         heroCard.addView(homeHeroIdentity, lp(-1, -2));
 
         LinearLayout syncLine = row();
@@ -578,7 +573,7 @@ final class DashboardView extends FrameLayout {
         radarHeading.addView(radarTitle, new LinearLayout.LayoutParams(0, -2, 1));
         radarHeading.addView(label("01 / EXAM", 9, palette.highlight, Typeface.BOLD));
         overviewExamSection.addView(radarHeading);
-        overviewExamBlock = new UpcomingExamCardView(getContext());
+        overviewExamBlock = new UpcomingExamCardView(getContext(), palette.toComposeColors());
         overviewExamSection.addView(overviewExamBlock, topLp(-1, -2, 8));
         addTop(body, overviewExamSection, 14);
 
@@ -600,25 +595,9 @@ final class DashboardView extends FrameLayout {
         overviewWeekBlock.setVisibility(GONE);
         addTop(body, overviewWeekBlock, 18);
 
-        overviewAttendanceBlock = column();
-        overviewAttendanceBlock.setPadding(dp(12), dp(9), dp(12), dp(9));
-        overviewAttendanceBlock.setBackground(industrialSurface(soft, 12, 0));
-        overviewAttendanceTitle = label("LAST CLASS", 11, muted, Typeface.BOLD);
-        overviewAttendanceBlock.addView(overviewAttendanceTitle);
-        LinearLayout latestClassRow = row();
-        latestClassRow.setGravity(Gravity.CENTER_VERTICAL);
-        overviewAttendanceCourse = text("", 12, ink, Typeface.BOLD);
-        overviewAttendanceCourse.setMaxLines(2);
-        overviewAttendanceCourse.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        latestClassRow.addView(overviewAttendanceCourse, new LinearLayout.LayoutParams(0, -2, 1));
-        overviewAttendanceStatus = text("", 10, ink, Typeface.BOLD);
-        overviewAttendanceStatus.setGravity(Gravity.CENTER);
-        overviewAttendanceStatus.setPadding(dp(9), dp(5), dp(9), dp(5));
-        latestClassRow.addView(overviewAttendanceStatus, lp(-2, -2));
-        overviewAttendanceBlock.addView(latestClassRow, topLp(-1, -2, 3));
+        overviewAttendanceBlock = new LatestClassAttendanceCardView(getContext(), palette.toComposeColors(),
+                () -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
         overviewAttendanceBlock.setVisibility(GONE);
-        overviewAttendanceBlock.setOnClickListener(v -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
-        overviewAttendanceBlock.setContentDescription("Latest class attendance. Open attendance history");
         addTop(body, overviewAttendanceBlock, 10);
 
         overviewCourseHeader = overviewSectionHeader("Below target", "All courses", () -> showPage(1));
@@ -1094,11 +1073,9 @@ final class DashboardView extends FrameLayout {
             overviewExamBlock.setExamState(new UpcomingExamCardState(
                     false, "No upcoming exam found", "", "", "", "",
                     "Refresh KCT from Marks & academics to check the latest schedule.",
-                    "No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.",
-                    ink, muted, surface, soft, border, lime, heroText, muted, statusTint(amber), ink));
+                    "No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule."));
             return;
         }
-        int sessionColor = "AN".equals(next.upcomingExamSession) ? palette.highlight : amber;
         SimpleDateFormat format = new SimpleDateFormat(next.upcomingExamHasTime
                 ? "EEE, d MMM · h:mm a" : "EEE, d MMM", Locale.getDefault());
         java.util.Calendar day = java.util.Calendar.getInstance();
@@ -1128,9 +1105,7 @@ final class DashboardView extends FrameLayout {
                 + ", " + countdown + ", " + examDate + (details.isEmpty() ? "" : ", " + details);
         overviewExamBlock.setExamState(new UpcomingExamCardState(
                 true, next.upcomingExamTitle, next.upcomingExamType, next.upcomingExamSession,
-                countdown, examDate, details, accessibleDescription,
-                ink, muted, surface, soft, border, lime, heroText, muted,
-                statusTint(sessionColor), sessionColor));
+                countdown, examDate, details, accessibleDescription));
     }
 
     private LinearLayout forecastTile(LinearLayout parent, String title) {

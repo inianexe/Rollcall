@@ -2,7 +2,7 @@
 
 ## Current shape
 
-Rollcall is a single-module native Android application (`android/app`). `MainActivity` extends `ComponentActivity` to host Compose but still coordinates the application. Most existing screens and flows are assembled as Android Views in Java; `DashboardView` is the main custom dashboard view. The Home hero identity/ticket is the first embedded Compose component. There are not yet screen ViewModels or a Compose navigation graph.
+Rollcall is a single-module native Android application (`android/app`). `MainActivity` extends `ComponentActivity` to host Compose but still coordinates the application. Most existing screens and flows are assembled as Android Views in Java; `DashboardView` is the main custom dashboard view. The Home hero identity/ticket, upcoming-exam card and latest-class attendance summary are embedded Compose components. There are not yet screen ViewModels or a Compose navigation graph.
 
 ```text
 Android lifecycle / MainActivity (Java)
@@ -12,10 +12,11 @@ Android lifecycle / MainActivity (Java)
   └─ DashboardView (Java custom View)
        ├─ Home / Courses / Week / What If / Marks
        ├─ RollcallHeroIdentityView (interop bridge) -> HomeHeroIdentity (Compose)
-       └─ UpcomingExamCardView (interop bridge) -> UpcomingExamCard (Compose)
+       ├─ UpcomingExamCardView (interop bridge) -> UpcomingExamCard (Compose)
+       └─ LatestClassAttendanceCardView (interop bridge) -> LatestClassAttendanceCard (Compose)
 ```
 
-`Attendance` owns course percentage, safe absence, recovery and guidance calculations. `LiveSnapshotStore` persists the MyCamu snapshot and notifies its listener. `MainActivity.render` maps snapshot and academic preferences into `DashboardView.State`. The UI displays that state. Keep that authority relationship during migration.
+`Attendance` owns course percentage, safe absence, recovery and guidance calculations. `LiveSnapshotStore` persists the MyCamu snapshot and notifies its listener. `MainActivity.render` maps snapshot and academic preferences into `DashboardView.State`. The UI displays that state. `AppPalette` remains the Java source for the current light/dark choice and maps semantic values into `RollcallThemeColors`; do not duplicate palette values in Compose. The latest-class summary state and click action are still supplied by Java. Keep these authority relationships during migration.
 
 ## Intended direction
 
@@ -45,4 +46,4 @@ From `android/`:
 ./gradlew assembleRelease
 ```
 
-Release builds require the existing local signing setup; never add signing properties or passwords to Git. Use `adb install -r` only when an install is explicitly requested and the device is connected. Current unit tests are local JVM tests; there is no instrumentation test source set yet.
+Release builds require the existing local signing setup; never add signing properties or passwords to Git. Use `adb install -r` only when an install is explicitly requested and the device is connected. JVM tests characterize attendance calculations and Java-to-Compose palette mapping. `androidTest` contains isolated Compose component tests with fixed fixtures; they do not launch portal authentication.
