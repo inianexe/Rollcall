@@ -575,7 +575,7 @@ public class MainActivity extends Activity {
         RollcallLogo brandMark = new RollcallLogo(this, palette);
         brandMark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         brand.addView(brandMark, new LinearLayout.LayoutParams(dp(36), dp(36)));
-        TextView brandName = text("Rollcall", 21, ink, Typeface.BOLD);
+        TextView brandName = text("rollcall", 24, ink, Typeface.BOLD);
         LinearLayout.LayoutParams brandNameParams = new LinearLayout.LayoutParams(-2, -2);
         brandNameParams.leftMargin = dp(10);
         brand.addView(brandName, brandNameParams);
@@ -1302,8 +1302,8 @@ public class MainActivity extends Activity {
         page.setPadding(dp(20), dp(22), dp(20), dp(30));
         scroll.addView(page);
 
-        Button back = button("‹  Dashboard");
-        back.setBackgroundTintList(ColorStateList.valueOf(SECONDARY));
+        Button back = button("←  BACK TO DASHBOARD");
+        back.setBackground(background(SECONDARY, BORDER, 10));
         back.setTextColor(INK);
         back.setOnClickListener(v -> showDashboard());
         page.addView(back, new LinearLayout.LayoutParams(-1, dp(48)));
@@ -1311,23 +1311,23 @@ public class MainActivity extends Activity {
         eyebrow.setLetterSpacing(.12f);
         eyebrow.setPadding(0, dp(24), 0, dp(8));
         page.addView(eyebrow);
-        TextView title = text("Settings.", 32, INK, Typeface.BOLD);
+        TextView title = text("Settings.", 35, INK, Typeface.BOLD);
         title.setTypeface(appTypeface(), Typeface.BOLD);
         title.setPadding(0, 0, 0, dp(3));
         page.addView(title);
-        TextView subtitle = text("Make this your space.", 14, MUTED, Typeface.NORMAL);
+        TextView subtitle = text("Make this your space.", 12, MUTED, Typeface.NORMAL);
         subtitle.setPadding(0, 0, 0, dp(16));
         page.addView(subtitle);
 
         LinearLayout settings = cardContainer();
-        settings.addView(text("APPEARANCE · NOTIFICATIONS · TARGET", 10, HIGHLIGHT, Typeface.BOLD));
+        settings.addView(text("APP PREFERENCES", 11, darkTheme ? HERO : INK, Typeface.BOLD));
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         modeRow.setPadding(0, dp(8), 0, 0);
         LinearLayout modeCopy = new LinearLayout(this);
         modeCopy.setOrientation(LinearLayout.VERTICAL);
         modeCopy.addView(text("Appearance", 15, INK, Typeface.BOLD));
-        TextView modeHint = text(darkTheme ? "Dark · Rollcall Signal" : "Light · Rollcall Signal", 12, MUTED, Typeface.NORMAL);
+        TextView modeHint = text(darkTheme ? "Dark · Torch Genesis" : "Light · Torch Genesis", 12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams modeHintParams = new LinearLayout.LayoutParams(-1, -2);
         modeHintParams.topMargin = dp(4);
         modeCopy.addView(modeHint, modeHintParams);
@@ -1440,11 +1440,17 @@ public class MainActivity extends Activity {
         page.addView(version, versionParams);
 
         LinearLayout project = cardContainer();
-        project.addView(text("THE PROJECT", 12, MUTED, Typeface.BOLD));
-        TextView description = text("Rollcall brings your academic activity into a clear, useful dashboard. It tracks progress toward your attendance target and keeps the latest snapshot on this device.", 15, INK, Typeface.NORMAL);
+        project.setPadding(dp(21), dp(22), dp(21), dp(22));
+        project.setBackground(background(palette.focusSurface, 0, 16));
+        project.addView(text("ABOUT / THE PROJECT", 11, 0xFF121212, Typeface.BOLD));
+        TextView slogan = text("GOOD DESIGN.\\nBETTER ATTENDANCE.", 23, 0xFF121212, Typeface.BOLD);
+        slogan.setLetterSpacing(-.07f);
+        slogan.setLineSpacing(-dp(2), 1f);
+        project.addView(slogan, topMargin(-1, -2, 16));
+        TextView description = text("Rollcall puts attendance, timetable, grades and your target in one honest, useful place.", 13, 0xFF121212, Typeface.NORMAL);
         description.setPadding(0, dp(8), 0, 0);
         project.addView(description);
-        TextView privacy = text("Your connected academic account is used to read attendance data, which is stored locally. Rollcall is an independent project and is not affiliated with any institution or service provider.", 13, MUTED, Typeface.NORMAL);
+        TextView privacy = text("Your academic snapshot is stored on this device. Rollcall is independent and is not affiliated with MyCamu or your institution.", 11, 0xFF343A26, Typeface.NORMAL);
         privacy.setPadding(0, dp(10), 0, 0);
         project.addView(privacy);
         page.addView(project);
@@ -1503,7 +1509,7 @@ public class MainActivity extends Activity {
         data.addView(dataDescription, descriptionParams);
         Button clear = button("Disconnect and clear saved data");
         clear.setTextColor(RED);
-        clear.setBackgroundTintList(ColorStateList.valueOf(SECONDARY));
+        clear.setBackground(background(SECONDARY, RED, 10));
         clear.setOnClickListener(v -> confirmClearSavedData());
         LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(-1, dp(48));
         clearParams.topMargin = dp(10);
@@ -2365,7 +2371,8 @@ public class MainActivity extends Activity {
         button.setTextSize(15);
         button.setTypeface(appTypeface(), Typeface.BOLD);
         button.setTextColor(BUTTON_TEXT);
-        button.setBackgroundTintList(ColorStateList.valueOf(BUTTON));
+        button.setMinHeight(dp(48));
+        button.setBackground(background(BUTTON, 0, 10));
         return button;
     }
 
