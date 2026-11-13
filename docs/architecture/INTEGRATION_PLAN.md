@@ -5,6 +5,7 @@
 - `refactor/rollcall-java-torch` is based on `design/torch-genesis-exact-prototype` at `f20a982`.
 - PR #13 targets `main` and is draft. GitHub currently reports it as conflicting.
 - PR #14 (`codex/rollcall-torch-ui`) merged to `main` on 2026-11-13 and brought the Compose migration into the default branch.
+- `main`'s `android-app-checks.yml` currently filters pull requests to the Compose branch. This Java branch has its own build/test workflow and now triggers it on pushes to `refactor/rollcall-java-torch`; PR #13's latest head passed that workflow manually. A push-triggered run will verify subsequent commits on this branch.
 - The Java Torch app identity is unchanged (`com.iniexe.rollcall`). Its versionCode is 24; the later hybrid app used versionCode 25. Do not publish an upgrade from version 24 or lower a release code.
 
 ## Safe integration approach

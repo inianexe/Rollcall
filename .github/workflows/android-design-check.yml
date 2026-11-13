@@ -1,6 +1,19 @@
 name: Android Java verification
 on:
+  push:
+    branches:
+      - refactor/rollcall-java-torch
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-design-check.yml'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'README.md'
+      - '.gitignore'
+      - 'docs/architecture/**'
   pull_request:
+    branches:
+      - main
     paths:
       - 'android/**'
       - '.github/workflows/android-design-check.yml'
