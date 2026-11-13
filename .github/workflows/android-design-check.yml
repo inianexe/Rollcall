@@ -1,9 +1,12 @@
-name: Android design checks
+name: Android Java verification
 on:
   pull_request:
     paths:
       - 'android/**'
       - '.github/workflows/android-design-check.yml'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'docs/architecture/**'
   workflow_dispatch:
 
 permissions:
@@ -21,15 +24,16 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v4
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build debug APK and run unit tests
+      - name: Run JVM tests and build debug APK
         working-directory: android
         run: |
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --stacktrace
-      - name: Upload installable debug APK for design review
+      - name: Upload JVM test reports
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: rollcall-torch-native-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
+          name: rollcall-jvm-test-reports
+          path: android/app/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 14
