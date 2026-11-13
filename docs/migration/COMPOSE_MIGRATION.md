@@ -84,6 +84,6 @@ Phase 6A was run from `22d58c9` on `codex/rollcall-torch-ui`.
 
 ## Next safe slices
 
-1. Phase 6B.1 established a repeatable 48-row Courses interaction fixture, three `gfxinfo`/PSS runs, and a nonempty Perfetto trace on the isolated Android 16 AVD. See `docs/testing/PHASE6B_PERFORMANCE.md`. Debug-emulator jank was 69.92–73.44%; the trace does not yet isolate a safe production-code fix. Obtain a comparable release-like device trace before claiming performance parity or optimizing the screen.
-2. Perform manual TalkBack and process-death/relaunch checks; verify live external integrations separately with an authorized account only when required.
-3. Continue with Week only after a separate behavior inventory and migration gate.
+1. Phase 6B.1R added a non-debuggable, release-derived benchmark variant and a five-scenario Macrobenchmark suite for Courses scrolling, search/filter, expansion/navigation, cold startup, and a plain-list control. Six tests passed on the isolated Android 16 emulator. The benchmark-only Activity and 48-row fixtures are excluded from release. Fresh measurements and 25 retained Perfetto traces are documented in `docs/testing/PHASE6B_RELEASE_PERFORMANCE.md`; the traces are preserved outside Git under `/home/inian/Projects/Rollcall-performance-qa/phase6b1r-20261113-083653/`.
+2. The emulator control indicates substantial environment noise and a modest relative Courses cost; no specific code defect or safe optimization was isolated. These numbers are emulator diagnostics, not physical-device performance claims. Repeat on a safe physical test device before drawing production performance conclusions.
+3. Perform manual TalkBack and process-death/relaunch checks; verify live external integrations separately with an authorized account only when required. Do not begin Week migration until its separate behavior inventory and migration gate are ready and performance results have been reviewed.

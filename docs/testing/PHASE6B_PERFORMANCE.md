@@ -1,5 +1,7 @@
 # Phase 6B.1 Courses performance baseline
 
+> Historical, preliminary debug-emulator results only. The original temporary worktree and `/tmp/rollcall-phase6b-qa/` traces were lost before Phase 6B.1R; the old trace data cannot currently be reopened or independently reanalyzed. The values below are retained as records from the earlier report, not as recovered evidence. Fresh release-like emulator evidence is in [`PHASE6B_RELEASE_PERFORMANCE.md`](PHASE6B_RELEASE_PERFORMANCE.md).
+
 Date: 2026-11-12. Branch: `codex/rollcall-torch-ui`. Starting commit: `0cc7bdd`.
 
 ## Scenario and environment
