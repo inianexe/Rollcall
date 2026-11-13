@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "skills": {
+    "android-intent-security": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "security/android-intent-security/SKILL.md",
+      "computedHash": "c57a5de1bb7c24dd650ff9035d6b85fc01d29acd3543edc4b4fe4655c2e52b0b",
+      "installMode": "copy"
+    },
+    "android-profiler": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "profilers/android-profiler/SKILL.md",
+      "computedHash": "6653692bba419d55bfdfdffeb30c2a96d409177296556645cd314287304e3341",
+      "installMode": "copy"
+    },
+    "edge-to-edge": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "system/edge-to-edge/SKILL.md",
+      "computedHash": "954c391ab845f97ce160c04c3944d6c6da3c7ad0385970353b314ee2a3aabea2",
+      "installMode": "copy"
+    },
+    "jetpack-compose-performance": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "jetpack-compose/jetpack-compose-performance/SKILL.md",
+      "computedHash": "80b61358eca751c520492fca7d9571522ba3ed5af9258baa146cca9fd8fcedce",
+      "installMode": "copy"
+    },
+    "kotlin-tooling-java-to-kotlin": {
+      "source": "Kotlin/kotlin-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/kotlin-tooling-java-to-kotlin/SKILL.md",
+      "computedHash": "b3d737fa5ac816428e240a84cc2ac2b19d406ffece09ece8e7cf0618881de466",
+      "installMode": "copy"
+    },
+    "migrate-xml-views-to-jetpack-compose": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "jetpack-compose/migration/migrate-xml-views-to-jetpack-compose/SKILL.md",
+      "computedHash": "6a4fdd962eb909343fe368b1fcbe12b060f1ce5beac574a0d9a9b25e6d0e9484",
+      "installMode": "copy"
+    },
+    "r8-analyzer": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "performance/r8-analyzer/SKILL.md",
+      "computedHash": "7139e6cfb74aca9174eedf11d04b203b6cb908031a3171485ce4ddceb2b73f95",
+      "installMode": "copy"
+    },
+    "testing-setup": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "testing/testing-setup/SKILL.md",
+      "computedHash": "085b6e1ce264cf5ee9724065ceb22241432f574719f75ccfad8def7184455acd",
+      "installMode": "copy"
+    }
+  }
+}
