@@ -35,4 +35,4 @@ Playback pauses when the lifecycle owner is below `STARTED`, the caller sets `is
 
 ## Verification
 
-The wrapper was exercised on a connected Android 16 phone using an original debug fixture: load, hidden pause, visible playback, one-shot completion, component remount/replay and missing-resource error callback passed. The actual production app screens do not yet call this adapter. Device profiling and Lottie-specific frame/memory profiling remain required when the first production asset is introduced.
+The wrapper was exercised on the isolated Android 16/API 36 x86_64 emulator using an original debug fixture: load, hidden pause, visible playback, one-shot completion, component remount/replay and missing-resource error callback passed. The physical phone was not targeted. Production app screens do not yet call this adapter. Java's Home sync glyph now pauses its infinite `ValueAnimator` when Home becomes hidden, resumes it when Home is shown, and cancels it on detach; an emulator test verifies this visibility behavior. Device profiling and Lottie-specific frame/memory profiling remain required when the first production asset is introduced.

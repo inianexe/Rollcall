@@ -1,6 +1,7 @@
 package com.iniexe.rollcall.ui.screens.courses
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -36,6 +37,7 @@ import com.iniexe.rollcall.AppPalette
 import com.iniexe.rollcall.ui.theme.LocalRollcallColors
 import com.iniexe.rollcall.ui.theme.RollcallMono
 import com.iniexe.rollcall.ui.theme.RollcallTheme
+import com.iniexe.rollcall.ui.animation.motion.RollcallMotion
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -54,7 +56,7 @@ fun CourseCard(
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, Color(colors.border)),
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.animateContentSize(RollcallMotion.expandCollapse()).padding(14.dp)) {
             Text(
                 state.title,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -69,7 +71,8 @@ fun CourseCard(
                 style = TextStyle(fontFamily = RollcallMono, fontWeight = FontWeight.Bold,
                     fontSize = 17.sp, color = Color(colors.contentPrimary)),
             )
-            val columns = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
+            val columns = if (LocalDensity.current.fontScale > 1f || state.metrics.size == 1 ||
+                state.metrics.any { maxOf(it.canMiss.length, it.mustAttend.length) > 4 }) 1 else 2
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val itemWidth = if (columns == 1) maxWidth else (maxWidth - 8.dp) / 2
                 FlowRow(
@@ -166,7 +169,7 @@ private fun Outcome(label: String, value: String, color: Int, modifier: Modifier
             fontSize = 9.sp, color = Color(colors.contentSecondary)))
         Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = TextStyle(fontFamily = RollcallMono, fontWeight = FontWeight.Bold,
-                fontSize = if (value.length > 5) 10.sp else 18.sp, color = Color(color)))
+                fontSize = if (value.length > 4) 10.sp else 18.sp, color = Color(color)))
     }
 }
 

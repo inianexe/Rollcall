@@ -44,6 +44,12 @@ android {
                 signingConfig signingConfigs.release
             }
         }
+        benchmark {
+            initWith release
+            signingConfig signingConfigs.debug
+            debuggable false
+            matchingFallbacks = ['release']
+        }
     }
     buildFeatures {
         buildConfig true

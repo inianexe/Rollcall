@@ -1,6 +1,6 @@
 # Rollcall functional inventory
 
-Audit baseline: branch `codex/rollcall-torch-ui`, Phase 4 starts at `95d621b`, app 1.0.24. The inventory follows the current mixed Java View / Compose implementation. This is implementation evidence, not a claim that every live MyCamu/KCT response was exercised.
+Audit baseline: branch `codex/rollcall-torch-ui`, Phase 6A starts at `22d58c9`, app 1.0.24. The inventory follows the current mixed Java View / Compose implementation. This is implementation evidence, not a claim that every live MyCamu/KCT response was exercised.
 
 | Feature | Entry points and implementation | Data, state, persistence | Existing checks / migration risk |
 |---|---|---|---|
@@ -12,7 +12,7 @@ Audit baseline: branch `codex/rollcall-torch-ui`, Phase 4 starts at `95d621b`, a
 | Timetable and reminders | `MainActivity.parseTimetable`; `AttendanceSyncWorker.fetchTimetable`; `LiveSnapshotStore.timetable`; `ClassReminderScheduler`, `ClassReminderReceiver` | Schedule cache is persisted; reminder alarms are rescheduled after schedule updates and relevant device time changes | No alarm/device instrumentation test; very high risk because permission and Android background behavior matter |
 | Leave and OD | `MainActivity.parseLeaves`; `LiveSnapshotStore.leaves`; `DashboardView` current-semester filtering, expanded detail and period mapping; `AttendanceEventNotifier` | Leave/OD rows and mapped-period details are cached; approval changes can notify | Existing tests check decision classification only; high risk for semester matching and period mapping |
 | KCT marks, grades, GPA, exams | `MainActivity.buildKctPortalPage`, KCT WebView bridge/readers (`readKctAcademicRecords`, exam reader); `DashboardView.buildAcademicsPage` and GPA presentation | Portal records and exam information are saved in app preferences | No portal fixture or live sign-in test; very high risk. Preserve WebView authentication and saved record shapes |
-| Week, course list and What If | `DashboardView` builds tabs, course filters, timetable/attendance views and the hypothetical planner; grouped course-card presentation is Compose via `CourseCardView`; navigation is handled by `showPage` | View state is supplied from `MainActivity.render`; target is stored in preferences; existing `Attendance` outputs are passed through | Mapper JVM tests, Compose card tests and DashboardView host navigation/refresh/expansion tests PASS on isolated Android 16 AVD. Live portal data, MainActivity lifecycle and persisted theme restoration remain NOT VERIFIED |
+| Week, course list and What If | `DashboardView` builds the five-tab shell, Week and hypothetical planner. Courses page is `CoursesScreenView` → `CoursesScreen` (`LazyColumn`) → `CourseCard`; Java retains grouping, sorting, search/filter rules, expanded-course ownership and tab/What If navigation | View state is supplied from `MainActivity.render`; target is stored in preferences; `Attendance` outputs are passed through `CourseCardStateMapper` | Host tests cover legacy grouping/filtering/What If behavior. Production `MainActivityLifecycleTest` covers a sanitized snapshot fixture, updated Java-computed values, all five tabs, theme recreation, lifecycle and Back on an isolated Android 16 AVD. Live portal data remains NOT VERIFIED |
 | Theme and settings | `MainActivity.applyTheme`, `toggleTheme`, `choosePalette`, reminder/target controls, `buildAboutPage`; `AppPalette` owns current light/dark palette values | Existing preference keys include `dark_theme`, palette/theme keys and `attendance_target` | No persistence UI test; medium/high risk because both legacy and Compose views must update together |
 | Rollcall web account | `MainActivity` account flows; `CloudAccountClient`, `CloudSnapshotPayload`, `CloudSnapshotSyncWorker`; `ReleaseUpdateMessagingService` handles web login challenges | Firebase Auth/device registration; local preferences; read-only cloud snapshot endpoint | No Firebase integration test; very high risk. Do not alter auth, token, challenge or payload behavior during UI work |
 | Notifications | `AttendanceEventNotifier`, `ClassAttendanceNotifier`, `ClassReminderScheduler`, `ReleaseUpdateNotifier`, `ReleaseUpdateMessagingService` | Notification channels and notice-deduplication state use preferences; Android notification permission is required where applicable | Two existing notifier unit tests; no Android notification permission/device test; high risk |
@@ -29,9 +29,12 @@ Audit baseline: branch `codex/rollcall-torch-ui`, Phase 4 starts at `95d621b`, a
 - `AttendanceSyncWorker` performs periodic/background refresh using the existing authenticated account context. `CloudSnapshotSyncWorker` uploads the already-built Rollcall snapshot for verified cloud accounts.
 - The application remains a single Android app module. There is no ViewModel layer, Compose navigation, or DI framework. `src/androidTest` has fixed-fixture component tests and a `DashboardView` host test; integration with `MainActivity`, portal sessions and live data remains untested. No production Lottie asset is in `res/raw`.
 
-## Baseline verification
+## Phase 6A verification (2026-11-12)
 
-- `./gradlew testDebugUnitTest`: PASS, 5 existing tests.
-- `./gradlew assembleDebug`: PASS at the preceding Compose migration checkpoint.
-- `./gradlew assembleRelease`: PASS at the preceding Compose migration checkpoint with local release signing configured.
-- Instrumentation, portal live sign-in, reminders, Firebase and update installation are NOT TESTED by these build/unit-test commands.
+- `./gradlew testDebugUnitTest`: PASS, 16 tests; no failures, errors, or skips.
+- `./gradlew assembleDebug assembleRelease assembleDebugAndroidTest`: PASS with the existing local release signing setup.
+- `ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest`: PASS, 18/18 tests on isolated Android 16/API 36 AVD `rollcall_phase4b`.
+- Production `MainActivity` lifecycle/theme/data fixture tests pass. The local route fixture contains no portal credentials/cookies/session; snapshot data is injected through `LiveSnapshotStore`, not fetched from a live portal.
+- Visual font-scale review covered 1.0× through 2.0× at 320dp and standard 411dp width. Large-text navigation hides visual labels above 1.3× while preserving accessible names. Manual TalkBack review is NOT TESTED.
+- Repeatable debug startup proxy: cold `am start -W` median 1387ms (n=5, range 1312–1479); warm `WaitTime` median 200ms (n=5, range 81–640). This is not a release benchmark or time-to-usable metric. Frame/jank, Courses search/scroll timing, recomposition and repeatable memory profiling are NOT MEASURED.
+- Live portal authentication/sync, Firebase, notifications, background workers, widgets, and updater/install flows remain NOT TESTED. Full evidence and limitations are in `docs/testing/PHASE6A_VERIFICATION.md`.
