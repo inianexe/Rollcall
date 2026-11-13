@@ -142,8 +142,7 @@ public class MainActivity extends Activity {
     private TextView myCamuConsentStatus;
     private Button myCamuConsentButton;
     private ScrollView aboutPage;
-    private Switch reminderSwitch;
-    private ImageView reminderBellIcon;
+    private BellToggleView reminderBell;
     private TextView reminderPermissionHint;
     private TextView settingsTargetValue;
     private TextView onboardingChoiceStatus;
@@ -493,6 +492,10 @@ public class MainActivity extends Activity {
             @Override public void onTheme() { toggleTheme(); }
             @Override public void onPalette() { choosePalette(); }
             @Override public void onAbout() { showAbout(); }
+            @Override public void onRemindersToggle() {
+                if (classRemindersEnabled) confirmDisableReminders();
+                else setClassRemindersEnabled(true);
+            }
             @Override public void onFilter(boolean belowOnly) { showBelowOnly = belowOnly; }
             @Override public void onQuery(String value) { searchQuery = value; }
             @Override public void onCourse(String code) {
@@ -1187,7 +1190,6 @@ public class MainActivity extends Activity {
         classRemindersEnabled = enabled;
         ClassReminderScheduler.setEnabled(this, enabled);
         updateReminderSettings();
-        if (enabled) animateReminderBell();
         render(LiveSnapshotStore.get());
     }
 
@@ -1207,7 +1209,6 @@ public class MainActivity extends Activity {
                 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
         ClassReminderScheduler.setEnabled(this, classRemindersEnabled);
         updateReminderSettings();
-        if (classRemindersEnabled) animateReminderBell();
         ReleaseUpdateNotifier.check(this);
         render(LiveSnapshotStore.get());
     }
@@ -1394,25 +1395,17 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams eventHintParams = new LinearLayout.LayoutParams(-1, -2);
         eventHintParams.topMargin = dp(4);
         reminderCopy.addView(text("Attendance, OD, schedule, and sync alerts follow Android notification settings.", 11, MUTED, Typeface.NORMAL), eventHintParams);
-        reminderRow.addView(reminderCopy, new LinearLayout.LayoutParams(0, -2, 1));
-        reminderBellIcon = new ImageView(this);
-        reminderBellIcon.setImageResource(R.drawable.ic_notification_bell);
-        reminderBellIcon.setColorFilter(classRemindersEnabled ? (darkTheme ? HERO : INK) : MUTED);
-        reminderBellIcon.setContentDescription("Class reminder notifications");
-        reminderRow.addView(reminderBellIcon, new LinearLayout.LayoutParams(dp(28), dp(28)));
-        reminderSwitch = new Switch(this);
-        reminderSwitch.setMinHeight(dp(48));
-        reminderSwitch.setSwitchMinWidth(dp(52));
-        reminderSwitch.setPadding(dp(8), 0, 0, 0);
-        reminderSwitch.setThumbTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{0xFF121212, darkTheme ? 0xFFF5F5EE : 0xFFFFFFFF}));
-        reminderSwitch.setTrackTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, BORDER}));
-        reminderSwitch.setContentDescription("Class reminders");
-        reminderRow.addView(reminderSwitch, new LinearLayout.LayoutParams(-2, dp(48)));
+        reminderRow.addView(reminderCopy, new LinearLayout.LayoutParams(-1, -2));
         settings.addView(reminderRow);
+        reminderBell = new BellToggleView(this, SECONDARY, HERO, INK, HERO_TEXT);
+        reminderBell.setChecked(classRemindersEnabled);
+        reminderBell.onToggle(() -> {
+            if (classRemindersEnabled) confirmDisableReminders();
+            else setClassRemindersEnabled(true);
+        });
+        LinearLayout.LayoutParams reminderBellParams = new LinearLayout.LayoutParams(-1, dp(52));
+        reminderBellParams.topMargin = dp(8);
+        settings.addView(reminderBell, reminderBellParams);
         notificationSettingsButton = button("Manage Android notifications");
         notificationSettingsButton.setOnClickListener(v -> {
             Intent intent = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
@@ -1745,10 +1738,29 @@ public class MainActivity extends Activity {
                 String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
                 JSONObject result = CloudAccountClient.fetchPendingCode(token, CloudAccountClient.deviceId(this), challengeId);
                 runOnUiThread(() -> {
-                    TextView code = text(result.optString("code"), 32, HERO, Typeface.BOLD); code.setTextIsSelectable(true); code.setGravity(android.view.Gravity.CENTER); code.setPadding(dp(16), dp(10), dp(16), dp(10));
-                    new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Web sign-in code")
-                            .setMessage("Select and copy this six-digit code into your browser. It expires in 5 minutes.")
-                            .setView(code).setPositiveButton("Done", null).show();
+                    String value = result.optString("code", "");
+                    if (!value.matches("[0-9]{6}")) {
+                        Toast.makeText(this, "The web sign-in code is unavailable. Request a new one in your browser.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    CodeSlotsView slots = new CodeSlotsView(this, SECONDARY, INK, HERO);
+                    AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                            .setTitle("Web sign-in code")
+                            .setMessage("Copy this six-digit code into your browser. It expires in 5 minutes.")
+                            .setView(slots)
+                            .setPositiveButton("Copy code", (d, which) -> {
+                                android.content.ClipData clip = android.content.ClipData.newPlainText("Rollcall web code", value);
+                                if (Build.VERSION.SDK_INT >= 33) {
+                                    android.os.PersistableBundle extras = new android.os.PersistableBundle();
+                                    extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
+                                    clip.getDescription().setExtras(extras);
+                                }
+                                ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(clip);
+                            })
+                            .setNegativeButton("Done", null).create();
+                    dialog.show();
+                    dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+                    slots.setCode(value);
                 });
             } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "The web sign-in code expired or this is not the trusted phone.", Toast.LENGTH_LONG).show()); }
         }, "rollcall-web-code").start();
@@ -1950,10 +1962,8 @@ public class MainActivity extends Activity {
     }
 
     private void updateReminderSettings() {
-        if (reminderSwitch == null || reminderPermissionHint == null || notificationSettingsButton == null) return;
-        reminderSwitch.setOnCheckedChangeListener(null);
-        reminderSwitch.setChecked(classRemindersEnabled);
-        reminderSwitch.setOnCheckedChangeListener(this::onReminderSwitchChanged);
+        if (reminderBell == null || reminderPermissionHint == null || notificationSettingsButton == null) return;
+        reminderBell.setChecked(classRemindersEnabled);
         boolean allowed = ClassReminderScheduler.canNotify(this);
         reminderPermissionHint.setText(allowed
                 ? classRemindersEnabled
@@ -1962,35 +1972,11 @@ public class MainActivity extends Activity {
                 : classRemindersEnabled
                     ? "Rollcall is set to remind you, but Android blocks notifications. Allow them below to receive reminders."
                     : "Reminders are off and Android blocks notifications. Turn them on and allow notifications to get class reminders.");
-        if (reminderBellIcon != null) {
-            reminderBellIcon.setColorFilter(classRemindersEnabled ? (darkTheme ? HERO : INK) : MUTED);
-            reminderBellIcon.setContentDescription(classRemindersEnabled
-                    ? "Class reminder notifications enabled" : "Class reminder notifications disabled");
-        }
         notificationSettingsButton.setVisibility(View.VISIBLE);
     }
 
-    private void animateReminderBell() {
-        if (reminderBellIcon == null) return;
-        reminderBellIcon.post(() -> {
-            reminderBellIcon.setPivotX(reminderBellIcon.getWidth() / 2f);
-            reminderBellIcon.setPivotY(dp(3));
-            android.animation.ObjectAnimator ring = android.animation.ObjectAnimator.ofFloat(
-                    reminderBellIcon, View.ROTATION, 0f, 16f, -13f, 8f, -4f, 0f);
-            ring.setDuration(680L);
-            ring.start();
-        });
-    }
-
-    private void onReminderSwitchChanged(android.widget.CompoundButton button, boolean checked) {
-        if (checked) {
-            if (!classRemindersEnabled) setClassRemindersEnabled(true);
-            return;
-        }
+    private void confirmDisableReminders() {
         if (!classRemindersEnabled) return;
-        button.setOnCheckedChangeListener(null);
-        button.setChecked(true);
-        button.setOnCheckedChangeListener(this::onReminderSwitchChanged);
         int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -2453,6 +2439,7 @@ public class MainActivity extends Activity {
         }
         DashboardView.State ui = new DashboardView.State();
         ui.dark = darkTheme;
+        ui.remindersEnabled = classRemindersEnabled;
         ui.name = studentName.isEmpty() ? "MyCamu student" : studentName;
         String[] nameParts = studentName.trim().split("\\s+");
         ui.initials = nameParts.length == 0 || nameParts[0].isEmpty() ? "R"

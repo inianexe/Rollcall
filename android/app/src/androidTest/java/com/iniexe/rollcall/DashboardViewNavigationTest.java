@@ -36,9 +36,9 @@ public class DashboardViewNavigationTest {
                 assertNotNull(findText(activity.dashboard, "Data Structures lecture"));
                 assertNotNull(findDescription(activity.dashboard, "Data Structures lecture, Present"));
                 assertTrue(findDescription(activity.dashboard, "Week, selected").isSelected());
-                findDescription(activity.dashboard, "Show weekly class schedule").performClick();
+                findText(activity.dashboard, "SCHEDULE").performClick();
                 assertNotNull(findText(activity.dashboard, "Data Structures lab"));
-                findDescription(activity.dashboard, "Show attendance history").performClick();
+                findText(activity.dashboard, "ATTENDANCE").performClick();
                 assertNotNull(findDescription(activity.dashboard, "Data Structures lecture, Present"));
             });
         }

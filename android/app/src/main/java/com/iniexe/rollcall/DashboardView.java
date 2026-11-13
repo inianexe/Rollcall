@@ -66,6 +66,7 @@ final class DashboardView extends FrameLayout {
         void onTheme();
         void onPalette();
         void onAbout();
+        void onRemindersToggle();
         void onFilter(boolean belowOnly);
         void onQuery(String value);
         void onCourse(String code);
@@ -73,6 +74,7 @@ final class DashboardView extends FrameLayout {
 
     static final class State {
         boolean dark;
+        boolean remindersEnabled;
         String name = "MyCamu student", initials = "R";
         String status = "", heroMessage = "— / —";
         String overallCaption = "classes attended", targetHint = "";
@@ -168,9 +170,10 @@ final class DashboardView extends FrameLayout {
     private final ArrayList<CourseGroupRow> courseGroupViews = new ArrayList<>();
     private final ArrayList<TextView> avatars = new ArrayList<>();
     private final HashSet<String> expandedScheduleDays = new HashSet<>();
+    private final Set<String> revealedContent = new HashSet<>();
     private boolean scheduleExpansionInitialized;
     private String pendingScheduleRevealDate = "";
-    private SyncGlyphView dashboardSyncGlyph;
+    private StatusMarkView dashboardSyncGlyph;
     private final Typeface uiTypeface;
     private final Typeface uiBoldTypeface;
     private final Typeface displayTypeface;
@@ -185,7 +188,8 @@ final class DashboardView extends FrameLayout {
     private ModeSwitchButtonView homeThemeButton;
     private final TextView[] navItems = new TextView[5];
 
-    private TextView headlineView, statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
+    private ShuffleTextView headlineView;
+    private TextView statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
     private TextView allCoursesFilter, focusCoursesFilter;
     private TextView coursesEmptyView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
@@ -221,6 +225,7 @@ final class DashboardView extends FrameLayout {
     private LinearLayout scheduleEmptyPanel;
     private TextView scheduleEmptyTitle, scheduleEmptyDetail;
     private WeekPulseView weekPulse;
+    private BellToggleView weekBell;
     private TextView weekPulseMeta;
     private LinearLayout scheduleRows, historyRows, scheduleContent, historyContent;
     private LinearLayout scheduleExtras, odOptions;
@@ -234,7 +239,7 @@ final class DashboardView extends FrameLayout {
     private TextView odNotice;
     private final TextView[] odChips = new TextView[3];
     private int odMode;
-    private TextView scheduleTab, historyTab;
+    private JellyRadioView coursesRadio, weekRadio, plannerRadio;
     private boolean showingHistory = true;
     private int historyLimit = 30;
     private boolean scheduleDirty = true;
@@ -248,10 +253,10 @@ final class DashboardView extends FrameLayout {
     private String query = "";
     private boolean belowOnly;
     private boolean plannerAttend;
-    private TextView plannerMissView, plannerAttendView;
     private int plannerCount = 1, plannerCourse;
     private int selectedPage;
     private LinearLayout academicsContent;
+    private String selectedSemester = "";
     private boolean initialized;
     private int swipeTouchSlop;
     private float swipeDownX, swipeDownY;
@@ -363,7 +368,7 @@ final class DashboardView extends FrameLayout {
                 name.length(), name.length() + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         heroSpans.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
                 heroHeadline.length() - 1, heroHeadline.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        headlineView.setText(heroSpans);
+        headlineView.setShuffledText(heroSpans);
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
         welcomeView.setText(greeting + ",");
@@ -419,6 +424,7 @@ final class DashboardView extends FrameLayout {
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
         if (homeThemeButton != null) homeThemeButton.setDark(next.dark);
+        if (weekBell != null) weekBell.setChecked(next.remindersEnabled);
         if (attendanceRail != null) attendanceRail.invalidate();
         if (overviewGoal != null) overviewGoal.setText(next.target + "% target  ↗");
         if (rulerTargetLabel != null) rulerTargetLabel.setText(next.target + "% target");
@@ -497,7 +503,9 @@ final class DashboardView extends FrameLayout {
             if (state.sessionExpired) actions.onPortal();
             else actions.onSync();
         });
-        dashboardSyncGlyph.show(syncing, failed, succeeded);
+        dashboardSyncGlyph.setState(syncing ? StatusMarkView.State.RUNNING
+                : failed ? StatusMarkView.State.FAILED
+                : succeeded ? StatusMarkView.State.DONE : StatusMarkView.State.PENDING);
     }
 
     private void build() {
@@ -543,10 +551,15 @@ final class DashboardView extends FrameLayout {
 
         LinearLayout identityRow = row();
         identityRow.setGravity(Gravity.CENTER_VERTICAL);
+        identityRow.setClipChildren(false);
         LinearLayout identity = column();
         welcomeView = text("Good afternoon,", 11, 0xFF343A26, Typeface.NORMAL);
         identity.addView(welcomeView);
-        headlineView = text("YOU GOT THIS.", 25, heroText, Typeface.BOLD);
+        headlineView = new ShuffleTextView(getContext());
+        headlineView.setText("YOU GOT THIS.");
+        headlineView.setTextSize(25);
+        headlineView.setTextColor(heroText);
+        headlineView.setTypeface(uiBoldTypeface);
         headlineView.setLetterSpacing(-.07f);
         headlineView.setMaxLines(4);
         headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -566,14 +579,14 @@ final class DashboardView extends FrameLayout {
         dashboardSyncButton.setBackground(shape(0x33FFFFFF, 100, 0x55111111));
         dashboardSyncButton.setClickable(true);
         dashboardSyncButton.setFocusable(true);
-        dashboardSyncGlyph = new SyncGlyphView(getContext());
+        dashboardSyncGlyph = new StatusMarkView(getContext(), heroText, heroText, 0xFF9A2E00);
         dashboardSyncButton.addView(dashboardSyncGlyph,
                 new FrameLayout.LayoutParams(-1, -1));
         dashboardSyncButton.setContentDescription("Refresh attendance from MyCamu");
         dashboardSyncButton.setOnClickListener(v -> actions.onSync());
         syncLine.addView(dashboardSyncButton, lp(dp(48), dp(48)));
         heroCard.addView(syncLine, topLp(-1, -2, 8));
-        addTop(body, heroCard, 10);
+        addTop(body, animated(heroCard, "home-hero"), 10);
 
         // HTML reference: two-card STATUS / LIVE and WHAT'S NEXT? broadcast beneath the hero.
         LinearLayout broadcasts = row();
@@ -587,7 +600,8 @@ final class DashboardView extends FrameLayout {
         live.addView(broadcastStatusView, topLp(-1, -2, 10));
         broadcastCaptionView = text("Academic snapshot", 9, muted, Typeface.NORMAL);
         live.addView(broadcastCaptionView, topLp(-1, -2, 5));
-        broadcasts.addView(live, new LinearLayout.LayoutParams(0, dp(112), 1f));
+        live.addView(new LetterGlitchView(getContext(), muted, palette.highlight), topLp(-1, dp(36), 6));
+        broadcasts.addView(live, new LinearLayout.LayoutParams(0, dp(154), 1f));
         LinearLayout whatsNext = column();
         whatsNext.setPadding(dp(15), dp(13), dp(10), dp(10));
         whatsNext.setBackground(shape(0xFFC8C8FF, 15, 0xFF111111));
@@ -600,7 +614,7 @@ final class DashboardView extends FrameLayout {
         LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(0, dp(112), 1f);
         nextParams.leftMargin = dp(10);
         broadcasts.addView(whatsNext, nextParams);
-        addTop(body, broadcasts, 11);
+        addTop(body, animated(broadcasts, "home-broadcasts"), 11);
         courseLists[0] = column();
         LinearLayout summary = column();
         summary.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -741,7 +755,7 @@ final class DashboardView extends FrameLayout {
         overviewWeekPulse = new WeekPulseView(getContext());
         overviewWeekPulse.setContentDescription("Weekly timetable preview. Open the full week schedule");
         overviewWeekPulse.setOnClickListener(v -> showPage(2));
-        overviewWeekBlock.addView(overviewWeekPulse, topLp(-1, dp(64), 2));
+        overviewWeekBlock.addView(overviewWeekPulse, topLp(-1, weekPulseHeight(), 2));
         overviewWeekBlock.setVisibility(GONE);
         addTop(body, overviewWeekBlock, 18);
 
@@ -790,6 +804,8 @@ final class DashboardView extends FrameLayout {
 
     private FrameLayout homeWeekTicket() {
         FrameLayout ticket = new FrameLayout(getContext());
+        ticket.setClipChildren(false);
+        ticket.setClipToPadding(false);
         View backing = new View(getContext());
         backing.setBackground(shape(0xFFC8C8FF, 7, 0xFF121212));
         backing.setRotation(9f);
@@ -824,7 +840,7 @@ final class DashboardView extends FrameLayout {
             ring.setRotation(-5f);
             FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(
                     dp(15), dp(24), Gravity.TOP | Gravity.RIGHT);
-            ringParams.topMargin = dp(6);
+            ringParams.topMargin = dp(10);
             ringParams.rightMargin = dp(index == 0 ? 68 : 28);
             ticket.addView(ring, ringParams);
         }
@@ -916,6 +932,7 @@ final class DashboardView extends FrameLayout {
             if (AcademicRecords.gradePoint(course.grade) >= 0 && course.credits > 0) eligible.add(course);
         }
         Collections.sort(semesters, (a, b) -> Integer.compare(AcademicRecords.semesterNumber(b), AcademicRecords.semesterNumber(a)));
+        if (!selectedSemester.isEmpty() && !semesters.contains(selectedSemester)) selectedSemester = "";
         double weighted = 0, creditTotal = 0;
         for (AcademicCourse course : eligible) {
             weighted += course.credits * AcademicRecords.gradePoint(course.grade);
@@ -969,7 +986,30 @@ final class DashboardView extends FrameLayout {
         }
 
         addTop(academicsContent, text("Semester results", 20, ink, Typeface.BOLD), 20);
+        ArrayList<String> wheelLabels = new ArrayList<>();
+        wheelLabels.add("All semesters");
+        for (String semester : semesters) wheelLabels.add(AcademicRecords.semesterTitle(semester));
+        LinearLayout wheelRow = row();
+        wheelRow.setGravity(Gravity.CENTER_VERTICAL);
+        OptionWheelView wheel = new OptionWheelView(getContext(), ink, muted, palette.highlight);
+        wheel.setItems(wheelLabels, selectedSemester.isEmpty() ? 0 : semesters.indexOf(selectedSemester) + 1,
+                index -> { selectedSemester = index == 0 ? "" : semesters.get(index - 1); updateAcademics(state); });
+        TextView previous = text("PREV", 10, linkInk, Typeface.BOLD);
+        previous.setGravity(Gravity.CENTER);
+        previous.setMinHeight(dp(48));
+        previous.setContentDescription("Previous semester");
+        previous.setOnClickListener(v -> wheel.select(wheel.selection() - 1));
+        wheelRow.addView(previous, lp(dp(56), dp(48)));
+        wheelRow.addView(wheel, new LinearLayout.LayoutParams(0, dp(150), 1));
+        TextView following = text("NEXT", 10, linkInk, Typeface.BOLD);
+        following.setGravity(Gravity.CENTER);
+        following.setMinHeight(dp(48));
+        following.setContentDescription("Next semester");
+        following.setOnClickListener(v -> wheel.select(wheel.selection() + 1));
+        wheelRow.addView(following, lp(dp(56), dp(48)));
+        academicsContent.addView(wheelRow);
         for (String semester : semesters) {
+            if (!selectedSemester.isEmpty() && !selectedSemester.equals(semester)) continue;
             ArrayList<AcademicCourse> courses = grouped.get(semester);
             if (courses == null || courses.isEmpty()) continue;
             double termWeighted = 0, termCredits = 0;
@@ -1030,7 +1070,7 @@ final class DashboardView extends FrameLayout {
             View divider = new View(getContext());
             divider.setBackgroundColor(border);
             section.addView(divider, topLp(-1, dp(1), 3));
-            academicsContent.addView(section, topLp(-1, -2, 4));
+            academicsContent.addView(animated(section, "marks-" + semester), topLp(-1, -2, 4));
         }
         if (next.academicUpdatedAt > 0) {
             TextView updated = text("Last read from KCT " + relativeAge(next.academicUpdatedAt), 11, muted, Typeface.NORMAL);
@@ -1056,26 +1096,17 @@ final class DashboardView extends FrameLayout {
         
         pulseCard.addView(pulseHeading);
         weekPulse = new WeekPulseView(getContext());
-        pulseCard.addView(weekPulse, topLp(-1, dp(64), 5));
+        pulseCard.addView(weekPulse, topLp(-1, weekPulseHeight(), 5));
         addTop(scheduleExtras, pulseCard, 2);
+        weekBell = new BellToggleView(getContext(), soft, hero, ink, heroText);
+        weekBell.onToggle(actions::onRemindersToggle);
+        scheduleExtras.addView(weekBell, topLp(-2, dp(52), 8));
         scheduleUpdatedView = text("Waiting for MyCamu timetable", 11, muted, Typeface.NORMAL);
 
-        LinearLayout selector = row();
-        selector.setPadding(dp(3), dp(3), dp(3), dp(3));
-        selector.setBackground(shape(soft, 12, border));
-        scheduleTab = text("SCHEDULE", 11, muted, Typeface.BOLD);
-        historyTab = text("ATTENDANCE", 11, ink, Typeface.BOLD);
-        scheduleTab.setGravity(Gravity.CENTER);
-        historyTab.setGravity(Gravity.CENTER);
-        scheduleTab.setMinHeight(dp(48));
-        historyTab.setMinHeight(dp(48));
-        scheduleTab.setContentDescription("Show weekly class schedule");
-        historyTab.setContentDescription("Show attendance history");
-        scheduleTab.setOnClickListener(v -> { showingHistory = false; updateTimetable(); });
-        historyTab.setOnClickListener(v -> { showingHistory = true; updateTimetable(); });
-        selector.addView(historyTab, new LinearLayout.LayoutParams(0, -2, 1));
-        selector.addView(scheduleTab, new LinearLayout.LayoutParams(0, -2, 1));
-        addTop(body, selector, 10);
+        weekRadio = new JellyRadioView(getContext(), new String[]{"ATTENDANCE", "SCHEDULE"},
+                showingHistory ? 0 : 1, hero, soft, heroText, muted, uiBoldTypeface);
+        weekRadio.onSelection(index -> { showingHistory = index == 0; updateTimetable(); });
+        addTop(body, weekRadio, 10);
         addTop(body, scheduleExtras, 10);
         addTop(body, scheduleUpdatedView, 8);
 
@@ -1123,13 +1154,11 @@ final class DashboardView extends FrameLayout {
         historyHeading.setGravity(Gravity.CENTER_VERTICAL);
         historyHeading.addView(text("Attendance history", 16, ink, Typeface.BOLD),
                 new LinearLayout.LayoutParams(0, -2, 1));
-        TextView leaveDetails = text("Leave & OD  →", 11, linkInk, Typeface.BOLD);
-        leaveDetails.setGravity(Gravity.CENTER);
-        leaveDetails.setMinHeight(dp(44));
-        leaveDetails.setPadding(dp(8), 0, 0, 0);
-        leaveDetails.setOnClickListener(v -> openOdDetails());
-        historyHeading.addView(leaveDetails, lp(-2, dp(44)));
         historyContent.addView(historyHeading);
+        FolderFloatView folder = new FolderFloatView(getContext(), 0xFFC8C8FF, ink, soft,
+                () -> { showAllOd = false; openOdDetails(); },
+                () -> { showAllOd = true; openOdDetails(); });
+        historyContent.addView(folder, topLp(-1, -2, 8));
         historyRows = column();
         historyContent.addView(historyRows, topLp(-1, -2, 6));
         historyEmptyView = text("Go to Home and tap refresh to load attendance history.", 12, muted, Typeface.NORMAL);
@@ -1375,12 +1404,7 @@ final class DashboardView extends FrameLayout {
         scheduleContent.setVisibility(showingHistory ? GONE : VISIBLE);
         historyContent.setVisibility(showingHistory ? VISIBLE : GONE);
         scheduleExtras.setVisibility(showingHistory ? GONE : VISIBLE);
-        scheduleTab.setTextColor(showingHistory ? muted : heroText);
-        historyTab.setTextColor(showingHistory ? heroText : muted);
-        scheduleTab.setSelected(!showingHistory);
-        historyTab.setSelected(showingHistory);
-        scheduleTab.setBackground(showingHistory ? null : shape(hero, 9, 0));
-        historyTab.setBackground(showingHistory ? shape(hero, 9, 0) : null);
+        weekRadio.select(showingHistory ? 0 : 1, false);
         if (weekPulse != null) {
             int total = weekPulse.setSchedule(state.timetable);
             int campusDays = 0;
@@ -1526,7 +1550,7 @@ final class DashboardView extends FrameLayout {
             }
             LinearLayout.LayoutParams dayParams = lp(-1, -2);
             dayParams.bottomMargin = dp(8);
-            scheduleRows.addView(dayCard, dayParams);
+            scheduleRows.addView(animated(dayCard, "week-" + date), dayParams);
             if (date.equals(pendingScheduleRevealDate)) {
                 pendingScheduleRevealDate = "";
                 View revealed = expanded ? dayItems : daySummary;
@@ -2092,21 +2116,13 @@ final class DashboardView extends FrameLayout {
 
 
     private View filters() {
-        LinearLayout filters = row();
-        filters.setGravity(Gravity.CENTER_VERTICAL);
-        filters.setPadding(dp(3), dp(3), dp(3), dp(3));
-        filters.setBackground(shape(soft, 12, 0));
-        TextView all = filterChip("All courses · " + state.courses);
-        TextView focus = filterChip("Below target · " + state.below);
-        allCoursesFilter = all;
-        focusCoursesFilter = focus;
-        all.setTag("allFilter");
-        focus.setTag("focusFilter");
-        all.setOnClickListener(v -> setFilter(false));
-        focus.setOnClickListener(v -> setFilter(true));
-        filters.addView(all, new LinearLayout.LayoutParams(0, dp(48), 1));
-        filters.addView(focus, new LinearLayout.LayoutParams(0, dp(48), 1));
-        return filters;
+        coursesRadio = new JellyRadioView(getContext(),
+                new String[]{"All courses · " + state.courses, "Below target · " + state.below},
+                belowOnly ? 1 : 0, hero, soft, heroText, muted, uiBoldTypeface);
+        allCoursesFilter = coursesRadio.chip(0);
+        focusCoursesFilter = coursesRadio.chip(1);
+        coursesRadio.onSelection(index -> setFilter(index == 1));
+        return coursesRadio;
     }
 
     private TextView filterChip(String label) {
@@ -2208,25 +2224,14 @@ final class DashboardView extends FrameLayout {
         }
         card.addView(odOptions, topLp(-1, -2, 8));
 
-        LinearLayout mode = row();
-        TextView miss = filterChip("MISS");
-        TextView attend = filterChip("ATTEND");
-        plannerMissView = miss;
-        plannerAttendView = attend;
-        miss.setContentDescription("Project attendance if I miss the next classes");
-        attend.setContentDescription("Project attendance if I attend the next classes");
-        miss.setGravity(Gravity.CENTER);
-        attend.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams missParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        missParams.rightMargin = dp(5);
-        LinearLayout.LayoutParams attendParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        attendParams.leftMargin = dp(5);
-        mode.addView(miss, missParams);
-        mode.addView(attend, attendParams);
+        plannerRadio = new JellyRadioView(getContext(), new String[]{"MISS", "ATTEND"},
+                plannerAttend ? 1 : 0, hero, soft, heroText, muted, uiBoldTypeface);
+        plannerRadio.onSelection(index -> {
+            plannerAttend = index == 1;
+            plannerFeedback(plannerRadio.chip(index));
+        });
         card.addView(label("SIMULATE / CLASSES", 10, muted, Typeface.BOLD), topLp(-1, -2, 18));
-        card.addView(mode, topLp(-1, -2, 10));
-        miss.setOnClickListener(v -> { plannerAttend = false; plannerFeedback(v); });
-        attend.setOnClickListener(v -> { plannerAttend = true; plannerFeedback(v); });
+        card.addView(plannerRadio, topLp(-1, -2, 10));
 
         // Native implementation of the prototype's 1–20 class slider.
         LinearLayout countRow = row();
@@ -2442,8 +2447,7 @@ final class DashboardView extends FrameLayout {
     private void setFilter(boolean focus) {
         belowOnly = focus;
         refreshVisibleRows();
-        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !focus);
-        for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, focus);
+        coursesRadio.select(focus ? 1 : 0, false);
         actions.onFilter(focus);
     }
 
@@ -2467,20 +2471,6 @@ final class DashboardView extends FrameLayout {
         }
     }
 
-    private List<View> findTaggedViews(String tag) {
-        ArrayList<View> found = new ArrayList<>();
-        findTagged(this, tag, found);
-        return found;
-    }
-
-    private void findTagged(View view, String tag, List<View> found) {
-        if (tag.equals(view.getTag())) found.add(view);
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) findTagged(group.getChildAt(i), tag, found);
-        }
-    }
-
     private void updateSearchFields() {
         setTextWithoutCursorJump(coursesSearch, query);
         if (allCoursesFilter != null) {
@@ -2491,8 +2481,7 @@ final class DashboardView extends FrameLayout {
             focusCoursesFilter.setText("Below target · " + state.below);
             focusCoursesFilter.setContentDescription("Show courses below your " + state.target + "% target");
         }
-        for (View chip : findTaggedViews("allFilter")) setChipSelected(chip, !belowOnly);
-        for (View chip : findTaggedViews("focusFilter")) setChipSelected(chip, belowOnly);
+        coursesRadio.select(belowOnly ? 1 : 0, false);
     }
 
     private String courseHeading(Course course) {
@@ -2556,7 +2545,7 @@ final class DashboardView extends FrameLayout {
         for (CourseGroup group : groupedCourses()) {
             CourseGroupRow item = new CourseGroupRow(group);
             courseGroupViews.add(item);
-            list.addView(item.root, topLp(-1, -2, 8));
+            list.addView(animated(item.root, "course-group-" + group.lecture.code), topLp(-1, -2, 8));
         }
     }
 
@@ -2564,7 +2553,7 @@ final class DashboardView extends FrameLayout {
         CourseRow item = new CourseRow(course, pairedLecture, list == courseLists[0]);
         courseViews.add(item);
         LinearLayout.LayoutParams params = topLp(-1, -2, topMargin);
-        list.addView(item.root, params);
+        list.addView(animated(item.root, (item.overviewPreview ? "home-course-" : "course-") + course.code), params);
     }
 
     private List<CourseGroup> groupedCourses() {
@@ -2853,8 +2842,7 @@ final class DashboardView extends FrameLayout {
     private void updatePlanner() {
         if (plannerCountView == null) return;
         plannerCountView.setText(String.format(Locale.ROOT, "%02d", plannerCount));
-        setChipSelected(plannerMissView, !plannerAttend);
-        setChipSelected(plannerAttendView, plannerAttend);
+        plannerRadio.select(plannerAttend ? 1 : 0, false);
         Course course = state.rows.isEmpty() ? null : state.rows.get(Math.min(plannerCourse, state.rows.size() - 1));
         if (plannerBaseline != null) plannerBaseline.setText(course == null ? "" : course.percentLabel
                 + " now · " + course.counts + (course.targetCount.isEmpty() ? "" : "\n" + course.targetCount)
@@ -2942,6 +2930,11 @@ final class DashboardView extends FrameLayout {
         card.setPadding(dp(16), dp(14), dp(16), dp(14));
         card.setBackground(industrialSurface(surface, 16, border));
         return card;
+    }
+
+    private AnimatedContentView animated(View content, String key) {
+        return new AnimatedContentView(getContext(), content, revealedContent.contains(key),
+                () -> revealedContent.add(key));
     }
 
     private TextView text(String value, float size, int color, int style) {
@@ -3244,193 +3237,6 @@ final class DashboardView extends FrameLayout {
             fill.setColorFilter(filter); outline.setColorFilter(filter); active.setColorFilter(filter); invalidateSelf();
         }
         @Override public int getOpacity() { return PixelFormat.OPAQUE; }
-    }
-
-    private final class SyncGlyphView extends View {
-        private static final int MORPH_STEPS = 36;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF ring = new RectF();
-        private final Path morphPath = new Path();
-        private final android.animation.ArgbEvaluator colorEvaluator = new android.animation.ArgbEvaluator();
-        private final float[] loadingPoints = new float[MORPH_STEPS * 2];
-        private final float[] tickPoints = new float[MORPH_STEPS * 2];
-        private ValueAnimator spin;
-        private ValueAnimator markAnimator;
-        private float rotation;
-        private float markProgress;
-        private float morphStartRotation, morphStartSweep;
-        private boolean morphFromSpinner, morphPathsReady;
-        private int state = 2; // idle, loading, success, failure
-
-        SyncGlyphView(Context context) {
-            super(context);
-            setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        }
-
-        void show(boolean loading, boolean failed, boolean succeeded) {
-            int next = loading ? 0 : failed ? -1 : succeeded ? 1 : 2;
-            if (state == next) return;
-            boolean wasLoading = state == 0;
-            float lastRotation = rotation;
-            float lastSweep = 170f + 100f * (float) Math.sin(Math.toRadians(lastRotation));
-            state = next;
-            if (spin != null) {
-                spin.cancel();
-                spin = null;
-            }
-            if (markAnimator != null) {
-                markAnimator.cancel();
-                markAnimator = null;
-            }
-            animate().cancel();
-            setScaleX(1f); setScaleY(1f); setAlpha(1f);
-            boolean motionEnabled = android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled();
-            if (loading && motionEnabled) {
-                morphFromSpinner = false;
-                spin = ValueAnimator.ofFloat(rotation, rotation + 360f);
-                spin.setDuration(1200);
-                spin.setRepeatCount(ValueAnimator.INFINITE);
-                spin.setInterpolator(new LinearInterpolator());
-                spin.addUpdateListener(value -> { rotation = (float) value.getAnimatedValue(); invalidate(); });
-                spin.start();
-            } else {
-                if (next == 1 || next == -1) {
-                    markProgress = motionEnabled ? 0f : 1f;
-                    if (motionEnabled) {
-                        morphFromSpinner = next == 1 && wasLoading;
-                        morphPathsReady = false;
-                        morphStartRotation = lastRotation;
-                        morphStartSweep = lastSweep;
-                        if (!morphFromSpinner) rotation = 0f;
-                        markAnimator = ValueAnimator.ofFloat(0f, 1f);
-                        markAnimator.setDuration(morphFromSpinner ? 200 : 220);
-                        markAnimator.setInterpolator(new LinearInterpolator());
-                        markAnimator.addUpdateListener(value -> {
-                            markProgress = (float) value.getAnimatedValue();
-                            if (markProgress >= 1f) morphFromSpinner = false;
-                            invalidate();
-                        });
-                        markAnimator.start();
-                    }
-                } else {
-                    rotation = 0f;
-                    morphFromSpinner = false;
-                    markProgress = 0f;
-                }
-            }
-            invalidate();
-        }
-
-        @Override protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float cx = getWidth() / 2f, cy = getHeight() / 2f, radius = dp(7.5f);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(dp(2));
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setStrokeJoin(Paint.Join.ROUND);
-            if (state == 0) {
-                ring.set(cx - radius, cy - radius, cx + radius, cy + radius);
-                paint.setColor(heroMuted);
-                paint.setAlpha(95);
-                canvas.drawArc(ring, 0, 360, false, paint);
-                paint.setColor(heroText);
-                paint.setAlpha(255);
-                float sweep = 170f + 100f * (float) Math.sin(Math.toRadians(rotation));
-                canvas.drawArc(ring, rotation, sweep, false, paint);
-            } else if (state == 1 || state == -1) {
-                if (state == 1 && morphFromSpinner) {
-                    drawSpinnerToTick(canvas, cx, cy);
-                    return;
-                }
-                paint.setColor(state == 1 ? green : red);
-                paint.setAlpha(Math.round(72 * (1f - markProgress)));
-                float ringRadius = radius * (1.28f - .28f * markProgress);
-                canvas.drawCircle(cx, cy, ringRadius, paint);
-                paint.setAlpha(255);
-                Path mark = new Path();
-                if (state == 1) {
-                    mark.moveTo(cx - dp(5), cy);
-                    mark.lineTo(cx - dp(1.5f), cy + dp(4));
-                    mark.lineTo(cx + dp(6), cy - dp(5));
-                    PathMeasure measure = new PathMeasure(mark, false);
-                    Path visible = new Path();
-                    measure.getSegment(0, measure.getLength() * markProgress, visible, true);
-                    canvas.drawPath(visible, paint);
-                } else {
-                    float first = Math.min(1f, markProgress * 2f);
-                    float second = Math.max(0f, (markProgress - .5f) * 2f);
-                    canvas.drawLine(cx - dp(4.5f), cy - dp(4.5f),
-                            cx - dp(4.5f) + dp(9f) * first, cy - dp(4.5f) + dp(9f) * first, paint);
-                    canvas.drawLine(cx + dp(4.5f), cy - dp(4.5f),
-                            cx + dp(4.5f) - dp(9f) * second, cy - dp(4.5f) + dp(9f) * second, paint);
-                }
-            } else {
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(heroText);
-                paint.setTextSize(dp(25));
-                paint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("↻", cx, cy - (paint.ascent() + paint.descent()) / 2f, paint);
-            }
-        }
-
-        private void drawSpinnerToTick(Canvas canvas, float cx, float cy) {
-            if (!morphPathsReady) prepareSpinnerToTick(cx, cy);
-            paint.setColor(heroMuted);
-            paint.setAlpha(Math.round(95 * (1f - markProgress)));
-            canvas.drawArc(ring, 0, 360, false, paint);
-            paint.setColor((int) colorEvaluator.evaluate(markProgress, heroText, green));
-            paint.setAlpha(255);
-            morphPath.reset();
-            for (int i = 0; i < MORPH_STEPS; i++) {
-                int offset = i * 2;
-                float x = loadingPoints[offset] + (tickPoints[offset] - loadingPoints[offset]) * markProgress;
-                float y = loadingPoints[offset + 1] + (tickPoints[offset + 1] - loadingPoints[offset + 1]) * markProgress;
-                if (i == 0) morphPath.moveTo(x, y);
-                else morphPath.lineTo(x, y);
-            }
-            canvas.drawPath(morphPath, paint);
-        }
-
-        private void prepareSpinnerToTick(float cx, float cy) {
-            Path loadingArc = new Path();
-            loadingArc.arcTo(ring, morphStartRotation, morphStartSweep, false);
-            Path tick = new Path();
-            tick.moveTo(cx - dp(5), cy);
-            tick.lineTo(cx - dp(1.5f), cy + dp(4));
-            tick.lineTo(cx + dp(6), cy - dp(5));
-            sample(loadingArc, loadingPoints);
-            sample(tick, tickPoints);
-            morphPathsReady = true;
-        }
-
-        private void sample(Path path, float[] points) {
-            PathMeasure measure = new PathMeasure(path, false);
-            float length = measure.getLength();
-            float[] point = new float[2];
-            for (int i = 0; i < MORPH_STEPS; i++) {
-                measure.getPosTan(length * i / (MORPH_STEPS - 1f), point, null);
-                points[i * 2] = point[0];
-                points[i * 2 + 1] = point[1];
-            }
-        }
-
-        @Override protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            if (state == 0 && spin == null) {
-                state = 2;
-                show(true, false, false);
-            }
-        }
-
-        @Override protected void onDetachedFromWindow() {
-            if (spin != null) { spin.cancel(); spin = null; }
-            if (markAnimator != null) { markAnimator.cancel(); markAnimator = null; }
-            if (morphFromSpinner) { morphFromSpinner = false; markProgress = 1f; }
-            if (navIndicatorAnimator != null) { navIndicatorAnimator.cancel(); navIndicatorAnimator = null; }
-            animate().cancel();
-            setScaleX(1f); setScaleY(1f); setAlpha(1f);
-            super.onDetachedFromWindow();
-        }
     }
 
     private final class CourseGroupRow {
@@ -3746,6 +3552,11 @@ final class DashboardView extends FrameLayout {
         }
     }
 
+    private int weekPulseHeight() {
+        float fontScale = getResources().getConfiguration().fontScale;
+        return dp(76 + Math.max(0f, fontScale - 1f) * 40f);
+    }
+
     private final class WeekPulseView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final int[] counts = new int[7];
@@ -3794,8 +3605,8 @@ final class DashboardView extends FrameLayout {
             super.onDraw(canvas);
             float width = getWidth();
             float step = width / 7f;
-            float baseY = getHeight() - dp(16);
-            float graphTop = dp(20);
+            float baseY = getHeight() - sp(10) - sp(11) - dp(12);
+            float graphTop = Math.max(dp(20), sp(12) + dp(8));
             int max = 1;
             for (int count : counts) max = Math.max(max, count);
 
@@ -3849,10 +3660,10 @@ final class DashboardView extends FrameLayout {
                 date.add(Calendar.DAY_OF_YEAR, i);
                 paint.setTextSize(sp(10));
                 paint.setColor(i == today ? amber : muted);
-                canvas.drawText(labels[i], x, getHeight() - dp(13), paint);
+                canvas.drawText(labels[i], x, getHeight() - sp(11) - dp(4), paint);
                 paint.setTextSize(sp(11));
                 paint.setColor(i == today ? ink : muted);
-                canvas.drawText(String.valueOf(date.get(Calendar.DAY_OF_MONTH)), x, getHeight() - dp(1), paint);
+                canvas.drawText(String.valueOf(date.get(Calendar.DAY_OF_MONTH)), x, getHeight() - dp(2), paint);
             }
         }
 
