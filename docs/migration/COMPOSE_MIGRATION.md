@@ -25,7 +25,7 @@
 - One grouped Courses card is now rendered by Compose inside the existing Java `DashboardView`; Java retains filtering, grouping, navigation, expansion state and source palette selection.
 - The current Java render mapping now supplies the same Can miss / Must attend values previously calculated while constructing the Java card. Compose only renders those strings, percent, status and progress color.
 - Phase 5 migrates the complete Courses page presentation to Compose: header/summary, search, filters, empty states and grouped course cards in a single `LazyColumn` hosted directly in the Java page shell. Java continues supplying data, grouping/sort/filter results, calculations, expanded state and navigation callbacks.
-- The five-tab shell now stores page content as `View[]`; the Home, Week, What If and Marks pages remain their original Java `ScrollView`s. Courses is a full-height Compose sibling, not a nested scroll container. OD detail return, tab visibility and page-entry transitions use that shared page array.
+- The five-tab shell stores page content as `View[]`; Home, What If and Marks remain their original Java `ScrollView`s. Courses and Week are full-height Compose siblings, not nested scroll containers. OD detail return, tab visibility and page-entry transitions use that shared page array.
 - The Courses search is controlled by the existing Java query state. The bridge reports search-field bounds so the dashboard's horizontal tab-swipe recognizer does not take over a gesture that starts inside the search control.
 - Added DashboardView-host tests for paired lecture/lab and lab-only groups, priority order among visible groups, search by subject/code, combined search and filters, no-result/no-data states, sync/reconnect actions, and the already-tested refresh, expansion, What If and five-tab navigation behavior.
 
@@ -33,7 +33,7 @@
 
 - `MainActivity` remains the application controller and Java view builder.
 - Home screen content outside its hero identity and upcoming-exam card remains Java Views.
-- Courses screen presentation is Compose, while Courses calculations, source data, grouping, sorting, filtering, expansion ownership and event destinations remain Java. Week, What If, Marks, Settings, onboarding, consent, MyCamu/KCT WebViews, account dialogs and updater remain Java Views.
+- Courses and Week screen presentations are Compose. Java retains Courses calculations, grouping, sorting, filtering and expansion ownership; Java also retains Week parsing/mapping, date grouping, attendance status, pulse aggregation, expansion/mode/pagination state and event destinations. What If, Marks, Settings, onboarding, consent, MyCamu/KCT WebViews, account dialogs, updater and Leave/OD details remain Java Views.
 - No screen ViewModels, Compose navigation, repository abstraction migration, multi-module split or DI framework.
 - Notifications, workers, widgets and update flows remain unchanged.
 
@@ -53,6 +53,17 @@
 - Startup time, frame timing, scroll smoothness, main-thread stalls, runtime memory, large-font/narrow-screen screenshot coverage and production-screen visual QA remain NOT MEASURED / NOT TESTED.
 - MyCamu/KCT authentication, fresh/cached synchronization, notification/alarm, Firebase, background workers, widgets and update/install integrations remain NOT TESTED by Phase 4.
 - The debug Lottie fixture verifies adapter playback mechanics only; no production Lottie artwork was visually reviewed or enabled.
+
+## Phase 6B.2 — Week screen migration
+
+The Week page presentation has moved to `WeekScreenView` → `WeekScreen`, using one full-height Compose `LazyColumn` in the existing Java five-tab shell. The screen contains the schedule/history selector, Canvas Week Pulse, data status, expandable schedule days, class rows, attendance-history rows/statuses, older-history pagination, empty/error states and Leave & OD action. The Java dashboard still owns all academic mapping and interactions; OD details remain Java-managed.
+
+- Characterization and dashboard-host instrumentation tests cover schedule date ordering, default/multiple expansion, cancelled/all-day classes, attendance statuses including unknown/unmarked, approved OD detail, 30-record history pagination, refresh, empty/error/expired-session states, OD navigation and return, and tab navigation.
+- `MainActivityLifecycleTest` continues to cover actual Activity startup, Java-to-Compose snapshot updates, theme and lifecycle behavior on the isolated Android 16 emulator. It does not validate live MyCamu/KCT services.
+- The full app instrumentation suite passes 21/21 tests. The seven Week Macrobenchmark scenarios pass five iterations each on the isolated Android 16 emulator. Physical QA used the separate synthetic `com.iniexe.rollcall.qa` package; production `com.iniexe.rollcall` remained installed and unchanged.
+- Week schedule-scroll performance is a notable unresolved emulator regression against the prior Courses/plain-list control. Physical device screenshots were reviewed, but the device Perfetto trace had no Rollcall app frame-timeline entries; physical runtime performance is therefore not measured. No speculative optimization was applied. See `docs/testing/PHASE6B_WEEK_VERIFICATION.md`.
+
+**Phase status: PARTIALLY VERIFIED.** Functional behavior, UI rendering and builds are verified for the covered fixtures. Performance parity is not established and must be reviewed before a further major screen migration.
 
 ## Functional regression snapshot
 
@@ -84,6 +95,6 @@ Phase 6A was run from `22d58c9` on `codex/rollcall-torch-ui`.
 
 ## Next safe slices
 
-1. Phase 6B.1R added a non-debuggable, release-derived benchmark variant and a five-scenario Macrobenchmark suite for Courses scrolling, search/filter, expansion/navigation, cold startup, and a plain-list control. Six tests passed on the isolated Android 16 emulator. The benchmark-only Activity and 48-row fixtures are excluded from release. Fresh measurements and 25 retained Perfetto traces are documented in `docs/testing/PHASE6B_RELEASE_PERFORMANCE.md`; the traces are preserved outside Git under `/home/inian/Projects/Rollcall-performance-qa/phase6b1r-20261113-083653/`.
-2. The emulator control indicates substantial environment noise and a modest relative Courses cost; no specific code defect or safe optimization was isolated. These numbers are emulator diagnostics, not physical-device performance claims. Repeat on a safe physical test device before drawing production performance conclusions.
-3. Perform manual TalkBack and process-death/relaunch checks; verify live external integrations separately with an authorized account only when required. Do not begin Week migration until its separate behavior inventory and migration gate are ready and performance results have been reviewed.
+1. Review and, if needed, investigate the Week scrolling performance difference using a trace with usable app frame-timeline data or another physical device. Do not make speculative changes.
+2. Perform manual TalkBack and process-death/relaunch checks; verify live external integrations separately with an authorized account only when required.
+3. Only after the Week performance risk is reviewed, migrate the next presentation screen (What If) through its own behavior inventory and migration gate.

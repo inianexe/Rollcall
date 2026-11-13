@@ -1,12 +1,19 @@
 package com.iniexe.rollcall;
 
 import android.os.Bundle;
+import android.graphics.Color;
+import android.view.View;
+import android.widget.FrameLayout;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
 
 /** Offline profiling fixtures included only in the local benchmark build. */
 public final class CoursesBenchmarkActivity extends ComponentActivity {
@@ -41,6 +48,9 @@ public final class CoursesBenchmarkActivity extends ComponentActivity {
         }
         state.courses = state.rows.size();
         for (DashboardView.Course row : state.rows) if (row.below) state.below++;
+        boolean week = getIntent().getBooleanExtra("week", BuildConfig.BUILD_TYPE.equals("qa"));
+        if (week) addWeekFixture(state);
+        AppPalette palette = AppPalette.get(getIntent().getBooleanExtra("dark", false), 0);
         dashboard = new DashboardView(this, new DashboardView.Actions() {
             public void onSync() {}
             public void onPortal() {}
@@ -55,9 +65,85 @@ public final class CoursesBenchmarkActivity extends ComponentActivity {
                 for (DashboardView.Course row : state.rows) if (row.code.equals(code)) row.expanded = !row.expanded;
                 dashboard.update(state);
             }
-        }, AppPalette.get(false, 0));
-        setContentView(dashboard);
+        }, palette);
+        if (BuildConfig.BUILD_TYPE.equals("qa")) setQaContentView(dashboard, palette);
+        else setContentView(dashboard);
         dashboard.update(state);
+        if (week) dashboard.openWidgetPage(2);
+    }
+
+    private void setQaContentView(View page, AppPalette palette) {
+        FrameLayout root = new FrameLayout(this);
+        FrameLayout content = new FrameLayout(this);
+        root.setBackgroundColor(palette.canvas);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            content.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets;
+        });
+        content.addView(page, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(content, new FrameLayout.LayoutParams(-1, -1));
+        View decor = getWindow().getDecorView();
+        decor.setSystemUiVisibility(decor.getSystemUiVisibility()
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        setContentView(root);
+        root.requestApplyInsets();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            int lightBars = palette.canvas > 0xFF808080
+                    ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
+            android.view.WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) controller.setSystemBarsAppearance(lightBars,
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                            | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+        } else if (palette.canvas > 0xFF808080) {
+            decor.setSystemUiVisibility(decor.getSystemUiVisibility()
+                    | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        }
+    }
+
+    private static void addWeekFixture(DashboardView.State state) {
+        long now = System.currentTimeMillis();
+        SimpleDateFormat day = new SimpleDateFormat("EEEE, d MMM", Locale.getDefault());
+        SimpleDateFormat time = new SimpleDateFormat("h:mm a", Locale.getDefault());
+        Calendar date = Calendar.getInstance();
+        date.set(Calendar.HOUR_OF_DAY, 0); date.set(Calendar.MINUTE, 0); date.set(Calendar.SECOND, 0); date.set(Calendar.MILLISECOND, 0);
+        for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
+            date.setTimeInMillis(now);
+            date.add(Calendar.DAY_OF_YEAR, dayIndex);
+            String label = day.format(new Date(date.getTimeInMillis()));
+            for (int period = 0; period < 6; period++) {
+                DashboardView.ScheduleItem item = new DashboardView.ScheduleItem();
+                item.date = label;
+                item.startsAt = date.getTimeInMillis() + (8L + period) * 60 * 60 * 1000;
+                item.endsAt = item.startsAt + 50 * 60 * 1000;
+                item.time = time.format(new Date(item.startsAt)) + " – " + time.format(new Date(item.endsAt));
+                item.name = "Long Applied Computing Course " + dayIndex + " Period " + period;
+                item.code = String.format(Locale.ROOT, "WK%02d%02d", dayIndex, period);
+                item.details = "Room " + (period + 1) + " · Faculty member";
+                item.allDay = dayIndex == 6 && period == 0;
+                item.cancelled = period == 5 && dayIndex % 3 == 0;
+                state.timetable.add(item);
+            }
+        }
+        state.timetableLoaded = true;
+        state.timetableUpdatedAt = now;
+        for (int i = 0; i < 60; i++) {
+            DashboardView.ClassMarkItem item = new DashboardView.ClassMarkItem();
+            item.day = new SimpleDateFormat("EEEE, d MMM yyyy", Locale.getDefault())
+                    .format(new Date(now - i * 24L * 60 * 60 * 1000));
+            item.time = "9:00 AM";
+            item.code = String.format(Locale.ROOT, "WK%03d", i);
+            item.name = "Week benchmark attendance record " + i;
+            item.status = i % 4 == 0 ? "absent" : i % 4 == 1 ? "not_taken" : i % 4 == 2 ? "unable_to_confirm" : "present";
+            item.color = "absent".equals(item.status) ? 0xffb5362a : "present".equals(item.status) ? 0xff24774f : 0xff73766e;
+            item.startsAt = now - i * 60 * 60 * 1000L;
+            state.classMarks.add(item);
+        }
+        state.classMarksUpdatedAt = now;
     }
 
     private static DashboardView.Course course(String code, String name, int percent, boolean below) {

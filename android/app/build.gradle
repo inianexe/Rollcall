@@ -50,12 +50,20 @@ android {
             debuggable false
             matchingFallbacks = ['release']
         }
+        qa {
+            initWith benchmark
+            applicationIdSuffix '.qa'
+            matchingFallbacks = ['benchmark', 'release']
+        }
     }
     buildFeatures {
         buildConfig true
         compose true
     }
     kotlinOptions { jvmTarget = '1.8' }
+    sourceSets {
+        qa.java.srcDir 'src/benchmark/java'
+    }
 }
 
 tasks.register('requireReleaseSigning') {
@@ -70,6 +78,7 @@ tasks.configureEach { task ->
     if (task.name == 'packageRelease' || task.name == 'bundleRelease') {
         task.dependsOn('requireReleaseSigning')
     }
+    if (task.name == 'processQaGoogleServices') task.enabled = false
 }
 
 dependencies {

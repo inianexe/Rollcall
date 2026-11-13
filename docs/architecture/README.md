@@ -14,13 +14,17 @@ Android lifecycle / MainActivity (Java)
        ├─ RollcallHeroIdentityView (interop bridge) -> HomeHeroIdentity (Compose)
        ├─ UpcomingExamCardView (interop bridge) -> UpcomingExamCard (Compose)
        ├─ LatestClassAttendanceCardView (interop bridge) -> LatestClassAttendanceCard (Compose)
-       └─ CoursesScreenView (Compose page in Java-owned tab shell)
-            └─ CoursesScreen (LazyColumn) -> CourseCard (Compose)
+       ├─ CoursesScreenView (Compose page in Java-owned tab shell)
+       │    └─ CoursesScreen (LazyColumn) -> CourseCard (Compose)
+       └─ WeekScreenView (Compose page in Java-owned tab shell)
+            └─ WeekScreen (LazyColumn; schedule/history/pulse)
 ```
 
 `Attendance` owns course percentage, safe absence, recovery and guidance calculations. `LiveSnapshotStore` persists the MyCamu snapshot and notifies its listener. `MainActivity.render` maps snapshot and academic preferences into `DashboardView.State`. The UI displays that state. `AppPalette` remains the Java source for the current light/dark choice and maps semantic values into `RollcallThemeColors`; do not duplicate palette values in Compose. The latest-class summary state and click action are still supplied by Java. Keep these authority relationships during migration.
 
 For the Courses screen, `MainActivity.render` supplies the existing course values, including Can miss / Must attend, status, progress color and expanded state. `DashboardView` retains the existing Java grouping and priority sort, applies the existing group search/filter behavior, and maps those results through `CourseCardStateMapper` into immutable Compose screen/card state. Compose owns the page layout, text input, filter controls, and rendering; callbacks return query, filter, course and What If actions to the existing Java owners. The Compose `LazyColumn` is a full-height sibling of the other four page views inside the Java tab shell, not nested in a `ScrollView`. No attendance formula moved into Kotlin.
+
+The Week presentation is also Compose, hosted by `WeekScreenView` as a full-height sibling in the same Java tab shell. `DashboardView` still owns timetable/history processing, date grouping and ordering, attendance status strings, Week Pulse counts, selected Schedule/Attendance mode, expanded dates, 30-record history pagination, refresh actions and Leave/OD navigation. `WeekScreenUiState` is an immutable rendering snapshot; Compose renders Java-supplied values and callbacks return mode, expansion, pagination and navigation events. The screen has one primary `LazyColumn`; it is not nested in the Java scroll container. OD details remain Java-managed.
 
 ## Intended direction
 

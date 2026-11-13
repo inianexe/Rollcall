@@ -22,6 +22,8 @@ Provide previews for standalone Compose screens/components where their data can 
 
 The Courses screen is Compose. Its `LazyColumn`, search field, filter controls, empty state and reused `CourseCard` use shared semantic colors and typography. Java still computes attendance, groups and priority-sorts lecture/lab rows, applies the legacy search/filter behavior, and owns expansion state and callbacks. `CourseCardUiState` contains the existing calculated percentage, Can miss, Must attend, status, progress color and expanded state. Do not add attendance math or a parallel grouping/filter pipeline to composables.
 
+The Week page uses the same `RollcallTheme` and semantic tokens. `WeekScreen` renders Java-prepared schedule/history states and Java-owned expansion/mode state. Its Canvas Week Pulse receives the existing daily activity counts and labels; the drawing is a visual representation only. Attendance statuses, approved OD meaning, date grouping and pagination remain determined by Java.
+
 Courses metrics switch to a single-column layout for larger font scales, single-metric groups, or long counts so values remain visible. Search/filter text wraps. At font scales above 1.3, the fixed five-item dashboard navigation hides its visual text labels to avoid broken word wrapping; the full tab names remain exposed on the clickable tab semantics. The 320dp/2.0x layout was screenshot-reviewed on the Android 16 emulator. Course title and summary may ellipsize visually at very large text sizes; their complete content remains available in Compose semantics. This is not a claim of TalkBack testing.
 
 ## Theme switching

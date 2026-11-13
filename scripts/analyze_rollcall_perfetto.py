@@ -24,13 +24,13 @@ def rows(processor, sql):
     return [row.__dict__ for row in processor.query(sql)]
 
 
-def analyze(path):
+def analyze(path, package, activity):
     processor = TraceProcessor(trace=path)
     try:
-        frames = rows(processor, """
+        frames = rows(processor, f"""
             SELECT dur / 1e6 AS duration_ms, jank_type, layer_name
             FROM actual_frame_timeline_slice
-            WHERE dur > 0 AND layer_name LIKE '%CoursesBenchmarkActivity%'
+            WHERE dur > 0 AND layer_name LIKE '%{activity}%'
         """)
         durations = [r["duration_ms"] for r in frames]
         jank = collections.Counter(r["jank_type"] or "Unknown" for r in frames)
@@ -39,7 +39,7 @@ def analyze(path):
             FROM sched_slice
             JOIN thread USING (utid)
             JOIN process USING (upid)
-            WHERE process.name = 'com.iniexe.rollcall'
+            WHERE process.name = '{package}'
             GROUP BY thread.name ORDER BY SUM(sched_slice.dur) DESC
         """)
         slices = rows(processor, """
@@ -48,7 +48,7 @@ def analyze(path):
             JOIN thread_track ON slice.track_id = thread_track.id
             JOIN thread USING (utid)
             JOIN process USING (upid)
-            WHERE process.name = 'com.iniexe.rollcall'
+            WHERE process.name = '{package}'
               AND (slice.name LIKE '%measureAndLayout%' OR slice.name LIKE '%recompos%'
                    OR slice.name LIKE '%GC%')
             GROUP BY slice.name ORDER BY SUM(slice.dur) DESC
@@ -74,11 +74,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("trace_directory")
     parser.add_argument("--output")
+    parser.add_argument("--package", default="com.iniexe.rollcall")
+    parser.add_argument("--activity", default="CoursesBenchmarkActivity")
     args = parser.parse_args()
-    paths = sorted(glob.glob(os.path.join(args.trace_directory, "**", "CoursesBenchmark_*_iter*.perfetto-trace"), recursive=True))
+    paths = [args.trace_directory] if os.path.isfile(args.trace_directory) else sorted(
+        glob.glob(os.path.join(args.trace_directory, "**", "*Benchmark_*_iter*.perfetto-trace"), recursive=True)
+    )
     if not paths:
         raise SystemExit("No CoursesBenchmark Perfetto traces found")
-    report = [analyze(path) for path in paths]
+    report = [analyze(path, args.package, args.activity) for path in paths]
     payload = json.dumps(report, indent=2)
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:

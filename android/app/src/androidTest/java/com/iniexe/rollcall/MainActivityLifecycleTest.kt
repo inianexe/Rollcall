@@ -7,12 +7,11 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.io.FileOutputStream
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -65,6 +64,13 @@ class MainActivityLifecycleTest {
         waitForStartup(activity)
         assertSelected(activity, "Home")
 
+        selectTab(activity, "Week")
+        compose.onNodeWithText("Your week").assertIsDisplayed()
+        compose.onNodeWithText("YOUR WEEK", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Sync timetable", substring = true).assertIsDisplayed()
+        saveScreenshot("phase6b-week-dark.png")
+        selectTab(activity, "Home")
+
         selectTab(activity, "Courses")
         compose.onNodeWithText("Your courses appear here after your first MyCamu sync. Tap to connect.")
             .assertIsDisplayed()
@@ -112,10 +118,20 @@ class MainActivityLifecycleTest {
         selectTab(activity, "Courses")
         compose.onNodeWithText("Updated Programming Fundamentals").assertIsDisplayed()
         saveScreenshot("phase6a-courses-light.png")
+        selectTab(activity, "Week")
+        compose.onNodeWithText("Your week").assertIsDisplayed()
+        saveScreenshot("phase6b-week-light.png")
         activity.recreate()
         waitForStartup(activity)
         assertEquals(false, context.getSharedPreferences("MainActivity", 0).getBoolean("dark_theme", true))
         assertSelected(activity, "Home") // Existing behavior: selected tab is not persisted across Activity recreation.
+        selectTab(activity, "Week")
+        compose.onNodeWithText("Your week").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Show Attendance").performClick()
+        compose.onNodeWithContentDescription("Open Leave and On Duty details").performClick()
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        compose.onNodeWithText("Attendance history").assertIsDisplayed()
         selectTab(activity, "Courses")
         compose.onNodeWithText("Updated Programming Fundamentals").assertIsDisplayed()
 
@@ -152,6 +168,10 @@ class MainActivityLifecycleTest {
             .putBoolean("torch_html_palette_applied", true)
             .putBoolean("dark_theme", false)
             .commit()
+        val weekStartsAt = System.currentTimeMillis() + 3_600_000L
+        LiveSnapshotStore.timetable(context, listOf(LiveSnapshotStore.ClassSession(
+            "week-large-font", "WEEK-101", "Advanced Distributed Systems and Accessible Interface Design",
+            "Faculty member", "Room 204", "lecture", weekStartsAt, weekStartsAt + 3_600_000L, false, false)))
         val activity = launch()
         waitForStartup(activity)
         LiveSnapshotStore.attendance(context, listOf(Attendance(
@@ -165,6 +185,11 @@ class MainActivityLifecycleTest {
                     .executeShellCommand("settings put system font_scale $scale").close()
                 activity.recreate()
                 waitForStartup(activity)
+                selectTab(activity, "Week")
+                compose.onNodeWithText("Advanced Distributed Systems and Accessible Interface Design  ·  WEEK-101")
+                    .performScrollTo().assertIsDisplayed()
+                compose.onNodeWithText("WEEK-101", substring = true).assertIsDisplayed()
+                saveScreenshot("phase6b-week-font-${scale}.png")
                 selectTab(activity, "Courses")
                 compose.onNodeWithContentDescription("Search by subject or code").assertIsDisplayed()
                 compose.onNodeWithText("All courses · 1").assertIsDisplayed()
@@ -236,13 +261,10 @@ class MainActivityLifecycleTest {
     }
 
     private fun saveScreenshot(name: String) {
-        val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation
-            .executeShellCommand("screencap -p")
-        val output = File(context.getExternalFilesDir("phase6a"), name)
-        output.parentFile?.mkdirs()
-        FileOutputStream(output).use { target ->
-            java.io.FileInputStream(screenshot.fileDescriptor).use { it.copyTo(target) }
-        }
-        screenshot.close()
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.executeShellCommand("mkdir -p /sdcard/Pictures/RollcallQA").close()
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            automation.executeShellCommand("screencap -p /sdcard/Pictures/RollcallQA/$name")
+        ).use { it.readBytes() }
     }
 }

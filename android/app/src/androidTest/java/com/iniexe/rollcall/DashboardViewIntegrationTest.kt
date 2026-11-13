@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipeDown
 import android.view.View
@@ -22,6 +23,9 @@ import android.os.SystemClock
 import android.animation.ValueAnimator
 import java.io.File
 import java.io.FileInputStream
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -70,14 +74,14 @@ class DashboardViewIntegrationTest {
         captureProfile("before")
         repeat(3) { pass ->
             clickTab(dashboard, "Courses")
-            repeat(4) { compose.onNode(hasScrollAction()).performTouchInput { swipeUp() } }
-            repeat(8) { compose.onNode(hasScrollAction()).performTouchInput { swipeDown() } }
+            repeat(4) { compose.onAllNodes(hasScrollAction())[0].performTouchInput { swipeUp() } }
+            repeat(8) { compose.onAllNodes(hasScrollAction())[0].performTouchInput { swipeDown() } }
             compose.onNodeWithContentDescription("Search by subject or code").performTextInput("Name 17")
             compose.onNodeWithText("Long Course Name 17 Applied Computing").assertIsDisplayed()
             compose.onNodeWithContentDescription("Clear search").performClick()
             compose.onNodeWithText("Below target · ${state.below}").performClick()
             compose.onNodeWithText("All courses · ${state.courses}").performClick()
-            repeat(8) { compose.onNode(hasScrollAction()).performTouchInput { swipeDown() } }
+            repeat(8) { compose.onAllNodes(hasScrollAction())[0].performTouchInput { swipeDown() } }
             instrumentation.runOnMainSync { state.rows.forEach { it.expanded = false }; dashboard.update(state) }
             compose.onAllNodesWithText("LAB ·", substring = true).onFirst().performClick()
             compose.onNodeWithText("Try in What if?  →").assertIsDisplayed()
@@ -231,6 +235,172 @@ class DashboardViewIntegrationTest {
         assertEquals(0, compose.onAllNodesWithText("Programming Fundamentals").fetchSemanticsNodes().size)
     }
 
+    @Test fun weekScreenPreservesJavaScheduleExpansionHistoryAndOdNavigation() {
+        var syncs = 0
+        lateinit var dashboard: DashboardView
+        val state = DashboardView.State().apply {
+            timetableLoaded = true
+            timetableUpdatedAt = System.currentTimeMillis()
+            classMarksUpdatedAt = System.currentTimeMillis()
+            leavesLoaded = true
+            val now = System.currentTimeMillis()
+            val today = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+            val nextDay = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }
+            val dateFormat = SimpleDateFormat("EEEE, d MMM", Locale.getDefault())
+            val firstDate = dateFormat.format(today.time)
+            val secondDate = dateFormat.format(nextDay.time)
+            timetable = mutableListOf(
+                DashboardView.ScheduleItem().apply { date = firstDate; startsAt = today.timeInMillis; allDay = true; name = "Orientation"; code = "ALLDAY"; time = "" },
+                DashboardView.ScheduleItem().apply { date = firstDate; startsAt = now + 3_600_000; endsAt = now + 7_200_000; name = "Week Fixture Lecture"; code = "WK101"; time = "10:00 AM – 11:00 AM"; details = "Room 2 · Dr Tutor" },
+                DashboardView.ScheduleItem().apply { date = firstDate; startsAt = now + 8_000_000; name = "Cancelled Tutorial"; code = "WK101T"; time = "12:00 PM – 1:00 PM"; cancelled = true },
+                DashboardView.ScheduleItem().apply { date = secondDate; startsAt = nextDay.timeInMillis + 36_000_000; name = "Tomorrow Seminar"; code = "WK202"; time = "10:00 AM – 11:00 AM" },
+            )
+            classMarks = (0 until 32).map { index ->
+                DashboardView.ClassMarkItem().apply {
+                    day = if (index < 2) "Friday, 13 Nov 2026" else "Thursday, 12 Nov 2026"
+                    time = "${9 + index % 8}:00 AM"
+                    name = when (index) { 0 -> "Present Fixture"; 1 -> "Absent Fixture"; 2 -> "Not Marked Fixture"; 3 -> "Unknown Fixture"; 4 -> "Approved OD Fixture"; else -> "Older Fixture $index" }
+                    code = "WK${index.toString().padStart(3, '0')}"
+                    status = when (index) { 0 -> "present"; 1 -> "absent"; 2 -> "not_taken"; 3 -> "unable_to_confirm"; else -> "present" }
+                    leaveType = if (index == 4) "On Duty" else ""
+                    leaveStatus = if (index == 4) "Approved" else ""
+                    color = when (status) { "present" -> 0xff24774f.toInt(); "absent" -> 0xffb5362a.toInt(); "not_taken" -> 0xffaa7413.toInt(); else -> 0xff73766e.toInt() }
+                    startsAt = now - index * 3_600_000L
+                }
+            }.toMutableList()
+            leaves = mutableListOf(DashboardView.LeaveItem().apply {
+                id = "leave-fixture"; date = "13 Nov 2026"; type = "On Duty"; status = "Approved"; currentSemester = true
+            })
+        }
+        dashboard = DashboardView(compose.activity, object : DashboardView.Actions {
+            override fun onSync() { syncs++ }
+            override fun onPortal() = Unit
+            override fun onAcademicsPortal() = Unit
+            override fun onTarget() = Unit
+            override fun onTheme() = Unit
+            override fun onPalette() = Unit
+            override fun onAbout() = Unit
+            override fun onFilter(belowOnly: Boolean) = Unit
+            override fun onQuery(value: String) = Unit
+            override fun onCourse(code: String) = Unit
+        }, AppPalette.get(false, 0))
+        compose.activity.runOnUiThread { compose.activity.setContentView(dashboard); dashboard.update(state) }
+        clickTab(dashboard, "Week")
+
+        compose.onNodeWithText("Week Fixture Lecture", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("All day").assertIsDisplayed()
+        compose.onNodeWithText("Cancelled").assertIsDisplayed()
+        compose.onNodeWithText("Tomorrow Seminar").assertDoesNotExist()
+        val tomorrowLabel = SimpleDateFormat("EEEE, d MMM", Locale.getDefault()).format(
+            Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }.time)
+        compose.onNodeWithContentDescription("$tomorrowLabel, 1 class, expand").performClick()
+        compose.onNodeWithContentDescription("$tomorrowLabel, 1 class, collapse").assertExists()
+        val expanded = DashboardView::class.java.getDeclaredField("expandedScheduleDays").apply { isAccessible = true }
+            .get(dashboard) as Set<*>
+        assertTrue("Java should own the expanded day state", tomorrowLabel in expanded)
+        val screenState = DashboardView::class.java.getDeclaredMethod("weekScreenState").apply { isAccessible = true }
+            .invoke(dashboard)
+        val mappedDays = screenState.javaClass.getDeclaredMethod("getScheduleDays").invoke(screenState) as List<*>
+        val mappedTomorrow = mappedDays.first { it!!.javaClass.getDeclaredMethod("getDate").invoke(it) == tomorrowLabel }!!
+        assertEquals(1, mappedTomorrow.javaClass.getDeclaredMethod("getClasses").invoke(mappedTomorrow).let { (it as List<*>).size })
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Tomorrow Seminar", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Tomorrow Seminar", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("$tomorrowLabel, 1 class, collapse").performClick()
+        compose.onNodeWithText("Tomorrow Seminar", substring = true).assertDoesNotExist()
+
+        compose.onNodeWithContentDescription("Show Attendance").performClick()
+        compose.onNodeWithText("Attendance history").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Present Fixture, Present").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Absent Fixture, Absent").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Not Marked Fixture, Not marked").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Unknown Fixture, Unable to confirm").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("On Duty · Approved", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Older Fixture 31").assertDoesNotExist()
+        repeat(8) { compose.onAllNodes(hasScrollAction())[1].performTouchInput { swipeUp() } }
+        compose.onNodeWithText("Show older · 2 more").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Older Fixture 31").performScrollTo().assertIsDisplayed()
+
+        repeat(10) { compose.onAllNodes(hasScrollAction())[1].performTouchInput { swipeDown() } }
+        compose.onNodeWithContentDescription("Open Leave and On Duty details").performClick()
+        compose.activity.runOnUiThread {
+            assertNotNull(findText(dashboard, "Leave & OD"))
+            assertNotNull(findText(dashboard, "On Duty"))
+            findText(dashboard, "←  Back")!!.performClick()
+        }
+        assertTabSelected(dashboard, "Week, selected")
+        compose.onNodeWithText("Attendance history").assertIsDisplayed()
+
+        compose.activity.runOnUiThread {
+            state.classMarks[0].name = "Refreshed Present Fixture"
+            dashboard.update(state)
+        }
+        compose.onNodeWithText("Refreshed Present Fixture").assertIsDisplayed()
+        assertEquals(0, syncs)
+    }
+
+    @Test fun weekEmptyFailureAndExpiredStatesRemainDistinct() {
+        var syncs = 0
+        var portals = 0
+        val dashboard = DashboardView(compose.activity, object : DashboardView.Actions {
+            override fun onSync() { syncs++ }
+            override fun onPortal() { portals++ }
+            override fun onAcademicsPortal() = Unit
+            override fun onTarget() = Unit
+            override fun onTheme() = Unit
+            override fun onPalette() = Unit
+            override fun onAbout() = Unit
+            override fun onFilter(belowOnly: Boolean) = Unit
+            override fun onQuery(value: String) = Unit
+            override fun onCourse(code: String) = Unit
+        }, AppPalette.get(false, 0))
+        val state = DashboardView.State()
+        compose.activity.runOnUiThread { compose.activity.setContentView(dashboard); dashboard.update(state) }
+        clickTab(dashboard, "Week")
+        compose.onNodeWithText("YOUR WEEK", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Sync timetable from MyCamu").performClick()
+        assertEquals(1, syncs)
+        fun status(name: String): String {
+            val stateMethod = DashboardView::class.java.getDeclaredMethod("weekScreenState").apply { isAccessible = true }
+            val uiState = requireNotNull(stateMethod.invoke(dashboard))
+            val value = requireNotNull(uiState.javaClass.getDeclaredMethod("get${name}Status").invoke(uiState))
+            return value.toString()
+        }
+        assertEquals("NOT_LOADED", status("Timetable"))
+
+        state.syncError = true
+        compose.activity.runOnUiThread { dashboard.update(state) }
+        compose.onNodeWithText("NEEDS A", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Sync timetable from MyCamu").assertIsDisplayed()
+        assertEquals("SYNC_FAILED", status("Timetable"))
+
+        state.sessionExpired = true
+        compose.activity.runOnUiThread { dashboard.update(state) }
+        compose.onNodeWithText("RECONNECT TO", substring = true).assertIsDisplayed()
+        assertEquals("SESSION_EXPIRED", status("Timetable"))
+        compose.onNodeWithContentDescription("Reconnect MyCamu to load the timetable").performClick()
+        assertEquals(1, portals)
+
+        compose.onNodeWithContentDescription("Show Attendance").performClick()
+        compose.onNodeWithText("Reconnect MyCamu to load attendance history", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Reconnect MyCamu", substring = true).assertIsDisplayed()
+
+        state.sessionExpired = false
+        state.syncError = false
+        state.timetableLoaded = true
+        compose.activity.runOnUiThread { dashboard.update(state) }
+        compose.onNodeWithContentDescription("Show Schedule").performClick()
+        compose.onNodeWithText("NO CLASSES", substring = true).assertIsDisplayed()
+        assertEquals("LOADED_EMPTY", status("Timetable"))
+
+        state.timetable = mutableListOf(DashboardView.ScheduleItem().apply {
+            date = "Tuesday, 17 Nov"; name = "Cached schedule fixture"; code = "CACHE1"; time = "9:00 AM – 10:00 AM"
+        })
+        state.syncError = true
+        compose.activity.runOnUiThread { dashboard.update(state) }
+        assertEquals("CACHED", status("Timetable"))
+        compose.onNodeWithText("Cached schedule fixture", substring = true).assertIsDisplayed()
+    }
+
     @Test fun coursesScreenEmptyStateStillRoutesToSyncOrReconnect() {
         var syncs = 0
         var portalOpens = 0
@@ -335,6 +505,14 @@ class DashboardViewIntegrationTest {
         if (view.contentDescription == description) return view
         if (view is ViewGroup) for (index in 0 until view.childCount) {
             findByDescription(view.getChildAt(index), description)?.let { return it }
+        }
+        return null
+    }
+
+    private fun findText(view: View, text: String): View? {
+        if (view is android.widget.TextView && view.text.toString() == text) return view
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            findText(view.getChildAt(index), text)?.let { return it }
         }
         return null
     }
