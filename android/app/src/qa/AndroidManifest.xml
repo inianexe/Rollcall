@@ -1,0 +1,39 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" tools:node="remove" />
+    <uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES" tools:node="remove" />
+    <application android:label="Rollcall QA" tools:replace="android:label">
+        <profileable android:shell="true" />
+        <activity android:name=".MainActivity" tools:node="remove" />
+        <activity android:name=".UpdateActivity" tools:node="remove" />
+        <activity android:name=".CoursesBenchmarkActivity"
+            android:exported="true"
+            android:label="Rollcall QA">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".ReleaseUpdateMessagingService" tools:node="remove" />
+        <provider android:name="androidx.core.content.FileProvider" tools:node="remove" />
+        <provider android:name="com.google.firebase.provider.FirebaseInitProvider" tools:node="remove" />
+        <service android:name="com.google.firebase.components.ComponentDiscoveryService" tools:node="remove" />
+        <service android:name="com.google.firebase.messaging.FirebaseMessagingService" tools:node="remove" />
+        <receiver android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver" tools:node="remove" />
+        <activity android:name="com.google.firebase.auth.internal.GenericIdpActivity" tools:node="remove" />
+        <activity android:name="com.google.firebase.auth.internal.RecaptchaActivity" tools:node="remove" />
+        <receiver android:name=".ClassReminderReceiver" tools:node="remove" />
+        <receiver android:name=".RollcallTodayWidget" tools:node="remove" />
+        <receiver android:name=".AttendanceHealthWidget" tools:node="remove" />
+        <receiver android:name=".RollcallWeekWidget" tools:node="remove" />
+        <receiver android:name=".RollcallStreakWidget" tools:node="remove" />
+        <receiver android:name=".RollcallReminderWidget" tools:node="remove" />
+    </application>
+</manifest>

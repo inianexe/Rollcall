@@ -3,6 +3,7 @@ package com.iniexe.rollcall;
 import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
 import com.iniexe.rollcall.ui.bridge.LatestClassAttendanceCardView;
 import com.iniexe.rollcall.ui.bridge.CoursesScreenView;
+import com.iniexe.rollcall.ui.bridge.WeekScreenView;
 import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
 import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
 import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState;
@@ -11,6 +12,12 @@ import com.iniexe.rollcall.ui.screens.courses.CourseMetricUiState;
 import com.iniexe.rollcall.ui.screens.courses.CourseFilter;
 import com.iniexe.rollcall.ui.screens.courses.CoursesScreenUiState;
 import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
+import com.iniexe.rollcall.ui.screens.week.AttendanceHistoryUiState;
+import com.iniexe.rollcall.ui.screens.week.ScheduleClassUiState;
+import com.iniexe.rollcall.ui.screens.week.ScheduleDayUiState;
+import com.iniexe.rollcall.ui.screens.week.WeekPulseUiState;
+import com.iniexe.rollcall.ui.screens.week.WeekScreenUiState;
+import com.iniexe.rollcall.ui.screens.week.WeekDataStatus;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
@@ -219,13 +226,8 @@ final class DashboardView extends FrameLayout {
     private boolean wasSyncing;
     private PlannerMeter plannerMeter;
     private TextView plannerFeedback;
-    private TextView scheduleUpdatedView, scheduleEmptyView, historyEmptyView;
-    private LinearLayout scheduleEmptyPanel;
-    private TextView scheduleEmptyTitle, scheduleEmptyDetail;
-    private WeekPulseView weekPulse;
-    private TextView weekPulseMeta;
-    private LinearLayout scheduleRows, historyRows, scheduleContent, historyContent;
-    private LinearLayout scheduleExtras, odOptions;
+    private WeekScreenView weekScreenView;
+    private LinearLayout odOptions;
     private ScrollView odDetailsPage;
     private LinearLayout odDetailsRows;
     private TextView currentSemesterOdFilter, allOdFilter;
@@ -236,11 +238,8 @@ final class DashboardView extends FrameLayout {
     private TextView odNotice;
     private final TextView[] odChips = new TextView[3];
     private int odMode;
-    private TextView scheduleTab, historyTab;
     private boolean showingHistory;
     private int historyLimit = 30;
-    private boolean scheduleDirty = true;
-    private boolean historyDirty = true;
     private FrameLayout coursePicker;
     private TextView coursePickerText;
     private PopupWindow coursePopup;
@@ -346,8 +345,6 @@ final class DashboardView extends FrameLayout {
     void update(State next) {
         if (next == null) return;
         state = next;
-        scheduleDirty = true;
-        historyDirty = true;
         query = next.query == null ? query : next.query;
         belowOnly = next.belowOnly;
         if (homeHeroIdentity == null) return;
@@ -596,7 +593,7 @@ final class DashboardView extends FrameLayout {
         addTop(body, overviewWeekBlock, 18);
 
         overviewAttendanceBlock = new LatestClassAttendanceCardView(getContext(), palette.toComposeColors(),
-                () -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
+                this::openAttendanceHistory);
         overviewAttendanceBlock.setVisibility(GONE);
         addTop(body, overviewAttendanceBlock, 10);
 
@@ -856,111 +853,26 @@ final class DashboardView extends FrameLayout {
     }
 
     private void buildTimetablePage() {
-        LinearLayout body = newPage(2);
-        addTop(body, heading("03 / TIME & ATTENDANCE", "Your week", "Every class. Every record. In one place."), 18);
-        scheduleExtras = column();
-        LinearLayout pulseCard = column();
-        pulseCard.setPadding(0, dp(16), 0, dp(8));
-        LinearLayout pulseHeading = row();
-        pulseHeading.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout pulseCopy = column();
-        pulseCopy.addView(label(cyberpunk ? "CITY PULSE · CLASSES" : "WEEK RHYTHM", 10, green, Typeface.BOLD));
-        weekPulseMeta = text("Sync MyCamu to map your timetable.", 10, muted, Typeface.NORMAL);
-        pulseCopy.addView(weekPulseMeta, topLp(-1, -2, 3));
-        pulseHeading.addView(pulseCopy, new LinearLayout.LayoutParams(0, -2, 1));
-        
-        pulseCard.addView(pulseHeading);
-        weekPulse = new WeekPulseView(getContext());
-        pulseCard.addView(weekPulse, topLp(-1, dp(64), 5));
-        addTop(scheduleExtras, pulseCard, 2);
-        scheduleUpdatedView = text("Waiting for MyCamu timetable", 11, muted, Typeface.NORMAL);
+        weekScreenView = new WeekScreenView(getContext(), palette.toComposeColors(), weekScreenState(),
+                history -> { showingHistory = history; updateTimetable(); return kotlin.Unit.INSTANCE; },
+                date -> {
+                    if (expandedScheduleDays.contains(date)) expandedScheduleDays.remove(date);
+                    else expandedScheduleDays.add(date);
+                    scheduleExpansionInitialized = true;
+                    updateTimetable();
+                    return kotlin.Unit.INSTANCE;
+                },
+                () -> { historyLimit += 30; updateTimetable(); return kotlin.Unit.INSTANCE; },
+                () -> { if (state.sessionExpired) actions.onPortal(); else actions.onSync(); return kotlin.Unit.INSTANCE; },
+                () -> { openOdDetails(); return kotlin.Unit.INSTANCE; });
+        pageViews[2] = weekScreenView;
+    }
 
-        LinearLayout selector = row();
-        selector.setPadding(dp(3), dp(3), dp(3), dp(3));
-        selector.setBackground(shape(soft, 13, border));
-        scheduleTab = text("Schedule", 12, ink, Typeface.BOLD);
-        historyTab = text("Attendance", 12, muted, Typeface.BOLD);
-        scheduleTab.setGravity(Gravity.CENTER);
-        historyTab.setGravity(Gravity.CENTER);
-        scheduleTab.setMinHeight(dp(48));
-        historyTab.setMinHeight(dp(48));
-        scheduleTab.setContentDescription("Show weekly class schedule");
-        historyTab.setContentDescription("Show attendance history");
-        scheduleTab.setOnClickListener(v -> { showingHistory = false; updateTimetable(); });
-        historyTab.setOnClickListener(v -> { showingHistory = true; updateTimetable(); });
-        selector.addView(scheduleTab, new LinearLayout.LayoutParams(0, -2, 1));
-        selector.addView(historyTab, new LinearLayout.LayoutParams(0, -2, 1));
-        addTop(body, selector, 10);
-        addTop(body, scheduleExtras, 10);
-        addTop(body, scheduleUpdatedView, 8);
-
-        scheduleContent = column();
-        body.addView(scheduleContent, topLp(-1, -2, 10));
-        LinearLayout weekHeading = row();
-        weekHeading.setGravity(Gravity.CENTER_VERTICAL);
-        weekHeading.addView(text("This week", 16, ink, Typeface.BOLD), new LinearLayout.LayoutParams(0, -2, 1));
-        scheduleContent.addView(weekHeading);
-        scheduleRows = column();
-        scheduleContent.addView(scheduleRows, topLp(-1, -2, 24));
-        scheduleEmptyPanel = column();
-        scheduleEmptyPanel.setPadding(dp(18), dp(17), dp(18), dp(14));
-        scheduleEmptyPanel.setMinimumHeight(dp(205));
-        scheduleEmptyPanel.setBackground(shape(0xFFC8C8FF, 16, 0xFF121212));
-        scheduleEmptyPanel.addView(label("THE WEEK / LIVE SCHEDULE", 9, 0xFF343A26, Typeface.BOLD));
-        scheduleEmptyTitle = text("NO CLASSES\nON YOUR\nSCHEDULE.", 22, 0xFF121212, Typeface.BOLD);
-        scheduleEmptyTitle.setLineSpacing(0f, .92f);
-        scheduleEmptyPanel.addView(scheduleEmptyTitle, topLp(-1, -2, 12));
-        scheduleEmptyDetail = text("Your connected timetable will appear here when classes are scheduled.", 11, 0xFF343A26, Typeface.NORMAL);
-        scheduleEmptyDetail.setMaxLines(2);
-        scheduleEmptyDetail.setLineSpacing(dp(2), 1f);
-        scheduleEmptyPanel.addView(scheduleEmptyDetail, topLp(-1, -2, 8));
-        scheduleEmptyView = text("Refresh timetable  →", 11, 0xFF121212, Typeface.BOLD);
-        scheduleEmptyView.setGravity(Gravity.CENTER);
-        scheduleEmptyView.setMinHeight(dp(44));
-        scheduleEmptyView.setBackground(shape(0xFFCCFF00, 9, 0));
-        scheduleEmptyPanel.addView(scheduleEmptyView, topLp(-1, -2, 10));
-        scheduleEmptyView.setFocusable(true);
-        scheduleEmptyView.setClickable(true);
-        scheduleEmptyView.setOnClickListener(v -> {
-            if (state.sessionExpired) actions.onPortal(); else actions.onSync();
-        });
-        scheduleEmptyView.setContentDescription("Sync timetable from MyCamu");
-        scheduleEmptyPanel.setFocusable(true);
-        scheduleEmptyPanel.setOnClickListener(v -> {
-            if (state.sessionExpired) actions.onPortal(); else actions.onSync();
-        });
-        addTop(scheduleContent, scheduleEmptyPanel, 14);
-
-        historyContent = column();
-        historyContent.setVisibility(GONE);
-        body.addView(historyContent, topLp(-1, -2, 10));
-        LinearLayout historyHeading = row();
-        historyHeading.setGravity(Gravity.CENTER_VERTICAL);
-        historyHeading.addView(text("Attendance history", 16, ink, Typeface.BOLD),
-                new LinearLayout.LayoutParams(0, -2, 1));
-        TextView leaveDetails = text("Leave & OD  →", 11, green, Typeface.BOLD);
-        leaveDetails.setGravity(Gravity.CENTER);
-        leaveDetails.setMinHeight(dp(44));
-        leaveDetails.setPadding(dp(8), 0, 0, 0);
-        leaveDetails.setOnClickListener(v -> openOdDetails());
-        historyHeading.addView(leaveDetails, lp(-2, dp(44)));
-        historyContent.addView(historyHeading);
-        historyRows = column();
-        historyContent.addView(historyRows, topLp(-1, -2, 6));
-        historyEmptyView = text("Go to Home and tap refresh to load attendance history.", 12, muted, Typeface.NORMAL);
-        historyEmptyView.setPadding(dp(12), dp(12), dp(12), dp(12));
-        historyEmptyView.setMinHeight(dp(48));
-        historyEmptyView.setTextColor(lime);
-        historyEmptyView.setTypeface(uiTypeface, Typeface.BOLD);
-        historyEmptyView.setBackground(shape(soft, 14, 0));
-        historyEmptyView.setFocusable(true);
-        historyEmptyView.setClickable(true);
-        historyEmptyView.setOnClickListener(v -> {
-            if (state.sessionExpired) actions.onPortal(); else actions.onSync();
-        });
-        historyEmptyView.setContentDescription("Sync attendance history from MyCamu");
-        addTop(historyContent, historyEmptyView, 4);
-        addBottom(body, 24);
+    private void openAttendanceHistory() {
+        showingHistory = true;
+        updateTimetable();
+        showPage(2);
+        weekScreenView.scrollToTop();
     }
 
     private View legendItem(String title, int color) {
@@ -1170,28 +1082,41 @@ final class DashboardView extends FrameLayout {
     }
 
     private void updateTimetable() {
-        if (scheduleRows == null || state == null) return;
-        scheduleContent.setVisibility(showingHistory ? GONE : VISIBLE);
-        historyContent.setVisibility(showingHistory ? VISIBLE : GONE);
-        scheduleExtras.setVisibility(showingHistory ? GONE : VISIBLE);
-        scheduleTab.setTextColor(showingHistory ? muted : ink);
-        historyTab.setTextColor(showingHistory ? ink : muted);
-        scheduleTab.setSelected(!showingHistory);
-        historyTab.setSelected(showingHistory);
-        scheduleTab.setBackground(showingHistory ? null : shape(surface, 10, border));
-        historyTab.setBackground(showingHistory ? shape(surface, 10, border) : null);
-        if (weekPulse != null) {
-            int total = weekPulse.setSchedule(state.timetable);
-            int campusDays = 0;
-            for (int count : weekPulse.counts) if (count > 0) campusDays++;
-            weekPulse.setVisibility(VISIBLE);
-            weekPulseMeta.setText(!state.timetableLoaded ? "Sync MyCamu to map your timetable."
-                    : state.timetable.isEmpty() ? "No classes scheduled!"
-                    : total == 0 ? "No class periods mapped this week."
-                    : total + (total == 1 ? " class" : " classes") + " across " + campusDays
-                    + (campusDays == 1 ? " campus day" : " campus days"));
+        if (weekScreenView != null) weekScreenView.update(palette.toComposeColors(), weekScreenState());
+    }
+
+    private WeekScreenUiState weekScreenState() {
+        WeekPulseView pulseSource = overviewWeekPulse;
+        int total = pulseSource == null ? 0 : pulseSource.setSchedule(state.timetable);
+        int[] pulseCounts = pulseSource == null ? new int[7] : pulseSource.counts;
+        int today = pulseSource == null ? Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY
+                : pulseSource.today;
+        int nextClassDay = pulseSource == null ? -1 : pulseSource.nextClassDay;
+        int campusDays = 0;
+        ArrayList<Integer> counts = new ArrayList<>(7);
+        for (int count : pulseCounts) { counts.add(count); if (count > 0) campusDays++; }
+        String[] dayNames = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+        Calendar visibleWeek = Calendar.getInstance();
+        visibleWeek.setFirstDayOfWeek(Calendar.SUNDAY);
+        visibleWeek.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY);
+        visibleWeek.set(Calendar.HOUR_OF_DAY, 0); visibleWeek.set(Calendar.MINUTE, 0);
+        visibleWeek.set(Calendar.SECOND, 0); visibleWeek.set(Calendar.MILLISECOND, 0);
+        SimpleDateFormat dateFormat = new SimpleDateFormat("d", Locale.getDefault());
+        ArrayList<String> dateLabels = new ArrayList<>(7);
+        for (int i = 0; i < 7; i++) {
+            Calendar day = (Calendar) visibleWeek.clone();
+            day.add(Calendar.DAY_OF_YEAR, i);
+            dateLabels.add(dateFormat.format(day.getTime()));
         }
-        scheduleUpdatedView.setText(showingHistory
+        String pulseMeta = !state.timetableLoaded ? "Sync MyCamu to map your timetable."
+                : state.timetable.isEmpty() ? "No classes scheduled!"
+                : total == 0 ? "No class periods mapped this week."
+                : total + (total == 1 ? " class" : " classes") + " across " + campusDays
+                    + (campusDays == 1 ? " campus day" : " campus days");
+        WeekPulseUiState pulse = new WeekPulseUiState(cyberpunk ? "CITY PULSE · CLASSES" : "WEEK RHYTHM",
+                cyberpunk, counts, java.util.Arrays.asList(dayNames), today, nextClassDay, dateLabels, pulseMeta);
+
+        String updatedText = showingHistory
                 ? state.classMarksUpdatedAt > 0
                     ? (state.syncError ? "Sync issue · attendance log last updated " : "Attendance log · Updated ")
                         + relativeAge(state.classMarksUpdatedAt)
@@ -1199,145 +1124,108 @@ final class DashboardView extends FrameLayout {
                 : state.timetableLoaded
                     ? (state.syncError ? "Sync issue · timetable last updated " : "MyCamu timetable · Updated ")
                         + relativeAge(state.timetableUpdatedAt)
-                    : state.syncError ? "Sync issue · open Home and refresh your timetable" : "Waiting for MyCamu timetable");
-        if (showingHistory) {
-            if (historyDirty) updateClassHistory();
-            return;
+                    : state.syncError ? "Sync issue · open Home and refresh your timetable" : "Waiting for MyCamu timetable";
+
+        ArrayList<ScheduleDayUiState> days = new ArrayList<>();
+        if (!showingHistory) {
+            HashSet<String> dates = new HashSet<>();
+            for (ScheduleItem item : state.timetable) dates.add(item.date);
+            boolean stillHasExpandedDay = false;
+            for (String date : expandedScheduleDays) if (dates.contains(date)) { stillHasExpandedDay = true; break; }
+            if (scheduleExpansionInitialized && !expandedScheduleDays.isEmpty() && !stillHasExpandedDay) {
+                expandedScheduleDays.clear();
+                scheduleExpansionInitialized = false;
+            }
+            if (!scheduleExpansionInitialized && !state.timetable.isEmpty()) {
+                Calendar todayDate = Calendar.getInstance();
+                todayDate.set(Calendar.HOUR_OF_DAY, 0); todayDate.set(Calendar.MINUTE, 0);
+                todayDate.set(Calendar.SECOND, 0); todayDate.set(Calendar.MILLISECOND, 0);
+                long todayStart = todayDate.getTimeInMillis();
+                String defaultDate = state.timetable.get(0).date;
+                for (ScheduleItem item : state.timetable) {
+                    if (item.startsAt >= todayStart) { defaultDate = item.date; break; }
+                }
+                expandedScheduleDays.add(defaultDate);
+                scheduleExpansionInitialized = true;
+            }
+            int index = 0;
+            while (index < state.timetable.size()) {
+                int end = index + 1;
+                String date = state.timetable.get(index).date == null ? "" : state.timetable.get(index).date;
+                while (end < state.timetable.size() && date.equals(state.timetable.get(end).date)) end++;
+                boolean expanded = expandedScheduleDays.contains(date);
+                ArrayList<ScheduleClassUiState> classes = new ArrayList<>();
+                if (expanded) for (int i = index; i < end; i++) {
+                    ScheduleItem item = state.timetable.get(i);
+                    String time = item.time == null ? "" : item.time;
+                    if (item.allDay) time = "All day";
+                    else {
+                        String[] range = time.split("\\s*[–—-]\\s*", 2);
+                        if (range.length == 2) time = range[0] + "\n" + range[1];
+                    }
+                    classes.add(new ScheduleClassUiState(date + "#" + i, time,
+                            item.name == null ? "" : item.name, item.code == null ? "" : item.code,
+                            item.details == null ? "" : item.details, item.allDay, item.cancelled));
+                }
+                days.add(new ScheduleDayUiState(date, daySummary(index, end), end - index, expanded, classes));
+                index = end;
+            }
         }
-        if (!scheduleDirty) return;
-        scheduleDirty = false;
-        scheduleRows.removeAllViews();
-        boolean hasSchedule = state.timetableLoaded && !state.timetable.isEmpty();
-        scheduleEmptyPanel.setVisibility(hasSchedule ? GONE : VISIBLE);
-        scheduleEmptyTitle.setText(state.sessionExpired ? "RECONNECT TO\nSEE YOUR WEEK."
+
+        ArrayList<AttendanceHistoryUiState> history = new ArrayList<>();
+        int shown = Math.min(historyLimit, state.classMarks.size());
+        String activeDay = "";
+        for (int i = 0; i < shown; i++) {
+            ClassMarkItem mark = state.classMarks.get(i);
+            String day = mark.day == null ? "" : mark.day;
+            String dayHeading = day.equals(activeDay) ? "" : day;
+            activeDay = day;
+            String status = "present".equals(mark.status) ? "Present"
+                    : "absent".equals(mark.status) ? "Absent"
+                    : "not_taken".equals(mark.status) ? "Not marked" : "Unable to confirm";
+            String details = mark.code == null || mark.code.isEmpty() ? safe(mark.time) : mark.code + "  ·  " + safe(mark.time);
+            if (mark.leaveType != null && !mark.leaveType.isEmpty())
+                details += "\n" + mark.leaveType + " · " + safe(mark.leaveStatus);
+            history.add(new AttendanceHistoryUiState(day + "#" + i + "#" + mark.startsAt,
+                    dayHeading, safe(mark.time), safe(mark.name), safe(mark.code), details, status, mark.color));
+        }
+        String historyEmpty = state.classMarks.isEmpty()
+                ? state.sessionExpired ? "Reconnect MyCamu to load attendance history  →"
+                : state.syncError ? "Sync failed · tap to retry attendance history  →"
+                : state.classMarksUpdatedAt > 0 ? "No attendance records returned · tap to refresh  →"
+                : "Tap to sync MyCamu and load attendance history  →" : null;
+        String historyAction = state.sessionExpired ? "Reconnect MyCamu  →" : "Refresh attendance history  →";
+        String historyActionDescription = state.sessionExpired
+                ? "Reconnect MyCamu to load attendance history" : "Sync attendance history from MyCamu";
+        String emptyTitle = state.sessionExpired ? "RECONNECT TO\nSEE YOUR WEEK."
                 : state.timetableLoaded && state.timetable.isEmpty() ? "NO CLASSES\nON YOUR\nSCHEDULE."
-                : state.syncError ? "YOUR WEEK\nNEEDS A\nREFRESH."
-                : "YOUR WEEK\nIS WAITING.");
-        scheduleEmptyDetail.setText(state.sessionExpired
-                ? "Sign in to MyCamu again to refresh your timetable."
+                : state.syncError ? "YOUR WEEK\nNEEDS A\nREFRESH." : "YOUR WEEK\nIS WAITING.";
+        String emptyDetail = state.sessionExpired ? "Sign in to MyCamu again to refresh your timetable."
                 : state.timetableLoaded && state.timetable.isEmpty()
                     ? "MyCamu has no classes scheduled this week. Your attendance history is still available."
                     : state.syncError ? "Rollcall could not refresh the timetable. Try again when the connection is ready."
-                    : "Sync MyCamu to display your connected classes here.");
-        scheduleEmptyView.setText(state.sessionExpired ? "Reconnect MyCamu  →"
+                    : "Sync MyCamu to display your connected classes here.";
+        String actionLabel = state.sessionExpired ? "Reconnect MyCamu  →"
                 : state.timetableLoaded && state.timetable.isEmpty() ? "Refresh timetable  →"
-                : state.syncError ? "Try again  →" : "Sync timetable  →");
-        scheduleEmptyView.setContentDescription(state.sessionExpired ? "Reconnect MyCamu to load the timetable"
-                : "Refresh timetable from MyCamu");
-        HashSet<String> dates = new HashSet<>();
-        for (ScheduleItem item : state.timetable) dates.add(item.date);
-        boolean stillHasExpandedDay = false;
-        for (String date : expandedScheduleDays) if (dates.contains(date)) { stillHasExpandedDay = true; break; }
-        if (scheduleExpansionInitialized && !expandedScheduleDays.isEmpty() && !stillHasExpandedDay) {
-            expandedScheduleDays.clear();
-            scheduleExpansionInitialized = false;
-        }
-        if (!scheduleExpansionInitialized && !state.timetable.isEmpty()) {
-            Calendar today = Calendar.getInstance();
-            today.set(Calendar.HOUR_OF_DAY, 0); today.set(Calendar.MINUTE, 0);
-            today.set(Calendar.SECOND, 0); today.set(Calendar.MILLISECOND, 0);
-            long todayStart = today.getTimeInMillis();
-            String defaultDate = state.timetable.get(0).date;
-            for (ScheduleItem item : state.timetable) {
-                if (item.startsAt >= todayStart) { defaultDate = item.date; break; }
-            }
-            expandedScheduleDays.add(defaultDate);
-            scheduleExpansionInitialized = true;
-        }
-        int index = 0;
-        while (index < state.timetable.size()) {
-            int end = index + 1;
-            String date = state.timetable.get(index).date;
-            while (end < state.timetable.size() && date.equals(state.timetable.get(end).date)) end++;
+                : state.syncError ? "Try again  →" : "Sync timetable  →";
+        WeekDataStatus timetableStatus = weekDataStatus(state.timetableLoaded, !state.timetable.isEmpty(),
+                state.syncError, state.sessionExpired);
+        boolean historyLoaded = state.classMarksUpdatedAt > 0 || !state.classMarks.isEmpty();
+        WeekDataStatus historyStatus = weekDataStatus(historyLoaded, !state.classMarks.isEmpty(),
+                state.syncError, state.sessionExpired);
+        return new WeekScreenUiState(showingHistory, timetableStatus, historyStatus, updatedText, pulse,
+                state.timetableLoaded, days,
+                emptyTitle, emptyDetail, actionLabel,
+                state.sessionExpired ? "Reconnect MyCamu to load the timetable" : "Sync timetable from MyCamu",
+                history, historyEmpty, historyAction, historyActionDescription,
+                Math.max(0, state.classMarks.size() - shown));
+    }
 
-            LinearLayout dayCard = column();
-            dayCard.setPadding(dp(16), dp(8), dp(16), dp(8));
-            dayCard.setBackground(industrialSurface(surface, 20, border));
-            LinearLayout dayHeader = row();
-            dayHeader.setGravity(Gravity.CENTER_VERTICAL);
-            TextView day = text(date, 15, ink, Typeface.BOLD);
-            day.setIncludeFontPadding(false);
-            day.setMinHeight(dp(40));
-            day.setGravity(Gravity.CENTER_VERTICAL);
-            dayHeader.addView(day, new LinearLayout.LayoutParams(0, -2, 1));
-            int count = end - index;
-            dayHeader.addView(text(count + (count == 1 ? " class" : " classes"), 12, muted, Typeface.NORMAL));
-            boolean expanded = expandedScheduleDays.contains(date);
-            TextView expansionIcon = text(expanded ? "−" : "+", 18, green, Typeface.BOLD);
-            expansionIcon.setGravity(Gravity.CENTER);
-            expansionIcon.setPadding(dp(8), 0, 0, 0);
-            dayHeader.addView(expansionIcon, lp(dp(40), dp(48)));
-            dayCard.addView(dayHeader);
-
-            TextView daySummary = text(daySummary(index, end), 11, muted, Typeface.NORMAL);
-            daySummary.setPadding(0, dp(4), 0, dp(6));
-            daySummary.setVisibility(expanded ? GONE : VISIBLE);
-            dayCard.addView(daySummary);
-            LinearLayout dayItems = column();
-            dayItems.setVisibility(expanded ? VISIBLE : GONE);
-            dayCard.addView(dayItems);
-            dayHeader.setContentDescription(date + ", " + count + (count == 1 ? " class" : " classes")
-                    + (expanded ? ", collapse" : ", expand"));
-            dayHeader.setOnClickListener(v -> {
-                if (expandedScheduleDays.contains(date)) expandedScheduleDays.remove(date);
-                else expandedScheduleDays.add(date);
-                pendingScheduleRevealDate = date;
-                scheduleDirty = true;
-                updateTimetable();
-            });
-
-            for (int i = expanded ? index : end; i < end; i++) {
-                ScheduleItem item = state.timetable.get(i);
-                LinearLayout line = row();
-                line.setGravity(Gravity.CENTER_VERTICAL);
-                line.setPadding(0, dp(7), 0, dp(7));
-                String timeLabel = item.time;
-                if (!item.allDay) {
-                    String[] range = item.time.split("\\s*[–—-]\\s*", 2);
-                    if (range.length == 2) timeLabel = range[0] + "\n" + range[1];
-                } else timeLabel = "All day";
-                TextView time = text(timeLabel, 11, green, Typeface.BOLD);
-                time.setGravity(Gravity.CENTER_VERTICAL);
-                time.setMaxLines(2);
-                time.setIncludeFontPadding(false);
-                line.addView(time, lp(dp(72), -2));
-                LinearLayout copy = column();
-                String title = item.name + (item.code.isEmpty() ? "" : "  ·  " + item.code);
-                TextView course = text(title, 13, ink, Typeface.BOLD);
-                course.setMaxLines(2);
-                copy.addView(course);
-                if (!item.details.isEmpty()) copy.addView(text(item.details, 11, muted, Typeface.NORMAL), topLp(-1, -2, 2));
-                line.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
-                if (item.cancelled) {
-                    TextView canceled = text("Cancelled", 8, muted, Typeface.BOLD);
-                    canceled.setPadding(dp(5), dp(4), dp(5), dp(4));
-                    canceled.setBackground(shape(soft, 8, 0));
-                    line.addView(canceled, lp(-2, -2));
-                }
-                dayItems.addView(line);
-                if (i < end - 1) {
-                    View divider = new View(getContext());
-                    divider.setBackgroundColor(border);
-                    LinearLayout.LayoutParams dividerParams = lp(-1, dp(1));
-                    dividerParams.leftMargin = dp(72);
-                    dayItems.addView(divider, dividerParams);
-                }
-            }
-            LinearLayout.LayoutParams dayParams = lp(-1, -2);
-            dayParams.bottomMargin = dp(8);
-            scheduleRows.addView(dayCard, dayParams);
-            if (date.equals(pendingScheduleRevealDate)) {
-                pendingScheduleRevealDate = "";
-                View revealed = expanded ? dayItems : daySummary;
-                if (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()) {
-                    revealed.setAlpha(.9f);
-                    revealed.setTranslationY(dp(4));
-                    revealed.animate().alpha(1f).translationY(0f).setDuration(180)
-                            .setInterpolator(new android.view.animation.PathInterpolator(.2f, 0f, 0f, 1f)).start();
-                }
-            }
-            index = end;
-        }
+    private WeekDataStatus weekDataStatus(boolean loaded, boolean hasData, boolean syncError, boolean sessionExpired) {
+        if (sessionExpired) return WeekDataStatus.SESSION_EXPIRED;
+        if (syncError) return hasData ? WeekDataStatus.CACHED : WeekDataStatus.SYNC_FAILED;
+        if (!loaded) return WeekDataStatus.NOT_LOADED;
+        return hasData ? WeekDataStatus.POPULATED : WeekDataStatus.LOADED_EMPTY;
     }
 
     private void buildOdDetailsPage() {
@@ -1645,63 +1533,7 @@ final class DashboardView extends FrameLayout {
         return shortName.length() == 0 ? name : shortName.toString();
     }
 
-    private void updateClassHistory() {
-        historyDirty = false;
-        historyRows.removeAllViews();
-        historyEmptyView.setVisibility(state.classMarks.isEmpty() ? VISIBLE : GONE);
-        historyEmptyView.setText(state.sessionExpired ? "Reconnect MyCamu to load attendance history  →"
-                : state.syncError ? "Sync failed · tap to retry attendance history  →"
-                : state.classMarksUpdatedAt > 0 ? "No attendance records returned · tap to refresh  →"
-                : "Tap to sync MyCamu and load attendance history  →");
-        historyEmptyView.setContentDescription(state.sessionExpired ? "Reconnect MyCamu to load attendance history"
-                : "Sync attendance history from MyCamu");
-        int shown = Math.min(historyLimit, state.classMarks.size());
-        String activeDay = "";
-        for (int i = 0; i < shown; i++) {
-            ClassMarkItem mark = state.classMarks.get(i);
-            if (!mark.day.equals(activeDay)) {
-                activeDay = mark.day;
-                TextView day = label(activeDay.toUpperCase(Locale.ROOT), 9, muted, Typeface.BOLD);
-                day.setPadding(dp(2), dp(9), dp(2), dp(3));
-                historyRows.addView(day);
-            }
-            LinearLayout line = row();
-            line.setGravity(Gravity.CENTER_VERTICAL);
-            line.setPadding(dp(10), dp(8), dp(10), dp(8));
-            line.setBackground(shape(surface, 11, border));
-            LinearLayout copy = column();
-            TextView title = text(mark.name, 12, ink, Typeface.BOLD);
-            title.setMaxLines(2);
-            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            copy.addView(title);
-            String detail = mark.code.isEmpty() ? mark.time : mark.code + "  ·  " + mark.time;
-            if (!mark.leaveType.isEmpty()) detail += "\n" + mark.leaveType + " · " + mark.leaveStatus;
-            TextView sub = text(detail, 10, muted, Typeface.NORMAL);
-            sub.setMaxLines(1);
-            copy.addView(sub, topLp(-1, -2, 2));
-            line.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
-            String status = "present".equals(mark.status) ? "Present"
-                    : "absent".equals(mark.status) ? "Absent"
-                    : "not_taken".equals(mark.status) ? "Not marked"
-                    : "Unable to confirm";
-            TextView badge = text(status, 9, mark.color, Typeface.BOLD);
-            badge.setGravity(Gravity.CENTER);
-            badge.setPadding(dp(8), dp(5), dp(8), dp(5));
-            badge.setBackground(shape(soft, 9, 0));
-            badge.setContentDescription(mark.name + ", " + status);
-            line.addView(badge, lp(-2, -2));
-            LinearLayout.LayoutParams params = lp(-1, -2);
-            params.bottomMargin = dp(5);
-            historyRows.addView(line, params);
-        }
-        if (shown < state.classMarks.size()) {
-            TextView more = text("Show older · " + (state.classMarks.size() - shown) + " more", 11, green, Typeface.BOLD);
-            more.setGravity(Gravity.CENTER);
-            more.setMinHeight(dp(44));
-            more.setOnClickListener(v -> { historyLimit += 30; updateClassHistory(); });
-            historyRows.addView(more, lp(-1, dp(44)));
-        }
-    }
+    private static String safe(String value) { return value == null ? "" : value; }
 
     private String daySummary(int start, int end) {
         String first = "", last = "";
