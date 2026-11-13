@@ -913,12 +913,12 @@ final class DashboardView extends FrameLayout {
                 semesters.add(course.semester);
             }
             courses.add(course);
-            if (gradePoint(course.grade) >= 0 && course.credits > 0) eligible.add(course);
+            if (AcademicRecords.gradePoint(course.grade) >= 0 && course.credits > 0) eligible.add(course);
         }
-        Collections.sort(semesters, (a, b) -> Integer.compare(semesterNumber(b), semesterNumber(a)));
+        Collections.sort(semesters, (a, b) -> Integer.compare(AcademicRecords.semesterNumber(b), AcademicRecords.semesterNumber(a)));
         double weighted = 0, creditTotal = 0;
         for (AcademicCourse course : eligible) {
-            weighted += course.credits * gradePoint(course.grade);
+            weighted += course.credits * AcademicRecords.gradePoint(course.grade);
             creditTotal += course.credits;
         }
         double cgpa = creditTotal == 0 ? Double.NaN : weighted / creditTotal;
@@ -933,7 +933,7 @@ final class DashboardView extends FrameLayout {
         summary.addView(value, topLp(-1, -2, 2));
         double earnedCredits = 0;
         for (AcademicCourse course : eligible)
-            if (gradePoint(course.grade) >= 5) earnedCredits += course.credits;
+            if (AcademicRecords.gradePoint(course.grade) >= 5) earnedCredits += course.credits;
         summary.addView(text(String.format(Locale.getDefault(), "%.1f credits counted · %.1f earned · %d semesters",
                 creditTotal, earnedCredits, semesters.size()),
                 13, palette.heroMuted, Typeface.NORMAL), topLp(-1, -2, 1));
@@ -953,14 +953,14 @@ final class DashboardView extends FrameLayout {
         for (String semester : semesters) {
             double termWeighted = 0, termCredits = 0;
             for (AcademicCourse course : grouped.get(semester)) {
-                int point = gradePoint(course.grade);
+                int point = AcademicRecords.gradePoint(course.grade);
                 if (point < 0 || course.credits <= 0) continue;
                 termWeighted += course.credits * point;
                 termCredits += course.credits;
             }
             if (termCredits > 0) trend.add(new GpaPoint(semester, (float) (termWeighted / termCredits)));
         }
-        Collections.sort(trend, (a, b) -> Integer.compare(semesterNumber(a.semester), semesterNumber(b.semester)));
+        Collections.sort(trend, (a, b) -> Integer.compare(AcademicRecords.semesterNumber(a.semester), AcademicRecords.semesterNumber(b.semester)));
         if (!trend.isEmpty()) {
             addTop(academicsContent, text("Semester GPA trend", 18, ink, Typeface.BOLD), 20);
             SemesterGpaChart chart = new SemesterGpaChart(getContext(), palette.highlight, muted, uiTypeface);
@@ -974,7 +974,7 @@ final class DashboardView extends FrameLayout {
             if (courses == null || courses.isEmpty()) continue;
             double termWeighted = 0, termCredits = 0;
             for (AcademicCourse course : courses) {
-                int point = gradePoint(course.grade);
+                int point = AcademicRecords.gradePoint(course.grade);
                 if (point < 0 || course.credits <= 0) continue;
                 termWeighted += course.credits * point;
                 termCredits += course.credits;
@@ -985,7 +985,7 @@ final class DashboardView extends FrameLayout {
             LinearLayout title = row();
             title.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout titleText = column();
-            titleText.addView(text(semesterTitle(semester) + " · SGPA", 16, ink, Typeface.BOLD));
+            titleText.addView(text(AcademicRecords.semesterTitle(semester) + " · SGPA", 16, ink, Typeface.BOLD));
             titleText.addView(text(String.format(Locale.getDefault(), "%d course records · %.1f GPA credits",
                     courses.size(), termCredits), 12, muted, Typeface.NORMAL), topLp(-1, -2, 2));
             title.addView(titleText, new LinearLayout.LayoutParams(0, -2, 1));
@@ -1023,7 +1023,7 @@ final class DashboardView extends FrameLayout {
             }
             section.addView(courseRows, topLp(-1, -2, 4));
             section.setFocusable(true);
-            section.setContentDescription(semesterTitle(semester) + ", SGPA "
+            section.setContentDescription(AcademicRecords.semesterTitle(semester) + ", SGPA "
                     + (Double.isNaN(sgpa) ? "not available" : String.format(Locale.getDefault(), "%.2f", sgpa))
                     + ". Double tap to show or hide course grades.");
             section.setOnClickListener(v -> courseRows.setVisibility(courseRows.getVisibility() == VISIBLE ? GONE : VISIBLE));
@@ -1038,38 +1038,6 @@ final class DashboardView extends FrameLayout {
         }
         if (!next.academicStatus.isEmpty()) addTop(academicsContent,
                 text(next.academicStatus, 12, muted, Typeface.NORMAL), 4);
-    }
-
-    private static int gradePoint(String grade) {
-        if (grade == null) return -1;
-        switch (grade.trim().toUpperCase(Locale.ROOT)) {
-            case "O": case "S": return 10;
-            case "A+": return 9;
-            case "A": return 8;
-            case "B+": return 7;
-            case "B": return 6;
-            case "C": return 5;
-            case "U": case "SA": case "WD": return 0;
-            default: return -1;
-        }
-    }
-
-    private static int semesterNumber(String value) {
-        java.util.regex.Matcher match = java.util.regex.Pattern.compile("(?i)semester\\s*[-:]?\\s*(\\d+)").matcher(value);
-        if (!match.find()) return 0;
-        int term = Integer.parseInt(match.group(1));
-        java.util.regex.Matcher year = java.util.regex.Pattern.compile("20\\d{2}").matcher(value);
-        return year.find() ? Integer.parseInt(year.group()) * 10 + term : term;
-    }
-
-    private static String semesterTitle(String value) {
-        java.util.regex.Matcher match = java.util.regex.Pattern.compile("(?i)semester\\s*[-:]?\\s*\\d+").matcher(value);
-        return match.find() ? match.group().replaceAll("\\s+", " ") : value;
-    }
-
-    private static String semesterShortLabel(String value) {
-        java.util.regex.Matcher match = java.util.regex.Pattern.compile("(?i)semester\\s*[-:]?\\s*(\\d+)").matcher(value);
-        return match.find() ? "S" + match.group(1) : "Sem";
     }
 
     private void buildTimetablePage() {
@@ -4000,7 +3968,7 @@ final class DashboardView extends FrameLayout {
             points.addAll(values);
             StringBuilder description = new StringBuilder("Semester GPA trend. ");
             for (GpaPoint point : points)
-                description.append(semesterTitle(point.semester)).append(": ")
+                description.append(AcademicRecords.semesterTitle(point.semester)).append(": ")
                         .append(String.format(Locale.ROOT, "%.2f", point.value)).append(". ");
             setContentDescription(description.toString());
             invalidate();
@@ -4037,7 +4005,7 @@ final class DashboardView extends FrameLayout {
 
                 String score = String.format(Locale.getDefault(), "%.2f", point.value);
                 canvas.drawText(score, x - labels.measureText(score) / 2f, Math.max(dp(12), barTop - dp(6)), labels);
-                String term = semesterShortLabel(point.semester);
+                String term = AcademicRecords.semesterShortLabel(point.semester);
                 canvas.drawText(term, x - labels.measureText(term) / 2f, getHeight() - dp(5), labels);
             }
         }

@@ -6,7 +6,7 @@
 - Chosen because it is the verified native Java Torch Genesis implementation and retains `android/TORCH_GENESIS_DESIGN.md`. The compared `design/torch-genesis-native-polish`, `design/torch-genesis-exact-app`, and `design/torch-genesis-exact-app-wide` refs modify the same core Java UI and remove that canonical design document; `redesign/torch-genesis-reference-exact` adds an HTML/WebView runtime and was excluded.
 - App identity is `com.iniexe.rollcall`; baseline is versionCode 24 / versionName 1.0.23. Preserve that identity and treat the versionCode difference from the later hybrid app (25) as a release-compatibility decision, not a cleanup opportunity.
 - Source presence was checked in the selected baseline and against the original Java backup (`00b3f8eb07809d4686152f54e158c87fa28999e7`) and the current local hybrid workspace. The hybrid workspace contains extensive uncommitted changes and was not copied or modified.
-- Baseline verification: `ANDROID_HOME=/home/inian/Android/Sdk ANDROID_SDK_ROOT=/home/inian/Android/Sdk ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon` passed on 2026-11-13. Four JVM test classes ran 9 tests with no failures, errors or skips. No emulator or live external account was used.
+- Verification: `ANDROID_HOME=/home/inian/Android/Sdk ANDROID_SDK_ROOT=/home/inian/Android/Sdk ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon` passed on 2026-11-13. The initial baseline ran 9 tests across four classes; the Academics helper extraction adds two tests (5 classes, 11 tests total). No emulator or live external account was used.
 
 Status terms: **Present** means the selected branch contains an implementation; **Build/test verified** means included in the successful local Gradle command; **Unverified** means runtime/device/provider behavior was not exercised. This is not a claim of full production parity.
 
@@ -32,6 +32,7 @@ Status terms: **Present** means the selected branch contains an implementation; 
 - `MainActivity.java` coordinates onboarding, WebViews, authentication, snapshot refresh, parsing, preferences, dashboard state and navigation. It remains high-coupling and is the main refactoring candidate, but should only be split behind characterization tests.
 - `DashboardView.java` owns the Torch Genesis native dashboard, its five-page navigation, course planner, timetable/history/OD and academic presentation. Keep presentation changes here and calculations in shared model/helper code where already established.
 - `Attendance.java` is the attendance calculation model.
+- `AcademicRecords.java` owns KCT grade-point and semester-label parsing used by the Academics presentation; it has JVM regression tests.
 - `LiveSnapshotStore.java` validates and persists attendance, timetable, leave and class-history data shared by the Activity, workers and widgets.
 - Workers, receivers, notifications and widgets live as focused Java classes in the app package. The project is one Android app module; there is no separate data, domain, or UI module.
 
