@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.FrameLayout;
 
 /** Offline host for Java dashboard instrumentation tests; absent from release builds. */
@@ -26,6 +27,14 @@ public final class DashboardTestActivity extends Activity {
                     | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
             getWindow().getInsetsController().setSystemBarsAppearance(light ? flags : 0, flags);
         }
+        int systemUi = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+        if (Build.VERSION.SDK_INT < 30 && light) {
+            systemUi |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= 26) systemUi |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
+        getWindow().getDecorView().setSystemUiVisibility(systemUi);
         dashboard = new DashboardView(this, new DashboardView.Actions() {
             @Override public void onSync() { }
             @Override public void onPortal() { }
@@ -40,6 +49,7 @@ public final class DashboardTestActivity extends Activity {
             @Override public void onCourse(String code) { }
         }, AppPalette.get(!light, 0));
         FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(canvas);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             root.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
                     insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());

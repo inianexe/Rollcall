@@ -991,7 +991,7 @@ final class DashboardView extends FrameLayout {
         for (String semester : semesters) wheelLabels.add(AcademicRecords.semesterTitle(semester));
         LinearLayout wheelRow = row();
         wheelRow.setGravity(Gravity.CENTER_VERTICAL);
-        OptionWheelView wheel = new OptionWheelView(getContext(), ink, muted, palette.highlight);
+        OptionWheelView wheel = new OptionWheelView(getContext(), ink, muted, palette.highlight, uiBoldTypeface);
         wheel.setItems(wheelLabels, selectedSemester.isEmpty() ? 0 : semesters.indexOf(selectedSemester) + 1,
                 index -> { selectedSemester = index == 0 ? "" : semesters.get(index - 1); updateAcademics(state); });
         TextView previous = text("PREV", 10, linkInk, Typeface.BOLD);
@@ -1155,7 +1155,7 @@ final class DashboardView extends FrameLayout {
         historyHeading.addView(text("Attendance history", 16, ink, Typeface.BOLD),
                 new LinearLayout.LayoutParams(0, -2, 1));
         historyContent.addView(historyHeading);
-        FolderFloatView folder = new FolderFloatView(getContext(), 0xFFC8C8FF, ink, soft,
+        FolderFloatView folder = new FolderFloatView(getContext(), 0xFFC8C8FF, ink, soft, uiBoldTypeface,
                 () -> { showAllOd = false; openOdDetails(); },
                 () -> { showAllOd = true; openOdDetails(); });
         historyContent.addView(folder, topLp(-1, -2, 8));

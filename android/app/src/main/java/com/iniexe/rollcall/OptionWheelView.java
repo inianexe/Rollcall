@@ -25,10 +25,10 @@ final class OptionWheelView extends View {
     private boolean dragging;
     private int selected;
 
-    OptionWheelView(Context context, int ink, int muted, int highlight) {
+    OptionWheelView(Context context, int ink, int muted, int highlight, android.graphics.Typeface typeface) {
         super(context);
         this.ink = ink; this.muted = muted; this.highlight = highlight;
-        paint.setTypeface(android.graphics.Typeface.create("sans-serif-medium", 1));
+        paint.setTypeface(typeface);
         paint.setTextSize(getResources().getDisplayMetrics().scaledDensity * 19f);
         setFocusable(true);
         setClickable(true);

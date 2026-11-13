@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
@@ -19,11 +20,11 @@ final class FolderFloatView extends LinearLayout {
     private ValueAnimator flapAnimator;
     private boolean open;
 
-    FolderFloatView(Context context, int folderColor, int ink, int noteColor,
+    FolderFloatView(Context context, int folderColor, int ink, int noteColor, Typeface typeface,
                     Runnable currentSemester, Runnable allRecords) {
         super(context);
         setOrientation(VERTICAL);
-        art = new FolderArt(context, folderColor, ink);
+        art = new FolderArt(context, folderColor, ink, typeface);
         art.setContentDescription("Leave and OD folder, closed. Double tap to open actions.");
         art.setFocusable(true);
         art.setClickable(true);
@@ -32,16 +33,16 @@ final class FolderFloatView extends LinearLayout {
         notes = new LinearLayout(context);
         notes.setOrientation(VERTICAL);
         notes.setVisibility(GONE);
-        notes.addView(note("This semester", ink, noteColor, currentSemester));
-        notes.addView(note("All Leave & OD", ink, noteColor, allRecords));
+        notes.addView(note("This semester", ink, noteColor, typeface, currentSemester));
+        notes.addView(note("All Leave & OD", ink, noteColor, typeface, allRecords));
         addView(notes, new LayoutParams(-1, -2));
     }
 
-    private View note(String label, int ink, int fill, Runnable action) {
+    private View note(String label, int ink, int fill, Typeface typeface, Runnable action) {
         TextView text = new TextView(getContext());
         text.setText(label);
         text.setTextSize(13);
-        text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        text.setTypeface(typeface);
         text.setTextColor(ink);
         text.setGravity(Gravity.CENTER_VERTICAL);
         text.setPadding(dp(18), 0, dp(12), 0);
@@ -101,9 +102,12 @@ final class FolderFloatView extends LinearLayout {
         final Path flap = new Path();
         final RectF body = new RectF();
         final int folder, ink;
+        final Typeface typeface;
         float progress;
 
-        FolderArt(Context context, int folder, int ink) { super(context); this.folder = folder; this.ink = ink; }
+        FolderArt(Context context, int folder, int ink, Typeface typeface) {
+            super(context); this.folder = folder; this.ink = ink; this.typeface = typeface;
+        }
 
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
@@ -127,7 +131,7 @@ final class FolderFloatView extends LinearLayout {
             canvas.drawPath(flap, paint);
             paint.setColor(ink);
             paint.setTextSize(12 * getResources().getDisplayMetrics().scaledDensity);
-            paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            paint.setTypeface(typeface);
             canvas.drawText("LEAVE & OD", left + 16 * d, top + 41 * d, paint);
         }
     }
