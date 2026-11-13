@@ -41,7 +41,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --no-daemon --stacktrace
       - name: Upload JVM test reports
         uses: actions/upload-artifact@v4
         if: always()

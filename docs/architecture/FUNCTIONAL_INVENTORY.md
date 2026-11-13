@@ -6,7 +6,7 @@
 - Chosen because it is the verified native Java Torch Genesis implementation and retains `android/TORCH_GENESIS_DESIGN.md`. The compared `design/torch-genesis-native-polish`, `design/torch-genesis-exact-app`, and `design/torch-genesis-exact-app-wide` refs modify the same core Java UI and remove that canonical design document; `redesign/torch-genesis-reference-exact` adds an HTML/WebView runtime and was excluded.
 - App identity is `com.iniexe.rollcall`; baseline is versionCode 24 / versionName 1.0.23. Preserve that identity and treat the versionCode difference from the later hybrid app (25) as a release-compatibility decision, not a cleanup opportunity.
 - Source presence was checked in the selected baseline and against the original Java backup (`00b3f8eb07809d4686152f54e158c87fa28999e7`) and the current local hybrid workspace. The hybrid workspace contains extensive uncommitted changes and was not copied or modified.
-- Verification: `ANDROID_HOME=/home/inian/Android/Sdk ANDROID_SDK_ROOT=/home/inian/Android/Sdk ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon` passed on 2026-11-13. The initial baseline ran 9 tests across four classes; academic parsing and attendance characterization add seven tests (6 classes, 16 tests total). No emulator or live external account was used.
+- Verification: JVM tests, debug APK, and debug instrumentation APK are built in CI. Java unit coverage currently includes 16 tests across six classes; the AndroidJUnit4 navigation fixture exercises navigation, schedule/history switching, timetable, and attendance history on a temporary emulator.
 
 Status terms: **Present** means the selected branch contains an implementation; **Build/test verified** means included in the successful local Gradle command; **Unverified** means runtime/device/provider behavior was not exercised. This is not a claim of full production parity.
 
@@ -24,7 +24,7 @@ Status terms: **Present** means the selected branch contains an implementation; 
 | Home-screen widgets | No widget sources found in backup | Present: today, week, streak, reminder and attendance widgets | Present | Build verified; launcher-host behavior unverified |
 | Firebase account, FCM and cloud snapshots | No matching integration sources found in backup | Present: account client, snapshot payload/worker and update messaging | Present | Build verified; Firebase credentials, account flow, FCM delivery and server contract unverified |
 | GitHub update check, APK verification and installer | No updater sources found in backup | Present: release notifier, `UpdateActivity`, digest/signer checks and `FileProvider` | Present | Source/build only; download, signature and install path unverified |
-| Navigation, lifecycle, offline and accessibility | Native Activity/View flow | Native Java Activity/View flow and cached local snapshot | Present with additional migration regression tests in historical Compose branch | No emulator/instrumentation run in this baseline; lifecycle/offline behavior needs device coverage |
+| Navigation, lifecycle, offline and accessibility | Native Activity/View flow | Native Java Activity/View flow and cached local snapshot | Present with migration regression tests in historical Compose branch | Test-only Activity supports navigation, timetable, and history instrumentation; lifecycle/offline behavior still needs device coverage |
 | Compose/Kotlin UI | None | None in `app/src/main/java` (all Kotlin UI avoided) | Experimental Kotlin files exist in the dirty hybrid workspace and historical migration branch | Intentionally excluded from this Java-native branch |
 
 ## Current Java responsibilities
@@ -39,7 +39,7 @@ Status terms: **Present** means the selected branch contains an implementation; 
 ## Known limits and next steps
 
 1. Add fixture-driven tests for `Attendance`, MyCamu/KCT parsing and snapshot merges before extracting code from `MainActivity` or `DashboardView`.
-2. Add Android instrumentation coverage for navigation/lifecycle and permission-dependent behavior; no `src/androidTest` suite exists on this baseline.
+2. Expand Android instrumentation coverage to lifecycle and permission-dependent behavior; current `src/androidTest` coverage is limited to navigation, timetable, and attendance history.
 3. Verify live MyCamu/KCT, Firebase, FCM, WorkManager, alarms, widgets and updater flows only with dedicated test accounts/devices.
 4. Resolve release lineage before publishing: the Java Torch baseline uses versionCode 24 while the later app reached versionCode 25. Never lower the installed app's versionCode for an upgrade.
-5. The Obsidian vault location was not available in this worktree; no external vault records were changed.
+5. Engineering notes live in the existing Obsidian vault at `/home/inian/Projects/Rollcall-2.0/genesis-project`; the Java restoration log and task tracker are updated there. The vault remains in its separate worktree and is not included in this branch.
