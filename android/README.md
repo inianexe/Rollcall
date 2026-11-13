@@ -1,46 +1,42 @@
-# Rollcall for Android
+# Rollcall Android app
 
-Rollcall opens MyCamu's attendance page in an in-app WebView, requests the same-origin attendance endpoint, and displays the returned course counts on a native dashboard. The same WebView stays alive behind the dashboard and refreshes once a minute while Rollcall is in the foreground. Attendance is saved on-device so the dashboard remains useful after the app restarts.
+Rollcall is a Java Android app that reads MyCamu attendance through its authenticated in-app WebView and presents it in a native Torch Genesis dashboard. The selected baseline also includes KCT portal views, local snapshot persistence, reminders, notifications, widgets, Firebase account/snapshot integration and a verified APK update flow. These integrations are source-present; external service and device behavior is not implied to be verified by a successful build.
 
-The request reads the selected program from the MyCamu page's `ngStorage-progressionData` and posts to `/api/Attendance/getDtaForStupage`. The response is validated before Rollcall saves course name, course code, attended periods, and total periods. No credentials or attendance rows are sent to a Rollcall server. The endpoint is undocumented and can change.
+## Project structure
 
-## Android project layout
+- `app/src/main/java/com/iniexe/rollcall/MainActivity.java` coordinates onboarding, MyCamu/KCT WebViews, synchronization, local preferences, screen navigation and UI state.
+- `app/src/main/java/com/iniexe/rollcall/DashboardView.java` renders the native dashboard and its Home, Courses, Week, Lab and Academics experiences.
+- `app/src/main/java/com/iniexe/rollcall/Attendance.java` owns attendance calculations.
+- `app/src/main/java/com/iniexe/rollcall/LiveSnapshotStore.java` validates and persists attendance, timetable, leave and class-history snapshots used by UI, workers and widgets.
+- Other Java files implement WorkManager jobs, reminders, event notifications, home-screen widgets, Firebase/cloud integration and the updater.
+- `app/src/main/res/` contains Android resources and widget layouts; `app/src/main/assets/fonts/` contains bundled typography and license notices.
+- `app/src/test/` contains JVM tests. The selected baseline currently has no `src/androidTest/` instrumentation suite.
+- `TORCH_GENESIS_DESIGN.md` is the canonical design reference. The HTML prototype is a reference only, never the Android runtime.
 
-- `app/src/main/java/.../MainActivity.java`: embedded MyCamu WebView, same-origin attendance fetch, and one-minute foreground refresh.
-- `app/src/main/java/.../DashboardView.java`: native Java View dashboard styled after `UI IDEAS/rollcall-dashboard.html`, with overview, searchable courses, live attendance ring, target editor, and interactive attendance planner. Short ease transitions use alpha, scale, and translation animations.
-- `app/src/main/java/.../LiveSnapshotStore.java`: validates the in-process snapshot handoff and persists attendance rows locally.
-- `app/src/main/java/.../Attendance.java`: validates counts and calculates percentages and recovery guidance for the selected target.
-- `app/src/main/AndroidManifest.xml`: launcher, WebView activity, and internet permission. No overlay or accessibility service is declared.
-- `gradlew`, `gradlew.bat`, `gradle/wrapper/`: pinned Gradle wrapper for repeatable builds.
+The project uses a single Android `:app` module. Its configured identity is `com.iniexe.rollcall`, compile/target SDK 35, min SDK 23, versionCode 24 and versionName 1.0.23.
 
-## Build and install
+## Build and test
 
-Install Android Studio or the Android command line tools, including SDK Platform 35 and Build Tools. From the repository root:
+Install Java 17, Android SDK Platform 35 and Android Build Tools. From this directory:
 
 ```sh
-cd android
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.iniexe.rollcall/.MainActivity
+./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
+
+For a custom SDK location, set `ANDROID_HOME` and `ANDROID_SDK_ROOT` for the command. Do not commit `local.properties`. The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`.
+
+To install on a chosen device, first inspect `adb devices -l`, then specify its serial:
+
+```sh
+adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Only use this on a test device. Do not install over a production app as part of routine verification.
 
 ## Release signing
 
-The V1 release APK is signed with a dedicated Rollcall release key. The private keystore and password are kept outside this repository at `~/.config/rollcall/`; never commit or send either file. Keep an encrypted offline backup of both. Losing this key prevents signing compatible updates.
+Release signing is configured outside the repository at `~/.config/rollcall/release-signing.properties`; keep the keystore and password file private. Release tasks fail when signing is not configured. Do not alter signing or version identity as part of a cleanup. Because versionCode 24 is below the later hybrid app's versionCode 25, do not publish an upgrade build from this baseline until the release lineage is resolved.
 
-Build the signed release APK with:
+## Verification boundaries
 
-```sh
-cd android
-./gradlew :app:assembleRelease
-```
-
-The APK is written to `app/build/outputs/apk/release/app-release.apk`. Release builds fail if the local signing setup is missing, rather than silently producing an unsigned APK. The previous public V1 APK used Android's debug certificate, so installing this release over that preview is not supported; users must uninstall the preview first, which clears its local data.
-
-On a fresh install, sign in to MyCamu in the embedded WebView. Rollcall opens the dashboard after it confirms the account session; later launches go straight to the dashboard. The dashboard shows the student name, institute, and roll/admission identifier when MyCamu provides them. The moon/sun control switches the native dashboard between dark and light themes. **About Rollcall** includes the project summary and links to the developer's GitHub profile and repository.
-
-The dashboard follows the supplied mobile concept with a forest-green animated attendance ring, summary tiles, a focus banner, searchable course rows, and a bottom navigation capsule for Overview, Courses, and Lab. Light and dark palettes, target setting, filters, and course expansion are implemented natively. The attendance planner projects a selected course after a chosen number of missed or attended classes, using attended/total counts from MyCamu; it reports unavailable when counts are missing. The WebView refreshes attendance on entry and every minute while Rollcall stays in the foreground. Use the refresh control for an immediate sync. Set the attendance target from the dashboard (default 75%); it is saved locally.
-
-## Data and refresh behavior
-
-Course rows show attendance percentage and target status; expanded rows show attended/total counts and guidance toward the selected target. The dashboard displays the last successful update time and refreshes as soon as a new snapshot arrives. Student profile details and attendance are saved locally by Rollcall. Polling pauses when Rollcall leaves the foreground. The installed MyCamu app's private storage is not read or shared.
+The provider endpoints are undocumented. Unit tests and `assembleDebug` do not verify live MyCamu/KCT accounts, Firebase, FCM, Android notification permission, alarms, background scheduling, launcher widget behavior, or APK download/install. See [`../docs/architecture/FUNCTIONAL_INVENTORY.md`](../docs/architecture/FUNCTIONAL_INVENTORY.md) for status and follow-up coverage.
