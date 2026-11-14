@@ -9,7 +9,7 @@ Rollcall is a native Android application written in Java. Keep application UI in
 3. For a local SDK outside the environment defaults, set `ANDROID_HOME` and `ANDROID_SDK_ROOT` for the command. Do not commit `local.properties`.
 4. Install only when explicitly requested and after selecting the intended ADB serial: `adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk`.
 
-Declare third-party libraries in `android/app/build.gradle`. Run `./gradlew :app:dependencies` to inspect the resolved app dependency graph. This project does not currently configure `rosdep` or `colcon`; those are not Android build tools.
+Declare third-party libraries in `android/app/build.gradle`. Run `./gradlew :app:dependencies` to inspect the resolved app dependency graph.
 
 ## Existing application boundaries
 
@@ -18,6 +18,9 @@ Declare third-party libraries in `android/app/build.gradle`. Run `./gradlew :app
 - `Attendance` owns attendance calculations; preserve its behavior when changing presentation code.
 - `LiveSnapshotStore` owns the local attendance/timetable/history snapshot shared by the app, workers, and widgets.
 - WorkManager workers, receivers, notification helpers, and app widgets provide background and Android system integrations.
+- `web/app.js` owns the browser dashboard and local browser data; `web/cloud-auth.js` owns Firebase sign-in and the read-only cloud session UI.
+- `web/functions/_api.js` owns Pages API routes; ordered SQL migrations live in `web/migrations/`; API tests live in `web/functions/_api.test.mjs`.
+- `docs/architecture/API_CONTRACT.md` is the shared Android–Web wire contract. Update it when request, response, authentication, or migration behavior changes.
 
 Preserve application identity, release signing behavior, data formats, provider WebView sessions, and update verification unless the task explicitly changes them. Do not install on a USB-connected device or publish a release as part of ordinary verification.
 

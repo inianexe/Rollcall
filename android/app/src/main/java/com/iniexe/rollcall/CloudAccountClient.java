@@ -111,11 +111,4 @@ final class CloudAccountClient {
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork("rollcall-cloud-snapshot", ExistingWorkPolicy.REPLACE, request);
     }
 
-    static void setLastCloudSync(Context context, long time) {
-        context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong("last_sync", time).apply();
-    }
-
-    static long lastCloudSync(Context context) {
-        return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("last_sync", 0);
-    }
 }

@@ -43,4 +43,4 @@ Status terms: **Present** means the selected branch contains an implementation; 
 2. Expand Android instrumentation coverage to lifecycle and permission-dependent behavior. Existing `src/androidTest` fixtures cover navigation, dashboard rendering, and visual capture; they compile in CI but have not been run during this consolidation.
 3. Verify live MyCamu/KCT, Firebase, FCM, WorkManager, alarms, widgets and updater flows only with dedicated test accounts/devices.
 4. Verify APK identity, signing continuity, and versionCode before publishing. Never lower the installed app's versionCode for an upgrade or replace historical release assets during cleanup.
-5. Engineering notes also live in `/home/inian/Projects/Rollcall-2.0/genesis-project`. That separate worktree has uncommitted source and note changes, so this consolidation leaves it untouched; the tracked `docs/architecture/` files are the branch's reviewable source of truth.
+5. Historical architecture notes are preserved in the local workspace vault and are not part of active source. Tracked `docs/architecture/` files are the reviewable source of truth.

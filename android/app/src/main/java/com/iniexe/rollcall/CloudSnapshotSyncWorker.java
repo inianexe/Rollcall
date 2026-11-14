@@ -25,7 +25,6 @@ public final class CloudSnapshotSyncWorker extends Worker {
             String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
             JSONObject payload = CloudSnapshotPayload.build(getApplicationContext());
             CloudAccountClient.putSnapshot(token, deviceId, payload);
-            CloudAccountClient.setLastCloudSync(getApplicationContext(), System.currentTimeMillis());
             return Result.success();
         } catch (Exception error) {
             return getRunAttemptCount() < 8 ? Result.retry() : Result.failure();

@@ -29,10 +29,12 @@ async function hmac(value, secret) {
 function fakeDatabase() {
   const state = {
     sends: [], challengeSends: [], code: null, challenge: null, session: null,
-    deviceId: "old-device-id-1234", sessionsDeleted: 0
+    deviceId: "old-device-id-1234", sessionsDeleted: 0, deletedTables: [],
+    accountRows: Object.fromEntries(["trusted_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_email_sends"].map(table => [table, 1]))
   };
   return {
     state,
+    async batch(statements) { await Promise.all(statements.map(statement => statement.run())); },
     prepare(sql) {
       let args = [];
       return {
@@ -64,8 +66,23 @@ function fakeDatabase() {
           if (sql.startsWith("INSERT INTO web_sessions")) state.session = { session_hash: args[0], uid: args[1], created_at: args[2], expires_at: args[3] };
           if (sql.startsWith("INSERT INTO device_replacement_codes")) state.code = { uid: args[0], code_hash: args[1], created_at: args[2], expires_at: args[3], attempts: 0, used_at: null };
           if (sql.startsWith("UPDATE device_replacement_codes SET used_at")) state.code.used_at = args[0];
-          if (sql.startsWith("UPDATE device_replacement_codes SET attempts")) state.code.attempts++;
+          if (sql.startsWith("UPDATE device_replacement_codes SET attempts")) {
+            const allowed = state.code && !state.code.used_at && state.code.expires_at > args[1] && state.code.attempts < 5;
+            if (allowed) state.code.attempts++;
+            return { meta: { changes: allowed ? 1 : 0 } };
+          }
+          if (sql.startsWith("UPDATE web_challenges SET attempts")) {
+            const allowed = state.challenge && !state.challenge.consumed_at && state.challenge.expires_at > args[1] && state.challenge.attempts < 5;
+            if (allowed) state.challenge.attempts++;
+            return { meta: { changes: allowed ? 1 : 0 } };
+          }
           if (sql.startsWith("DELETE FROM web_sessions")) { state.sessionsDeleted++; state.session = null; }
+          if (sql.startsWith("DELETE FROM ") && sql.endsWith(" WHERE uid=?")) {
+            const table = sql.slice("DELETE FROM ".length, sql.indexOf(" WHERE uid=?"));
+            state.deletedTables.push(table);
+            if (table in state.accountRows) state.accountRows[table] = 0;
+            if (table === "web_challenge_sends") state.challengeSends = [];
+          }
           if (sql.startsWith("INSERT INTO trusted_devices")) state.deviceId = args[1];
           return { meta: { changes: 1 } };
         }
@@ -200,4 +217,50 @@ test("rate limits sign-in challenge sends across consumed challenges", async t =
   assert.equal(response.status, 429);
   assert.match((await response.json()).error, /Too many code requests/);
   assert.equal(database.state.challengeSends.length, 5);
+});
+
+test("wrong web sign-in codes stop incrementing at the five-attempt cap", async () => {
+  const database = fakeDatabase();
+  database.state.challenge = {
+    id: "challenge-cap", uid: "student-1", code_hash: await hmac("123456", "cap-test-secret"),
+    expires_at: Math.floor(Date.now() / 1000) + 300, attempts: 0, consumed_at: null
+  };
+  const env = { SESSION_HASH_KEY: "cap-test-secret", DB: database };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await handleApi(new Request("https://rollcall.test/api/auth/verify", {
+      method: "POST", headers: { origin: "https://rollcall.test", "content-type": "application/json" },
+      body: JSON.stringify({ challengeId: "challenge-cap", code: "000000" })
+    }), env);
+    assert.equal(response.status, 401);
+    assert.equal(database.state.challenge.attempts, attempt + 1);
+  }
+  const capped = await handleApi(new Request("https://rollcall.test/api/auth/verify", {
+    method: "POST", headers: { origin: "https://rollcall.test", "content-type": "application/json" },
+    body: JSON.stringify({ challengeId: "challenge-cap", code: "000000" })
+  }), env);
+  assert.equal(capped.status, 401);
+  assert.equal(database.state.challenge.attempts, 5);
+});
+
+test("account deletion removes every per-user row including the challenge send ledger", async t => {
+  const pair = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  Object.assign(jwk, { kid: "test-key", alg: "RS256", use: "sig" });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    assert.match(String(url), /securetoken@system\.gserviceaccount\.com/);
+    return Response.json({ keys: [jwk] });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const database = fakeDatabase();
+  database.state.challengeSends.push({ uid: "student-1", created_at: Math.floor(Date.now() / 1000) });
+  const token = await authToken(pair.privateKey);
+  const response = await handleApi(new Request("https://rollcall.test/api/account/delete", {
+    method: "POST", headers: { authorization: `Bearer ${token}`, origin: "https://rollcall.test" }
+  }), { FIREBASE_PROJECT_ID: "rollcall-test", DB: database });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.equal(database.state.challengeSends.length, 0);
+  assert.deepEqual(database.state.deletedTables.sort(), ["device_replacement_codes", "device_replacement_email_sends", "snapshots", "trusted_devices", "web_challenge_sends", "web_challenges", "web_sessions"].sort());
 });

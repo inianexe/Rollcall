@@ -34,7 +34,11 @@ async function api(path, options = {}) {
   const response = await fetch(`/api/${path}`, { credentials: 'same-origin', cache: 'no-store', ...options,
     headers: { 'content-type': 'application/json', ...(options.headers || {}) } });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || 'The request could not be completed.');
+  if (!response.ok) {
+    const error = new Error(body.error || 'The request could not be completed.');
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 async function showSnapshot() {
@@ -118,6 +122,14 @@ if (configured) {
   api('auth/session').then(result => { if (result.signedIn) { accountButton.textContent = 'Sign out'; return showSnapshot(); } }).catch(() => {
     if (!localStorage.getItem('rollcall.web.v1') && !sessionStorage.getItem('rollcall-signin-dismissed')) { dialog.showModal(); form.elements.email.focus(); }
   });
-  setInterval(() => { if (document.body.classList.contains('remote-data')) showSnapshot().catch(error => message(error.message, true)); }, 60_000);
-  window.addEventListener('focus', () => { if (document.body.classList.contains('remote-data')) showSnapshot().catch(() => {}); });
+  const refreshSnapshot = () => showSnapshot().catch(error => {
+    if (error.status === 401) {
+      document.body.classList.remove('remote-data');
+      accountButton.textContent = 'Sign in';
+      window.dispatchEvent(new CustomEvent('rollcall-cloud-logout'));
+      message('Your web session expired. Sign in again to view synced data.', true);
+    } else message(error.message, true);
+  });
+  setInterval(() => { if (document.body.classList.contains('remote-data')) refreshSnapshot(); }, 60_000);
+  window.addEventListener('focus', () => { if (document.body.classList.contains('remote-data')) refreshSnapshot(); });
 }
