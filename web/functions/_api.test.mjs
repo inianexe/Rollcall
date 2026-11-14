@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { handleApi } from "./_api.js";
 
-globalThis.crypto = webcrypto;
+globalThis.crypto ??= webcrypto;
 
 function encode(value) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
