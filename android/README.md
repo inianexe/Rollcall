@@ -7,13 +7,15 @@ Rollcall is a Java Android app that reads MyCamu attendance through its authenti
 - `app/src/main/java/com/iniexe/rollcall/MainActivity.java` coordinates onboarding, MyCamu/KCT WebViews, synchronization, local preferences, screen navigation and UI state.
 - `app/src/main/java/com/iniexe/rollcall/DashboardView.java` renders the native dashboard and its Home, Courses, Week, Lab and Academics experiences.
 - `app/src/main/java/com/iniexe/rollcall/Attendance.java` owns attendance calculations.
+- `ProviderClassMarkMatcher.java` reconciles MyCamu history entries to timetable sessions using normalized course codes and the existing one-minute tolerance; this cross-data rule has JVM regression tests.
 - `app/src/main/java/com/iniexe/rollcall/LiveSnapshotStore.java` validates and persists attendance, timetable, leave and class-history snapshots used by UI, workers and widgets.
 - Other Java files implement WorkManager jobs, reminders, event notifications, home-screen widgets, Firebase/cloud integration and the updater.
 - `app/src/main/res/` contains Android resources and widget layouts; `app/src/main/assets/fonts/` contains bundled typography and license notices.
-- `app/src/test/` contains JVM tests. The selected baseline currently has no `src/androidTest/` instrumentation suite.
+- `app/src/test/` contains JVM tests for attendance, academic parsing, palette contrast, widget metrics, and provider/timetable reconciliation.
+- `app/src/androidTest/` contains navigation and visual-capture instrumentation tests. CI assembles these tests but does not execute them; run them only on an isolated QA install, never over a production install.
 - `TORCH_GENESIS_DESIGN.md` is the canonical design reference. The HTML prototype is a reference only, never the Android runtime.
 
-The project uses a single Android `:app` module. Its configured identity is `com.iniexe.rollcall`, compile/target SDK 35, min SDK 23, versionCode 24 and versionName 1.0.23.
+The project uses a single Android `:app` module. Its configured identity is `com.iniexe.rollcall`, compile/target SDK 35, min SDK 23, versionCode 25 and versionName 1.0.24.
 
 ## Build and test
 
@@ -35,8 +37,8 @@ Only use this on a test device. Do not install over a production app as part of 
 
 ## Release signing
 
-Release signing is configured outside the repository at `~/.config/rollcall/release-signing.properties`; keep the keystore and password file private. Release tasks fail when signing is not configured. Do not alter signing or version identity as part of a cleanup. Because versionCode 24 is below the later hybrid app's versionCode 25, do not publish an upgrade build from this baseline until the release lineage is resolved.
+Release signing is configured outside the repository at `~/.config/rollcall/release-signing.properties`; keep the keystore and password file private. Release tasks fail when signing is not configured. Do not alter signing or version identity as part of a cleanup. The checked-in V1 APK is older than this source version; confirm the artifact's package, versionCode, and signing certificate before publishing.
 
 ## Verification boundaries
 
-The provider endpoints are undocumented. Unit tests and `assembleDebug` do not verify live MyCamu/KCT accounts, Firebase, FCM, Android notification permission, alarms, background scheduling, launcher widget behavior, or APK download/install. See [`../docs/architecture/FUNCTIONAL_INVENTORY.md`](../docs/architecture/FUNCTIONAL_INVENTORY.md) for status and follow-up coverage.
+The provider endpoints are undocumented. Unit tests and `assembleDebug` do not verify live MyCamu/KCT accounts, Firebase, FCM, Android notification permission, alarms, background scheduling, launcher widget behavior, or APK download/install. Phone/Web account and snapshot transport is documented in [`../docs/architecture/API_CONTRACT.md`](../docs/architecture/API_CONTRACT.md). See [`../docs/architecture/FUNCTIONAL_INVENTORY.md`](../docs/architecture/FUNCTIONAL_INVENTORY.md) for status and follow-up coverage.

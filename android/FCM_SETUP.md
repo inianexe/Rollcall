@@ -13,14 +13,14 @@ The `google-services.json` file contains public project configuration identifier
 
 ## Publishing
 
-The repository's `publish-v1-apk.yml` workflow runs when a signed APK named `Rollcall V1.apk` is pushed to `main`. It checks the package name, extracts the APK's `versionCode` and `versionName`, updates the existing V1 release and checksum, then announces that version to FCM. Increment both app version values before each publish; devices ignore announcements whose `versionCode` is not newer.
+The repository's `publish-v1-apk.yml` workflow runs when a signed APK named `Rollcall V1.apk` is pushed to `main`. It requires the APK's package, version code/name, and release certificate to match the checked-in Android source and known signing identity. It creates a new `v<versionName>` release with versioned APK/checksum names and announces that version to FCM. Existing release tags and assets are never overwritten or removed. Devices ignore announcements whose `versionCode` is not newer.
 
-The release notes contain hidden version metadata. The app uses it for its GitHub polling fallback, while the public release stays at the existing V1 page.
+The release notes contain hidden version metadata. The app uses it for its GitHub polling fallback, which scans the ten newest public releases and skips drafts and prereleases.
 
 ## Verify delivery
 
 - Install the signed APK built with this Firebase configuration.
 - Allow notifications during onboarding (or later in Android settings), then launch Rollcall once so it subscribes to `app_updates`.
-- Publish a newer signed APK to the repository root as `Rollcall V1.apk`. The workflow sends an FCM announcement to all `app_updates` subscribers; tapping it opens the update screen.
+- Publish the exact source-version release-signed APK to the repository root as `Rollcall V1.apk`. The workflow sends an FCM announcement to all `app_updates` subscribers; tapping it opens the update screen. A release tag is one-time; if it already exists, create a new app version instead of replacing the release.
 
 FCM delivery depends on Google Play services and Android notification settings. The app's periodic GitHub release check remains the fallback if a push is missed.

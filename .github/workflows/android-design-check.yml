@@ -1,24 +1,30 @@
-name: Android Java verification
+name: Rollcall Android and Web checks
 on:
   push:
     branches:
       - refactor/rollcall-java-torch
+      - refactor/rollcall-repository-consolidation
     paths:
       - 'android/**'
+      - 'web/**'
       - '.github/workflows/android-design-check.yml'
       - 'AGENTS.md'
       - 'CONTRIBUTING.md'
       - 'README.md'
       - '.gitignore'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
       - 'docs/architecture/**'
   pull_request:
     branches:
       - main
+      - refactor/rollcall-java-torch
     paths:
       - 'android/**'
+      - 'web/**'
       - '.github/workflows/android-design-check.yml'
       - 'AGENTS.md'
       - 'CONTRIBUTING.md'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
       - 'docs/architecture/**'
   workflow_dispatch:
 
@@ -26,7 +32,7 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  android:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -50,3 +56,22 @@ jobs:
           path: android/app/build/test-results/testDebugUnitTest/
           if-no-files-found: warn
           retention-days: 14
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Worker tests
+        working-directory: web
+        run: npm test
+      - name: Check browser and Worker JavaScript syntax
+        working-directory: web
+        run: |
+          node --check app.js
+          node --check cloud-auth.js
+          node --check _worker.js
+          node --check functions/_api.js

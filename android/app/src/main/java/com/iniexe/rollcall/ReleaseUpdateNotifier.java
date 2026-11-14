@@ -22,7 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 final class ReleaseUpdateNotifier {
-    private static final String API = "https://api.github.com/repos/inianexe/Rollcall/releases/tags/v1.0.0";
+    private static final String API = "https://api.github.com/repos/inianexe/Rollcall/releases?per_page=10";
     private static final long CHECK_INTERVAL = 6L * 60 * 60 * 1000;
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
 
@@ -109,24 +109,28 @@ final class ReleaseUpdateNotifier {
                 if (output.size() + count > 256 * 1024) throw new IllegalStateException("Release response too large");
                 output.write(buffer, 0, count);
             }
-            JSONObject release = new JSONObject(new String(output.toByteArray(), StandardCharsets.UTF_8));
-            String tag = release.optString("tag_name", ""), url = release.optString("html_url", "");
-            if (tag.isEmpty() || release.optBoolean("draft") || release.optBoolean("prerelease") || !isGithubRelease(url)) return null;
-            String body = release.optString("body", "");
-            Matcher code = Pattern.compile("(?m)^<!-- rollcall-version-code: (\\d+) -->\\s*$").matcher(body);
-            Matcher versionNameMatch = Pattern.compile("(?m)^<!-- rollcall-version-name: ([A-Za-z0-9._-]{1,80}) -->\\s*$").matcher(body);
-            long versionCode = code.find() ? Long.parseLong(code.group(1)) : -1;
-            String versionName = versionNameMatch.find() ? versionNameMatch.group(1) : tag;
-            String notes = body.replaceAll("(?m)^<!-- rollcall-version-(?:code|name): .* -->\\s*$", "").trim();
-            JSONArray assets = release.optJSONArray("assets");
-            if (assets == null) return null;
-            for (int i = 0; i < assets.length(); i++) {
-                JSONObject asset = assets.optJSONObject(i);
-                if (asset == null) continue;
-                String name = asset.optString("name", ""), download = asset.optString("browser_download_url", "");
-                if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".apk") || !isGithubDownload(download)) continue;
-                return new Release(versionName, release.optString("name", "Rollcall update"),
-                        notes, url, name, download, asset.optString("digest", ""), versionCode);
+            JSONArray releases = new JSONArray(new String(output.toByteArray(), StandardCharsets.UTF_8));
+            for (int r = 0; r < releases.length(); r++) {
+                JSONObject release = releases.optJSONObject(r);
+                if (release == null || release.optBoolean("draft") || release.optBoolean("prerelease")) continue;
+                String tag = release.optString("tag_name", ""), url = release.optString("html_url", "");
+                if (tag.isEmpty() || !isGithubRelease(url)) continue;
+                String body = release.optString("body", "");
+                Matcher code = Pattern.compile("(?m)^<!-- rollcall-version-code: (\\d+) -->\\s*$").matcher(body);
+                Matcher versionNameMatch = Pattern.compile("(?m)^<!-- rollcall-version-name: ([A-Za-z0-9._-]{1,80}) -->\\s*$").matcher(body);
+                long versionCode = code.find() ? Long.parseLong(code.group(1)) : -1;
+                String versionName = versionNameMatch.find() ? versionNameMatch.group(1) : tag;
+                String notes = body.replaceAll("(?m)^<!-- rollcall-version-(?:code|name): .* -->\\s*$", "").trim();
+                JSONArray assets = release.optJSONArray("assets");
+                if (assets == null) continue;
+                for (int i = 0; i < assets.length(); i++) {
+                    JSONObject asset = assets.optJSONObject(i);
+                    if (asset == null) continue;
+                    String name = asset.optString("name", ""), download = asset.optString("browser_download_url", "");
+                    if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".apk") || !isGithubDownload(download)) continue;
+                    return new Release(versionName, release.optString("name", "Rollcall update"),
+                            notes, url, name, download, asset.optString("digest", ""), versionCode);
+                }
             }
             return null;
         } finally {

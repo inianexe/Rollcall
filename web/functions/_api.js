@@ -6,6 +6,7 @@ const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).repl
 const fromB64url = value => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4)), c => c.charCodeAt(0));
 const random = size => crypto.getRandomValues(new Uint8Array(size));
 const now = () => Math.floor(Date.now() / 1000);
+const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const hex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, "0")).join("");
 const constantEqual = (a, b) => {
   if (a.length !== b.length) return false;
@@ -19,8 +20,23 @@ const secretKey = async (value, usages) => crypto.subtle.importKey("raw", value,
 async function readBody(request, limit = 1_900_000) {
   const length = Number(request.headers.get("content-length") || 0);
   if (length > limit) throw new Error("Request is too large.");
-  const text = await request.text();
-  if (text.length > limit) throw new Error("Request is too large.");
+  if (!request.body) return {};
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0, text = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) throw new Error("Request is too large.");
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } catch (error) {
+    await reader.cancel().catch(() => {});
+    throw error;
+  }
   return text ? JSON.parse(text) : {};
 }
 
@@ -60,7 +76,7 @@ async function sessionUser(request, env) {
   const token = request.headers.get("cookie")?.split(";").map(x => x.trim()).find(x => x.startsWith("rc_session="))?.slice("rc_session=".length);
   if (!token) return null;
   const hash = await digest(`${env.SESSION_HASH_KEY}:${token}`);
-  const row = await env.DB.prepare("SELECT uid FROM web_sessions WHERE session_hash=?").bind(hash).first();
+  const row = await env.DB.prepare("SELECT uid FROM web_sessions WHERE session_hash=? AND expires_at>?").bind(hash, now()).first();
   return row?.uid || null;
 }
 
@@ -143,9 +159,10 @@ async function sendDeviceReplacementEmail(env, email, code) {
 
 async function createWebSession(env, uid) {
   const token = b64url(random(32));
-  await env.DB.prepare("INSERT INTO web_sessions(session_hash,uid,created_at) VALUES(?,?,?)")
-    .bind(await digest(`${env.SESSION_HASH_KEY}:${token}`), uid, now()).run();
-  return json({ ok: true }, 200, { "set-cookie": `rc_session=${token}; Path=/; Secure; HttpOnly; SameSite=Strict` });
+  const createdAt = now();
+  await env.DB.prepare("INSERT INTO web_sessions(session_hash,uid,created_at,expires_at) VALUES(?,?,?,?)")
+    .bind(await digest(`${env.SESSION_HASH_KEY}:${token}`), uid, createdAt, createdAt + SESSION_TTL_SECONDS).run();
+  return json({ ok: true }, 200, { "set-cookie": `rc_session=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}` });
 }
 
 function normalizeSnapshot(input) {
@@ -212,8 +229,10 @@ async function route(request, env) {
     const device = await env.DB.prepare("SELECT fcm_token FROM trusted_devices WHERE uid=?").bind(user.uid).first();
     if (!device) return json({ error: "No trusted Rollcall app is linked to this account." }, 409);
     await env.DB.prepare("DELETE FROM web_challenges WHERE uid=? AND (expires_at<=? OR consumed_at IS NOT NULL)").bind(user.uid, now()).run();
-    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM web_challenges WHERE uid=? AND created_at>?").bind(user.uid, now() - 900).first();
-    if (count.n >= 5) return json({ error: "Too many code requests. Try again in 15 minutes." }, 429);
+    await env.DB.prepare("DELETE FROM web_challenge_sends WHERE created_at<?").bind(now() - 86400).run();
+    const send = await env.DB.prepare("INSERT INTO web_challenge_sends(uid,created_at) SELECT ?,? WHERE (SELECT COUNT(*) FROM web_challenge_sends WHERE uid=? AND created_at>?) < 5")
+      .bind(user.uid, now(), user.uid, now() - 900).run();
+    if (!send.meta.changes) return json({ error: "Too many code requests. Try again in 15 minutes." }, 429);
     let source;
     do { source = crypto.getRandomValues(new Uint32Array(1))[0]; } while (source >= 4294000000);
     const challengeId = b64url(random(18)), code = String(source % 1_000_000).padStart(6, "0");

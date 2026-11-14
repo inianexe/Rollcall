@@ -4,9 +4,9 @@
 
 - Selected starting ref: `origin/design/torch-genesis-exact-prototype` at `f20a982ea8f49c769abdc4d450d46b5930da8f4b`.
 - Chosen because it is the verified native Java Torch Genesis implementation and retains `android/TORCH_GENESIS_DESIGN.md`. The compared `design/torch-genesis-native-polish`, `design/torch-genesis-exact-app`, and `design/torch-genesis-exact-app-wide` refs modify the same core Java UI and remove that canonical design document; `redesign/torch-genesis-reference-exact` adds an HTML/WebView runtime and was excluded.
-- App identity is `com.iniexe.rollcall`; baseline is versionCode 24 / versionName 1.0.23. Preserve that identity and treat the versionCode difference from the later hybrid app (25) as a release-compatibility decision, not a cleanup opportunity.
+- App identity is `com.iniexe.rollcall`; baseline is versionCode 25 / versionName 1.0.24. Preserve the identity, signing key, and monotonically increasing release version. The checked-in V1 APK is a historical artifact with a lower version and must not be published as the current build.
 - Source presence was checked in the selected baseline and against the original Java backup (`00b3f8eb07809d4686152f54e158c87fa28999e7`) and the current local hybrid workspace. The hybrid workspace contains extensive uncommitted changes and was not copied or modified.
-- Verification: JVM tests, debug APK, and debug instrumentation APK are built in CI. Java unit coverage currently includes 16 tests across six classes; the AndroidJUnit4 navigation fixture exercises navigation, schedule/history switching, timetable, and attendance history on a temporary emulator.
+- Verification: JVM tests, debug APK, and debug instrumentation APK are built in CI. The JVM suite covers attendance, academics, palette contrast, widget metrics, notifier rules, and provider/timetable reconciliation. Instrumentation fixtures compile but are not executed by CI or this consolidation; use a separate QA install for physical-device execution.
 
 Status terms: **Present** means the selected branch contains an implementation; **Build/test verified** means included in the successful local Gradle command; **Unverified** means runtime/device/provider behavior was not exercised. This is not a claim of full production parity.
 
@@ -16,7 +16,7 @@ Status terms: **Present** means the selected branch contains an implementation; 
 |---|---|---|---|---|
 | Attendance model, percentage and skip/recovery guidance | Present in `Attendance` | Present in `Attendance`; JVM tests included | Present, with edits to `Attendance` | Build/test verified; expand edge-case characterization before changing calculations |
 | MyCamu authentication and attendance sync | Present in `MainActivity` WebView flow | Present in `MainActivity`, with local snapshot and foreground refresh | Present with modified sync and additional background integrations | Source only; live login, cookies, endpoint and parsing unverified |
-| Course list, search/filter and attendance planner | Present in native dashboard | Present in `DashboardView` | Present in native dashboard | Source/build only; UI behavior not emulator-tested |
+| Course list, search/filter and attendance planner | Present in native dashboard | Present in `DashboardView` | Present in native dashboard | Source/build only; phone UI behavior not verified in this consolidation |
 | Timetable, attendance history, leave/OD | Timetable model and portal parsing present | Native timetable/history/leave views, persisted snapshot, reminder scheduling and event notifications present | Present with expanded synchronization/integration classes | Source/build only; alarms and provider records unverified |
 | KCT login, academic results, GPA and exams | No KCT implementation found in backup source list | KCT portal and academic/exam presentation present | Present | Source/build only; KCT login and live result formats unverified |
 | Onboarding, target and theme preferences | Basic startup/dashboard behavior | Native onboarding, consent, target, palette and light/dark themes | Present with UX and state edits | Source/build only; lifecycle and persistence UI behavior not instrumented |
@@ -29,7 +29,8 @@ Status terms: **Present** means the selected branch contains an implementation; 
 
 ## Current Java responsibilities
 
-- `MainActivity.java` coordinates onboarding, WebViews, authentication, snapshot refresh, parsing, preferences, dashboard state and navigation. It remains high-coupling and is the main refactoring candidate, but should only be split behind characterization tests.
+- `MainActivity.java` coordinates onboarding, WebViews, authentication, snapshot refresh, provider parsing, preferences, dashboard state and navigation. It remains high-coupling and is the main refactoring candidate; extract behavior only behind characterization tests.
+- `ProviderClassMarkMatcher.java` owns the normalized course-code/time-window join that maps provider attendance-history rows to timetable session IDs.
 - `DashboardView.java` owns the Torch Genesis native dashboard, its five-page navigation, course planner, timetable/history/OD and academic presentation. Keep presentation changes here and calculations in shared model/helper code where already established.
 - `Attendance.java` is the attendance calculation model.
 - `AcademicRecords.java` owns KCT grade-point and semester-label parsing used by the Academics presentation; it has JVM regression tests.
@@ -39,7 +40,7 @@ Status terms: **Present** means the selected branch contains an implementation; 
 ## Known limits and next steps
 
 1. Add fixture-driven tests for `Attendance`, MyCamu/KCT parsing and snapshot merges before extracting code from `MainActivity` or `DashboardView`.
-2. Expand Android instrumentation coverage to lifecycle and permission-dependent behavior; current `src/androidTest` coverage is limited to navigation, timetable, and attendance history.
+2. Expand Android instrumentation coverage to lifecycle and permission-dependent behavior. Existing `src/androidTest` fixtures cover navigation, dashboard rendering, and visual capture; they compile in CI but have not been run during this consolidation.
 3. Verify live MyCamu/KCT, Firebase, FCM, WorkManager, alarms, widgets and updater flows only with dedicated test accounts/devices.
-4. Resolve release lineage before publishing: the Java Torch baseline uses versionCode 24 while the later app reached versionCode 25. Never lower the installed app's versionCode for an upgrade.
-5. Engineering notes live in the existing Obsidian vault at `/home/inian/Projects/Rollcall-2.0/genesis-project`; the Java restoration log and task tracker are updated there. The vault remains in its separate worktree and is not included in this branch.
+4. Verify APK identity, signing continuity, and versionCode before publishing. Never lower the installed app's versionCode for an upgrade or replace historical release assets during cleanup.
+5. Engineering notes also live in `/home/inian/Projects/Rollcall-2.0/genesis-project`. That separate worktree has uncommitted source and note changes, so this consolidation leaves it untouched; the tracked `docs/architecture/` files are the branch's reviewable source of truth.
