@@ -1,35 +1,64 @@
-# Rollcall
+# RollCall
 
-Rollcall is a Java Android attendance companion with an optional browser dashboard. The phone keeps the Torch Genesis design language, connects to MyCamu and KCT through their web portals, and can sync a read-only snapshot to the Cloudflare-hosted Web app.
+RollCall is a student attendance companion: a native Android app with an optional browser dashboard.
 
-## Project direction
+| Home | Week | Courses | Academics |
+|---|---|---|---|
+| ![RollCall home screen](release/android-v1/screenshots/01-home.png) | ![Weekly attendance](release/android-v1/screenshots/02-week.png) | ![Course attendance](release/android-v1/screenshots/03-courses.png) | ![Academic records](release/android-v1/screenshots/04-lab.png) |
 
-- Android app: Java, one `:app` module, custom native Views.
-- Web app: static browser dashboard plus Cloudflare Pages Functions and D1-backed account/snapshot API.
-- UI: Torch Genesis palette and typography, documented in [`android/TORCH_GENESIS_DESIGN.md`](android/TORCH_GENESIS_DESIGN.md).
-- Data: local attendance snapshot; MyCamu/KCT account and provider data remain subject to their existing web sessions and endpoints.
-- Phone/Web API: [`docs/architecture/API_CONTRACT.md`](docs/architecture/API_CONTRACT.md) is the shared wire-contract reference.
-- Historical Compose migration work remains on its existing branch and is not part of this Java development baseline.
+## What it does
 
-The selected Java Torch baseline is versionCode 25 / versionName 1.0.24. Check [`docs/architecture/FUNCTIONAL_INVENTORY.md`](docs/architecture/FUNCTIONAL_INVENTORY.md) for source-level feature coverage and verification limits before changing integrations.
+- **Android:** review attendance, weekly trends, courses, timetable, class history, leave records and academic results; connect MyCamu or KCT; set reminders and widgets.
+- **Web:** view a local dashboard or sign in to read the latest phone snapshot. Web sync is read-only; attendance calculations and provider access remain on the phone.
+- **Phone and web:** Firebase Authentication identifies the account; Cloudflare Pages Functions and D1 manage trusted-device verification, browser sessions and account-scoped snapshots. Firebase Cloud Messaging sends web sign-in requests to the trusted phone.
 
-## Build and verify
+The Android app uses Java and native Views with the Torch Genesis design system. The website is lightweight JavaScript served by Cloudflare Pages/Workers; it is not a second Android UI. See [the API contract](docs/architecture/API_CONTRACT.md) and [Torch Genesis design notes](android/TORCH_GENESIS_DESIGN.md).
 
-Use Java 17 and install Android SDK Platform 35 / Build Tools. From the repository root:
+## Install Android
+
+Download the APK from [GitHub Releases](https://github.com/inianexe/Rollcall/releases). Android may ask you to allow installation from your browser or file manager because the app is distributed outside Google Play. Only install RollCall releases signed with the established RollCall release key.
+
+Current Java source baseline: **version 1.0.24 (versionCode 25)**. The public `v1.0.0` release and checked-in root APK are older and are not an upgrade build for this source. Do not publish the checked-in APK as a current release.
+
+## Development
+
+Requirements: Java 17, Android SDK Platform 35 and Android Build Tools. Install the Android SDK, then run:
 
 ```sh
 cd android
-./gradlew :app:testDebugUnitTest :app:assembleDebug
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. For a nonstandard SDK path, set `ANDROID_HOME` and `ANDROID_SDK_ROOT` in the shell. Do not commit `local.properties` or signing material.
+The debug APK is at `android/app/build/outputs/apk/debug/app-debug.apk`. To run the browser Worker tests and syntax checks:
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md) before making changes. App architecture, test limits and known compatibility concerns are recorded in [`docs/architecture/FUNCTIONAL_INVENTORY.md`](docs/architecture/FUNCTIONAL_INVENTORY.md).
+```sh
+cd web
+npm test
+node --check app.js
+node --check cloud-auth.js
+node --check _worker.js
+node --check functions/_api.js
+```
 
-For the browser dashboard and Worker tests, see [`web/README.md`](web/README.md) and run `cd web && npm test`.
+Read [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [development setup](docs/development/README.md) before changing code. Never commit Firebase service credentials, keystores, signing passwords, `local.properties`, APKs built for local use, or private student data.
 
-## Data and release safety
+## Repository map
 
-Rollcall uses the MyCamu WebView session to read attendance and stores the resulting snapshot locally. The provider endpoints are undocumented and may change. KCT, Firebase, notifications, background jobs, widgets, and APK update/install flows require device or service verification; a local build does not validate them.
+```text
+android/                  Java Android app, tests, Gradle wrapper
+web/                      Browser UI, Pages Functions, D1 migrations and API tests
+docs/architecture/        Feature inventory and Android–Web API contract
+docs/development/          Local setup and release workflow
+release/android-v1/       Historical screenshots and release notes
+.github/workflows/         Android/Web CI and guarded release workflow
+```
 
-Do not change the package identity or release signing configuration during cleanup. The checked-in V1 APK predates the current app version; verify artifact version and signing continuity before publishing an upgrade.
+## Privacy and security
+
+Attendance records are personal student data. The Android app stores its working data locally; optional cloud snapshots are account-scoped and read-only in the browser. Provider sessions are handled on the phone. Review [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md), and do not attach real student records to issues or pull requests.
+
+## Releases and project status
+
+The Java + Web implementation is maintained on [`refactor/rollcall-java-torch`](https://github.com/inianexe/Rollcall/tree/refactor/rollcall-java-torch). The repository's default branch still contains historical Compose work. Promotion is intentionally paused until the divergent branch histories and deployment/release settings are reviewed; see [the transition notes](docs/development/README.md#github-branch-transition).
+
+No license has been selected for this repository yet. Until the owner chooses one, no open-source reuse license is granted. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.

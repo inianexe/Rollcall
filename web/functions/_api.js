@@ -190,7 +190,8 @@ async function route(request, env) {
       const codeRow = await env.DB.prepare("SELECT code_hash FROM device_replacement_codes WHERE uid=? AND expires_at>? AND attempts<5 AND used_at IS NULL").bind(user.uid, now()).first();
       if (!codeRow) return json({ error: "That confirmation code expired or reached its attempt limit. Request a fresh email code.", code: "email_code_expired" }, 403);
       if (!constantEqual(await hmac(body.emailCode, env.SESSION_HASH_KEY), codeRow.code_hash)) {
-        await env.DB.prepare("UPDATE device_replacement_codes SET attempts=attempts+1 WHERE uid=? AND used_at IS NULL").bind(user.uid).run();
+        const attempt = await env.DB.prepare("UPDATE device_replacement_codes SET attempts=attempts+1 WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(user.uid, now()).run();
+        if (!attempt.meta.changes) return json({ error: "That confirmation code expired or reached its attempt limit. Request a fresh email code.", code: "email_code_expired" }, 403);
         return json({ error: "That email code was not accepted. Request a new code and try again.", code: "email_code_invalid" }, 403);
       }
       const claimed = await env.DB.prepare("UPDATE device_replacement_codes SET used_at=? WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(now(), user.uid, now()).run();
@@ -260,7 +261,8 @@ async function route(request, env) {
     const code = String(body.code || "").trim();
     const valid = /^\d{6}$/.test(code) && constantEqual(await hmac(code, env.SESSION_HASH_KEY), row.code_hash);
     if (!valid) {
-      await env.DB.prepare("UPDATE web_challenges SET attempts=attempts+1 WHERE id=? AND consumed_at IS NULL").bind(row.id).run();
+      const attempt = await env.DB.prepare("UPDATE web_challenges SET attempts=attempts+1 WHERE id=? AND consumed_at IS NULL AND expires_at>? AND attempts<5").bind(row.id, now()).run();
+      if (!attempt.meta.changes) return json({ error: "That code expired or can no longer be used. Request another code." }, 401);
       return json({ error: "The code was not accepted. Check it and try again." }, 401);
     }
     const claimed = await env.DB.prepare("UPDATE web_challenges SET consumed_at=? WHERE id=? AND consumed_at IS NULL AND expires_at>? AND attempts<5").bind(now(), row.id, now()).run();
@@ -302,7 +304,7 @@ async function route(request, env) {
 
   if (path === "/api/account/delete" && method === "POST") {
     const user = await authFromHeader(request, env);
-    await env.DB.batch(["trusted_devices", "snapshots", "web_challenges", "web_sessions", "device_replacement_codes", "device_replacement_email_sends"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
+    await env.DB.batch(["trusted_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_email_sends"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
     return json({ ok: true });
   }
 

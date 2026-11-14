@@ -1696,6 +1696,16 @@ public class MainActivity extends Activity {
                 } else if (error instanceof CloudAccountClient.ApiException
                         && "email_code_invalid".equals(((CloudAccountClient.ApiException) error).code)) {
                     runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code did not match. Check the email and try again."));
+                } else if (error instanceof CloudAccountClient.ApiException
+                        && "email_code_expired".equals(((CloudAccountClient.ApiException) error).code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.sendDeviceReplacementCode(token);
+                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code expired or reached its attempt limit. A fresh code has been emailed to you."));
+                    } catch (Exception sendError) {
+                        String message = sendError.getMessage() == null ? "Could not send a new confirmation code." : sendError.getMessage();
+                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                    }
                 } else {
                     String message = error.getMessage() == null ? "Could not connect this phone." : error.getMessage();
                     runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
@@ -3026,7 +3036,7 @@ public class MainActivity extends Activity {
             boolean leavesUpdated = leaveResult != null && "ready".equals(leaveResult.optString("state"));
             if (leavesUpdated) LiveSnapshotStore.leaves(this, parseLeaves(leaveResult.optJSONArray("rows")));
             if (result.has("history")) LiveSnapshotStore.classMarks(this,
-                    parseClassMarks(result.optJSONArray("history"), result.optJSONArray("classAttendance")));
+                    parseClassMarks(result.optJSONArray("history"), result.optJSONArray("classAttendance"), LiveSnapshotStore.get().timetable));
             boolean firstConnection = !connectedOnce;
             connectedOnce = true;
             lastProgramAvailable = true;
@@ -3142,7 +3152,8 @@ public class MainActivity extends Activity {
         return rows;
     }
 
-    private List<LiveSnapshotStore.ClassMark> parseClassMarks(JSONArray history, JSONArray recent) {
+    private List<LiveSnapshotStore.ClassMark> parseClassMarks(JSONArray history, JSONArray recent,
+                                                               List<LiveSnapshotStore.ClassSession> timetable) {
         Map<String, LiveSnapshotStore.ClassMark> marks = new java.util.LinkedHashMap<>();
         if (history != null) for (int i = 0; i < Math.min(history.length(), 2000); i++) {
             JSONObject row = history.optJSONObject(i);
@@ -3152,7 +3163,7 @@ public class MainActivity extends Activity {
             String id = row.optString("id", "");
             String code = row.optString("code", "");
             LiveSnapshotStore.ClassSession session = ProviderClassMarkMatcher.match(
-                    code, startsAt, LiveSnapshotStore.get().timetable);
+                    code, startsAt, timetable);
             if (session != null) {
                 id = session.id;
                 code = session.code;
