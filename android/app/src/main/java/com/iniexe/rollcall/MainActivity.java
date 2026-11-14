@@ -1370,6 +1370,20 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams appearanceModeParams = new LinearLayout.LayoutParams(-1, -2);
         appearanceModeParams.topMargin = dp(8);
         settings.addView(appearanceModes, appearanceModeParams);
+        LinearLayout paletteRow = new LinearLayout(this);
+        paletteRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        paletteRow.setPadding(0, dp(10), 0, dp(2));
+        paletteRow.addView(text("Color palette", 14, INK, Typeface.BOLD),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        TextView paletteChoice = text(palette.name + "  →", 12, HERO_TEXT, Typeface.BOLD);
+        paletteChoice.setGravity(android.view.Gravity.CENTER);
+        paletteChoice.setPadding(dp(12), dp(9), dp(12), dp(9));
+        paletteChoice.setBackground(background(HERO, 0, 10));
+        paletteRow.addView(paletteChoice);
+        paletteRow.setContentDescription("Color palette, " + palette.name);
+        paletteRow.setFocusable(true);
+        paletteRow.setOnClickListener(v -> choosePalette());
+        settings.addView(paletteRow);
         LinearLayout targetRow = new LinearLayout(this);
         targetRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         targetRow.setPadding(0, dp(12), 0, dp(4));
