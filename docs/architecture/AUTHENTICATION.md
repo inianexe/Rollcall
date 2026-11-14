@@ -1,6 +1,6 @@
 # RollCall authentication
 
-Status: implementation on `feature/firebase-auth-v2`; Firebase Console and production deployment have not been changed.
+Status: implementation on `feature/firebase-auth-v2`; Firebase Authentication and Google OAuth branding were configured on 2026-11-14. Cloudflare production was not deployed or migrated.
 
 ## Identity and account modes
 
@@ -27,7 +27,7 @@ Android email links use Firebase Hosting's email action link and the `/__/auth/l
 
 - Firebase validates identities; the Cloudflare Worker validates Firebase ID-token signature, project audience, issuer, expiry and verified email at the API boundary.
 - D1 rows are scoped by Firebase UID. Web sessions are separately stored and revoked by logout, device replacement, and account deletion.
-- Email/password reset remains available. Email-link and Google availability depend on Firebase project and OAuth configuration; missing configuration must be treated as unavailable, not as successful sign-in.
+- Email/password reset remains available. Google, email-link, and authorized web-domain configuration is enabled in Firebase; authentication submissions and link delivery still require controlled live verification.
 - The email-link mode currently shares the existing Firebase Auth user and D1 schema; it introduces no new identity table or database migration.
 
 See [Firebase setup](../development/FIREBASE_SETUP.md), [account security](../security/ACCOUNT_SECURITY.md), and the [API contract](API_CONTRACT.md) for operational details.
