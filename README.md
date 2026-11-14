@@ -10,7 +10,7 @@ RollCall is a student attendance companion: a native Android app with an optiona
 
 - **Android:** review attendance, weekly trends, courses, timetable, class history, leave records and academic results; connect MyCamu or KCT; set reminders and widgets.
 - **Web:** view a local dashboard or sign in to read the latest phone snapshot. Web sync is read-only; attendance calculations and provider access remain on the phone.
-- **Phone and web:** Firebase Authentication identifies the account; Cloudflare Pages Functions and D1 manage trusted-device verification, browser sessions and account-scoped snapshots. Firebase Cloud Messaging sends web sign-in requests to the trusted phone.
+- **Phone and web:** Firebase Authentication identifies the account using Google, email-link, or existing email/password credentials; Cloudflare Pages Functions and D1 manage trusted-device verification, browser sessions and account-scoped snapshots. Firebase Cloud Messaging sends web sign-in requests to the trusted phone. Cloud sync is optional and remains separate from MyCamu/KCT sign-in.
 
 The Android app uses Java and native Views with the Torch Genesis design system. The website is lightweight JavaScript served by Cloudflare Pages/Workers; it is not a second Android UI. See [the API contract](docs/architecture/API_CONTRACT.md) and [Torch Genesis design notes](android/TORCH_GENESIS_DESIGN.md).
 
@@ -59,6 +59,6 @@ Attendance records are personal student data. The Android app stores its working
 
 ## Releases and project status
 
-The Java + Web implementation is maintained on [`refactor/rollcall-java-torch`](https://github.com/inianexe/Rollcall/tree/refactor/rollcall-java-torch). The repository's default branch still contains historical Compose work. Promotion is intentionally paused until the divergent branch histories and deployment/release settings are reviewed; see [the transition notes](docs/development/README.md#github-branch-transition).
+The consolidated Java + Web application is maintained from `main`. Authentication redesign work is developed on the isolated `feature/firebase-auth-v2` branch and is not merged or deployed automatically. See [authentication architecture](docs/architecture/AUTHENTICATION.md) and [Firebase setup](docs/development/FIREBASE_SETUP.md).
 
 No license has been selected for this repository yet. Until the owner chooses one, no open-source reuse license is granted. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.

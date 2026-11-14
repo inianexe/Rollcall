@@ -59,15 +59,19 @@ async function verifyFirebaseToken(token, env) {
   const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, fromB64url(parts[2]), encoder.encode(`${parts[0]}.${parts[1]}`));
   const project = env.FIREBASE_PROJECT_ID;
   if (!valid || claims.aud !== project || claims.iss !== `https://securetoken.google.com/${project}`
-      || !claims.sub || claims.sub.length > 128 || claims.exp <= now() || claims.iat > now() + 60) throw new Error("Sign in again to continue.");
-  return { uid: claims.sub, email: String(claims.email || ""), emailVerified: claims.email_verified === true };
+      || !claims.sub || claims.sub.length > 128 || !Number.isFinite(claims.exp) || !Number.isFinite(claims.iat)
+      || claims.exp <= now() || claims.iat > now() + 60) throw new Error("Sign in again to continue.");
+  return { uid: claims.sub, email: String(claims.email || ""), emailVerified: claims.email_verified === true,
+    authTime: claims.auth_time };
 }
 
-async function authFromHeader(request, env, requireVerified = true) {
+async function authFromHeader(request, env, requireVerified = true, requireRecent = false) {
   const match = request.headers.get("authorization")?.match(/^Bearer (.+)$/);
   if (!match) throw new Error("Sign in to your Rollcall account first.");
   const user = await verifyFirebaseToken(match[1], env);
   if (requireVerified && !user.emailVerified) throw new Error("Verify your email address before using web sync.");
+  if (requireRecent && (!Number.isFinite(user.authTime) || user.authTime > now() + 60 || now() - user.authTime > 5 * 60))
+    throw new Error("Sign in again before deleting your Rollcall account.");
   return user;
 }
 
@@ -303,7 +307,7 @@ async function route(request, env) {
   }
 
   if (path === "/api/account/delete" && method === "POST") {
-    const user = await authFromHeader(request, env);
+    const user = await authFromHeader(request, env, true, true);
     await env.DB.batch(["trusted_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_email_sends"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
     return json({ ok: true });
   }
@@ -315,7 +319,7 @@ export async function handleApi(request, env) {
   try { return await route(request, env); }
   catch (error) {
     const message = error?.message || "Request failed.";
-    const status = /sign in|verify your email/.test(message) ? 401 : /too large/.test(message) ? 413 : /not configured|push service|email delivery/.test(message) ? 503 : 400;
+    const status = /sign in|verify your email/i.test(message) ? 401 : /too large/i.test(message) ? 413 : /not configured|push service|email delivery/i.test(message) ? 503 : 400;
     return json({ error: message }, status);
   }
 }

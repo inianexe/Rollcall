@@ -9,12 +9,13 @@ function encode(value) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
-async function authToken(privateKey) {
+async function authToken(privateKey, claims = {}) {
   const header = encode({ alg: "RS256", kid: "test-key" });
   const payload = encode({
     aud: "rollcall-test", iss: "https://securetoken.google.com/rollcall-test", sub: "student-1",
     email: "student@example.com", email_verified: true,
-    iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600
+    iat: Math.floor(Date.now() / 1000), auth_time: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 3600, ...claims
   });
   const unsigned = `${header}.${payload}`;
   const signature = Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(unsigned))).toString("base64url");
@@ -255,6 +256,18 @@ test("account deletion removes every per-user row including the challenge send l
 
   const database = fakeDatabase();
   database.state.challengeSends.push({ uid: "student-1", created_at: Math.floor(Date.now() / 1000) });
+  const staleToken = await authToken(pair.privateKey, { auth_time: Math.floor(Date.now() / 1000) - 301 });
+  const staleResponse = await handleApi(new Request("https://rollcall.test/api/account/delete", {
+    method: "POST", headers: { authorization: `Bearer ${staleToken}`, origin: "https://rollcall.test" }
+  }), { FIREBASE_PROJECT_ID: "rollcall-test", DB: database });
+  assert.equal(staleResponse.status, 401);
+  assert.equal(database.state.deletedTables.length, 0);
+  const futureToken = await authToken(pair.privateKey, { auth_time: Math.floor(Date.now() / 1000) + 61 });
+  const futureResponse = await handleApi(new Request("https://rollcall.test/api/account/delete", {
+    method: "POST", headers: { authorization: `Bearer ${futureToken}`, origin: "https://rollcall.test" }
+  }), { FIREBASE_PROJECT_ID: "rollcall-test", DB: database });
+  assert.equal(futureResponse.status, 401);
+  assert.equal(database.state.deletedTables.length, 0);
   const token = await authToken(pair.privateKey);
   const response = await handleApi(new Request("https://rollcall.test/api/account/delete", {
     method: "POST", headers: { authorization: `Bearer ${token}`, origin: "https://rollcall.test" }

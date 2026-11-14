@@ -14,7 +14,7 @@ Status: implemented in Android `1.0.24` / schema version `1` and the Cloudflare 
 
 The API base URL is compiled into Android as `BuildConfig.ROLLCALL_API_BASE_URL`, defaulting to `https://rollcall-campus-companion.pages.dev/api`. All requests and responses use JSON except an empty `OPTIONS` response. Responses set `Cache-Control: no-store`.
 
-Phone requests and browser challenge creation send a Firebase ID token in `Authorization: Bearer <id-token>`. Protected account operations require a verified email. Browser data requests use the Worker-issued `rc_session` cookie (`Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`) and same-origin checks. Session tokens are random, only their SHA-256 keyed hashes are stored in D1, and both cookie and server row expire after 30 days. Logout/device replacement/account deletion removes the applicable session rows.
+Phone requests and browser challenge creation send a Firebase ID token in `Authorization: Bearer <id-token>`. Protected account operations require a verified email. `POST /account/delete` additionally requires a Firebase `auth_time` no more than five minutes old, so clients must reauthenticate before calling it. Browser data requests use the Worker-issued `rc_session` cookie (`Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`) and same-origin checks. Session tokens are random, only their SHA-256 keyed hashes are stored in D1, and both cookie and server row expire after 30 days. Logout/device replacement/account deletion removes the applicable session rows.
 
 Mutating `POST` and `PUT` requests require a same-origin `Origin` when the header is present. API errors use JSON `{ "error": "...", "code": "..." }`; `code` is present for selected client-handled cases.
 
@@ -31,11 +31,11 @@ Mutating `POST` and `PUT` requests require a same-origin `Origin` when the heade
 | `POST /auth/logout` | Browser / same-origin, cookie optional | empty object | `{ "ok": true }`, clears cookie | `200` even when already signed out |
 | `PUT /snapshot` | Android / verified Firebase bearer and trusted `deviceId` | `deviceId`, `snapshot` | `{ "ok": true, "updatedAt": epoch seconds }` | `403` device mismatch; `413` oversized serialized snapshot; `400` invalid snapshot |
 | `GET /snapshot` | Browser / `rc_session` | — | `{ "snapshot": object, "updatedAt": epoch seconds }` | `401` not signed in; `404` no uploaded snapshot |
-| `POST /account/delete` | Android / verified Firebase bearer | empty object | `{ "ok": true }`; deletes Rollcall D1 rows for the UID | `401` missing/invalid/unverified bearer token |
+| `POST /account/delete` | Android / verified Firebase bearer, reauthenticated within five minutes | empty object | `{ "ok": true }`; deletes Rollcall D1 rows for the UID | `401` missing/invalid/unverified/stale bearer token |
 
 Unknown method/path combinations return `404`. `OPTIONS` returns `204` with `Allow: GET, POST, PUT, OPTIONS`.
 
-Firebase Authentication account deletion is performed by the Android client separately; `/account/delete` only purges Rollcall-owned D1 rows.
+Firebase Authentication account deletion is performed by the Android client separately; `/account/delete` only purges Rollcall-owned D1 rows. This multi-service sequence is not transactional: if Firebase deletion fails after the API succeeds, the Firebase identity remains but its Rollcall D1 rows have already been removed.
 
 ## Snapshot schema v1
 

@@ -130,6 +130,10 @@ body.dark{--canvas:#121212;--surface:#292929;--ink:#f4f5ef;--muted:#c2c6b7;--lin
 #web-account-dialog .dialog-head p,#web-account-dialog .dialog-copy{color:#303848;font-size:13px}
 #web-account-dialog .button-primary{background:#121212;color:#ccff00}
 #web-account-dialog .button-quiet{border-color:#121212;color:#121212}
+#web-account-dialog #web-google-signin{background:#121212;color:#ccff00}
+#web-account-dialog #web-email-link{background:#f6f7ed;color:#121212;border-color:#121212}
+#web-account-dialog .panel-link{justify-self:start;color:#121212;text-align:left}
+#web-account-dialog .panel-link[hidden],#web-account-dialog [hidden]{display:none!important}
 #web-account-dialog input{background:#f6f7ed;border:1.5px solid #121212;border-radius:8px;color:#121212;min-height:46px}
 #web-account-dialog #web-resend-code{justify-self:start;color:#121212}
 #web-account-dialog #web-resend-code:disabled{opacity:.6;cursor:default}

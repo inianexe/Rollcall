@@ -5,6 +5,7 @@ import android.animation.Animator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -61,7 +62,6 @@ import java.util.Set;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.android.gms.tasks.Tasks;
 import java.util.concurrent.TimeUnit;
@@ -385,6 +385,7 @@ public class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         setContentView(root);
         applyTheme();
+        handleRollCallEmailLink(getIntent());
         if (saved != null && saved.getBoolean("restore_about_settings", false)) showAbout();
         else routeWidgetLaunch(getIntent());
         if (saved == null) showStartupAnimation(root);
@@ -1418,7 +1419,9 @@ public class MainActivity extends Activity {
         page.addView(cloud, cloudParams);
         cloud.addView(text("ROLLCALL WEB ACCOUNT", 12, MUTED, Typeface.BOLD));
         FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
-        boolean cloudPhoneLinked = cloudUser != null && CloudAccountClient.deviceId(this).equals(getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("registered_device_id", ""));
+        SharedPreferences cloudAccountState = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        boolean cloudPhoneLinked = cloudUser != null && cloudUser.getUid().equals(cloudAccountState.getString("registered_uid", ""))
+                && CloudAccountClient.deviceId(this).equals(cloudAccountState.getString("registered_device_id", ""));
         TextView cloudInfo = text(cloudUser == null ? "Optional. Create an account to securely view your synced Rollcall snapshot on the web." : cloudUser.getEmail() + (cloudUser.isEmailVerified() ? (cloudPhoneLinked ? " · phone linked" : " · connect this phone") : " · verify email to connect"), 13, MUTED, Typeface.NORMAL);
         cloudInfo.setPadding(0, dp(8), 0, dp(8));
         cloud.addView(cloudInfo);
@@ -1519,81 +1522,131 @@ public class MainActivity extends Activity {
     /** Rollcall-owned account actions use a tactile branded sheet; no provider pages are restyled. */
     private void showCloudAccountDialog() {
         FirebaseUser existing = FirebaseAuth.getInstance().getCurrentUser();
-        if (existing == null) { showCloudCredentials(false); return; }
-        final boolean verified = existing.isEmailVerified();
-        String[] labels = verified
-                ? new String[]{"Connect this phone", "Delete Rollcall cloud account", "Sign out"}
-                : new String[]{"Resend verification", "Delete Rollcall account", "Sign out"};
+        if (existing == null) { showCloudCredentials(); return; }
+
         LinearLayout sheet = new LinearLayout(this);
         sheet.setOrientation(LinearLayout.VERTICAL);
         sheet.setPadding(dp(22), dp(18), dp(22), dp(22));
         sheet.setBackground(background(SURFACE, BORDER, 20));
-        View handle = new View(this);
-        handle.setBackground(background(MUTED, 0, 100));
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(38), dp(4));
-        handleParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-        sheet.addView(handle, handleParams);
-        sheet.addView(text("ROLLCALL / ACCOUNT", 11, darkTheme ? HERO : INK, Typeface.BOLD),
-                topMargin(-1, -2, 22));
-        sheet.addView(text("Your web account.", 22, INK, Typeface.BOLD),
-                topMargin(-1, -2, 6));
-        String accountAddress = existing.getEmail();
-        if (accountAddress != null && !accountAddress.isEmpty()) {
-            TextView account = text(accountAddress, 12, MUTED, Typeface.NORMAL);
-            account.setMaxLines(2);
-            sheet.addView(account, topMargin(-1, -2, 6));
+        sheet.addView(text("ROLLCALL / ACCOUNT", 11, darkTheme ? HERO : INK, Typeface.BOLD), topMargin(-1, -2, 18));
+        sheet.addView(text("Your academic world, connected.", 22, INK, Typeface.BOLD), topMargin(-1, -2, 6));
+        TextView email = text(existing.getEmail() == null ? "Rollcall account" : existing.getEmail(), 13, MUTED, Typeface.NORMAL);
+        email.setMaxLines(2);
+        sheet.addView(email, topMargin(-1, -2, 4));
+
+        List<String> providers = new ArrayList<>();
+        boolean emailProviderLinked = false;
+        boolean googleProviderLinked = false;
+        for (com.google.firebase.auth.UserInfo provider : existing.getProviderData()) {
+            String id = provider.getProviderId();
+            if ("password".equals(id)) { providers.add("Email"); emailProviderLinked = true; }
+            else if ("google.com".equals(id)) { providers.add("Google"); googleProviderLinked = true; }
+            else if (!"firebase".equals(id)) providers.add(id);
         }
-        final AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet).create();
-        for (int i = 0; i < labels.length; i++) {
-            final int index = i;
-            boolean destructive = labels[i].startsWith("Delete");
-            LinearLayout line = new LinearLayout(this);
-            line.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            line.setPadding(dp(14), 0, dp(14), 0);
-            line.setMinimumHeight(dp(56));
-            line.setBackground(background(destructive ? SECONDARY : SURFACE,
-                    destructive ? RED : BORDER, 12));
-            TextView name = text(labels[i], 14, destructive ? RED : INK, Typeface.BOLD);
-            line.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
-            line.addView(text("↗", 17, destructive ? RED : MUTED, Typeface.BOLD));
-            LinearLayout.LayoutParams lineParams = topMargin(-1, -2, 8);
-            if (i == 0) lineParams.topMargin = dp(22);
-            sheet.addView(line, lineParams);
-            line.setClickable(true);
-            line.setFocusable(true);
-            line.setOnClickListener(view -> {
-                dialog.dismiss();
-                if (!verified) {
-                    if (index == 0) existing.sendEmailVerification().addOnCompleteListener(task ->
-                            Toast.makeText(this, task.isSuccessful() ? "Verification email sent."
-                                    : "Could not send verification email.", Toast.LENGTH_LONG).show());
-                    else if (index == 1) confirmCloudAccountDelete();
-                    else if (index == 2) signOutCloudAccount();
-                } else {
-                    if (index == 0) registerCloudDevice(null);
-                    else if (index == 1) confirmCloudAccountDelete();
-                    else if (index == 2) signOutCloudAccount();
-                }
-            });
+        TextView methods = text("CONNECTED METHODS  ·  " + (providers.isEmpty() ? "Email link" : android.text.TextUtils.join(", ", providers)),
+                12, MUTED, Typeface.NORMAL);
+        methods.setLineSpacing(dp(2), 1f);
+        sheet.addView(methods, topMargin(-1, -2, 12));
+        SharedPreferences cloudPrefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        boolean syncEnabled = existing.getUid().equals(cloudPrefs.getString("cloud_sync_uid", ""));
+        boolean deviceLinked = existing.getUid().equals(cloudPrefs.getString("registered_uid", ""))
+                && CloudAccountClient.deviceId(this).equals(cloudPrefs.getString("registered_device_id", ""));
+        RollCallAuthState.Status accountState = RollCallAuthState.resolve(true, true, false,
+                existing.isEmailVerified(), deviceLinked, syncEnabled, false, false, false);
+        String accountStatus = accountState == RollCallAuthState.Status.READY_FOR_CLOUD_SYNC
+                ? "Phone connected · cloud sync on"
+                : accountState == RollCallAuthState.Status.SIGNED_IN_UNVERIFIED
+                    ? "Verify your email to connect the trusted phone"
+                    : "Cloud sync is off. Your attendance stays on this device until you connect it.";
+        sheet.addView(text(accountStatus, 12,
+                accountState == RollCallAuthState.Status.SIGNED_IN_UNVERIFIED ? AMBER : MUTED,
+                Typeface.NORMAL), topMargin(-1, -2, 8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet).create();
+        if (!existing.isEmailVerified()) {
+            addCloudAccountAction(sheet, dialog, "Resend verification", false, () -> existing.sendEmailVerification()
+                    .addOnCompleteListener(task -> Toast.makeText(this, task.isSuccessful()
+                            ? "Verification email sent." : "Could not send the verification email. Try again later.", Toast.LENGTH_LONG).show()));
+        } else {
+            if (!googleProviderLinked) addCloudAccountAction(sheet, dialog, "Connect Google account", false, () -> startGoogleSignIn(true));
+            if (!emailProviderLinked) addCloudAccountAction(sheet, dialog, "Connect email sign-in", false, this::promptEmailLinkToAccount);
+            addCloudAccountAction(sheet, dialog, syncEnabled ? "Reconnect this phone" : "Connect this phone and enable sync", false,
+                    () -> confirmCloudSyncAndConnect());
+            if (syncEnabled) addCloudAccountAction(sheet, dialog, "Turn off cloud sync", false, this::disableCloudSync);
         }
+        addCloudAccountAction(sheet, dialog, "Delete Rollcall account", true, this::confirmCloudAccountDelete);
+        addCloudAccountAction(sheet, dialog, "Sign out", false, this::signOutCloudAccount);
         TextView close = text("Close", 14, MUTED, Typeface.BOLD);
         close.setGravity(android.view.Gravity.CENTER);
         close.setMinHeight(dp(48));
         close.setOnClickListener(v -> dialog.dismiss());
-        sheet.addView(close, topMargin(-1, -2, 12));
+        sheet.addView(close, topMargin(-1, -2, 8));
         dialog.show();
         if (dialog.getWindow() != null) {
             dialog.getWindow().setGravity(android.view.Gravity.BOTTOM);
             dialog.getWindow().setBackgroundDrawable(background(SURFACE, BORDER, 20));
-            dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (Build.VERSION.SDK_INT < 26 || android.animation.ValueAnimator.areAnimatorsEnabled())
                 dialog.getWindow().setWindowAnimations(R.style.RollcallSheetAnimation);
         }
     }
 
-    private void showCloudCredentials(boolean create) {
+    private void addCloudAccountAction(LinearLayout parent, AlertDialog dialog, String title, boolean destructive, Runnable action) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), 0, dp(14), 0);
+        row.setMinimumHeight(dp(54));
+        row.setBackground(background(destructive ? SECONDARY : SURFACE, destructive ? RED : BORDER, 12));
+        TextView label = text(title, 14, destructive ? RED : INK, Typeface.BOLD);
+        row.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
+        row.addView(text("›", 19, destructive ? RED : MUTED, Typeface.BOLD));
+        parent.addView(row, topMargin(-1, -2, 8));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(view -> { dialog.dismiss(); action.run(); });
+    }
+
+    private void showCloudCredentials() {
         if (FirebaseAuth.getInstance().getCurrentUser() != null) { showCloudAccountDialog(); return; }
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(14), dp(24), dp(18));
+        TextView privacy = text("Your attendance stays on this device unless you choose to sync it. MyCamu and KCT sign-ins remain separate.",
+                13, MUTED, Typeface.NORMAL);
+        privacy.setLineSpacing(dp(3), 1f);
+        content.addView(privacy, topMargin(-1, -2, 18));
+        Button google = button("Continue with Google");
+        google.setOnClickListener(v -> startGoogleSignIn(false));
+        content.addView(google, new LinearLayout.LayoutParams(-1, dp(52)));
+        TextView emailLabel = text("EMAIL ADDRESS", 11, MUTED, Typeface.BOLD);
+        LinearLayout.LayoutParams emailLabelParams = topMargin(-1, -2, 18);
+        content.addView(emailLabel, emailLabelParams);
+        EditText email = new EditText(this);
+        styleCloudCredentialField(email, "you@example.com");
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS);
+        email.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        content.addView(email, new LinearLayout.LayoutParams(-1, dp(52)));
+        Button emailLink = button("Continue with email");
+        emailLink.setOnClickListener(v -> sendRollCallEmailLink(email.getText().toString().trim(), false));
+        content.addView(emailLink, topMargin(-1, dp(50), 8));
+        TextView password = text("Sign in with password", 13, darkTheme ? HERO : INK, Typeface.BOLD);
+        password.setGravity(android.view.Gravity.CENTER);
+        password.setMinHeight(dp(48));
+        password.setOnClickListener(v -> showCloudPasswordDialog(email.getText().toString().trim(), false));
+        content.addView(password, topMargin(-1, -2, 6));
+        TextView local = text("Continue without an account", 13, MUTED, Typeface.BOLD);
+        local.setGravity(android.view.Gravity.CENTER);
+        local.setMinHeight(dp(48));
+        content.addView(local);
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Your Rollcall account")
+                .setMessage("Optional cloud access for your Rollcall data.")
+                .setView(content).setNegativeButton("Close", null).create();
+        local.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+    }
+
+    private void showCloudPasswordDialog(String address, boolean create) {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
         fields.setPadding(dp(24), dp(12), dp(24), dp(4));
@@ -1601,31 +1654,190 @@ public class MainActivity extends Activity {
         fields.addView(emailLabel);
         EditText email = new EditText(this);
         styleCloudCredentialField(email, "you@example.com");
+        email.setText(address);
         email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS);
-        email.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
-        LinearLayout.LayoutParams emailParams = new LinearLayout.LayoutParams(-1, dp(52));
-        emailParams.topMargin = dp(5);
-        fields.addView(email, emailParams);
-        TextView passwordLabel = text("PASSWORD", 11, MUTED, Typeface.BOLD);
-        LinearLayout.LayoutParams passwordLabelParams = topMargin(-1, -2, 14);
-        fields.addView(passwordLabel, passwordLabelParams);
+        fields.addView(email, topMargin(-1, dp(52), 5));
         EditText password = new EditText(this);
-        styleCloudCredentialField(password, "8 characters minimum");
+        styleCloudCredentialField(password, "Password");
         password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
         password.setAutofillHints(View.AUTOFILL_HINT_PASSWORD);
-        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
-        LinearLayout.LayoutParams passwordParams = new LinearLayout.LayoutParams(-1, dp(52));
-        passwordParams.topMargin = dp(5);
-        fields.addView(password, passwordParams);
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in to Rollcall")
-                .setMessage("Your verified email protects the web copy of your Rollcall data. Use a password you do not use for MyCamu.")
+        fields.addView(password, topMargin(-1, dp(52), 12));
+        TextView reset = text("Forgot password? Send a reset email", 12, darkTheme ? HERO : INK, Typeface.BOLD);
+        reset.setPadding(0, dp(12), 0, dp(8));
+        reset.setOnClickListener(v -> {
+            String value = email.getText().toString().trim();
+            if (value.isEmpty()) { email.setError("Enter your account email first."); return; }
+            new RollCallAuthRepository(this).resetPassword(value).addOnCompleteListener(this, task ->
+                    Toast.makeText(this, task.isSuccessful() ? "If that account can receive a reset, Firebase has emailed instructions."
+                            : "Could not send a reset email. Check your connection and try again.", Toast.LENGTH_LONG).show());
+        });
+        fields.addView(reset);
+        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in with password")
                 .setView(fields)
                 .setPositiveButton(create ? "Create account" : "Sign in", (d, w) -> {
                     if (create) cloudCreateAccount(email.getText().toString().trim(), password.getText().toString());
                     else cloudSignIn(email.getText().toString().trim(), password.getText().toString());
                 })
-                .setNeutralButton(create ? "Have an account?" : "No account?", (d, w) -> showCloudCredentials(!create))
+                .setNeutralButton(create ? "Have an account?" : "Create account", (d, w) ->
+                        showCloudPasswordDialog(email.getText().toString().trim(), !create))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void sendRollCallEmailLink(String email, boolean linking) {
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            Toast.makeText(this, "Enter a valid email address.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new RollCallAuthRepository(this).sendEmailLink(email, linking).addOnCompleteListener(this, task ->
+                Toast.makeText(this, task.isSuccessful()
+                        ? "Sign-in link sent. Open it on this device to finish signing in."
+                        : "Could not send the sign-in link. Check your connection and try again.", Toast.LENGTH_LONG).show());
+    }
+
+    private void handleRollCallEmailLink(Intent intent) {
+        Uri data = intent == null ? null : intent.getData();
+        if (data == null) return;
+        String link = data.toString();
+        RollCallAuthRepository repository = new RollCallAuthRepository(this);
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (!auth.isSignInWithEmailLink(link)) return;
+        intent.setData(null);
+        SharedPreferences prefs = getSharedPreferences(RollCallAuthRepository.PREFS, MODE_PRIVATE);
+        String savedEmail = prefs.getString(RollCallAuthRepository.EMAIL_LINK_EMAIL, "");
+        boolean linking = prefs.getBoolean(RollCallAuthRepository.EMAIL_LINK_MODE, false);
+        boolean reauth = prefs.getBoolean(RollCallAuthRepository.EMAIL_LINK_REAUTH, false);
+        String expectedUid = prefs.getString(RollCallAuthRepository.EMAIL_LINK_UID, "");
+        if (savedEmail.isEmpty()) {
+            EditText emailInput = new EditText(this);
+            styleCloudCredentialField(emailInput, "Email used to request the link");
+            emailInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+            new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Finish email sign-in")
+                    .setMessage("Enter the same email address that received this sign-in link.")
+                    .setView(emailInput).setPositiveButton("Continue", (d, w) -> completeRollCallEmailLink(repository, emailInput.getText().toString().trim(), link, linking, reauth, expectedUid))
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        completeRollCallEmailLink(repository, savedEmail, link, linking, reauth, expectedUid);
+    }
+
+    private void completeRollCallEmailLink(RollCallAuthRepository repository, String email, String link,
+                                           boolean linking, boolean reauth, String expectedUid) {
+        try {
+            if (reauth) {
+                repository.reauthenticateWithEmailLink(email.trim(), link, expectedUid).addOnCompleteListener(this, task -> {
+                    if (!task.isSuccessful()) {
+                        Exception error = task.getException() instanceof Exception ? (Exception) task.getException()
+                                : new IllegalStateException("Account verification failed.");
+                        Toast.makeText(this, RollCallAuthRepository.userMessage(error), Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    clearEmailLinkState();
+                    deleteReauthenticatedCloudAccount();
+                });
+                return;
+            }
+            repository.completeEmailLink(email.trim(), link, linking, expectedUid).addOnCompleteListener(this, task -> {
+                if (!task.isSuccessful()) {
+                    Exception error = task.getException() instanceof Exception ? (Exception) task.getException()
+                            : new IllegalStateException("Sign-in link could not be verified.");
+                    Toast.makeText(this, RollCallAuthRepository.userMessage(error), Toast.LENGTH_LONG).show();
+                    return;
+                }
+                clearEmailLinkState();
+                FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                if (user != null && !linking) rememberSignedInAccount(user);
+                Toast.makeText(this, linking ? "Email sign-in is connected to your existing account."
+                        : "Email verified. Cloud sync remains off until you connect this phone.", Toast.LENGTH_LONG).show();
+                if (connectedOnce) showAbout();
+                showCloudAccountDialog();
+            });
+        } catch (Exception error) {
+            Toast.makeText(this, RollCallAuthRepository.userMessage(error), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void clearEmailLinkState() {
+        getSharedPreferences(RollCallAuthRepository.PREFS, MODE_PRIVATE).edit()
+                .remove(RollCallAuthRepository.EMAIL_LINK_EMAIL).remove(RollCallAuthRepository.EMAIL_LINK_UID)
+                .remove(RollCallAuthRepository.EMAIL_LINK_MODE).remove(RollCallAuthRepository.EMAIL_LINK_REAUTH).apply();
+    }
+
+    private void promptEmailLinkToAccount() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        EditText email = new EditText(this);
+        styleCloudCredentialField(email, "you@example.com");
+        if (user != null && user.getEmail() != null) email.setText(user.getEmail());
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Connect email sign-in")
+                .setMessage("A one-time link will connect this email method to your current Rollcall account. Your account ID and cloud data stay the same.")
+                .setView(email).setPositiveButton("Send link", (d, w) -> sendRollCallEmailLink(email.getText().toString().trim(), true))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void disableCloudSync() {
+        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("cloud_sync_uid").apply();
+        WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("rollcall-cloud-snapshot");
+        Toast.makeText(this, "Cloud sync is off. The web copy remains in your account; local attendance is unchanged.", Toast.LENGTH_LONG).show();
+        if (connectedOnce) showAbout();
+    }
+
+    private void startGoogleSignIn(boolean linkToCurrentAccount) {
+        FirebaseUser accountToKeep = FirebaseAuth.getInstance().getCurrentUser();
+        new GoogleIdentityClient(this).requestIdToken(new GoogleIdentityClient.Callback() {
+            @Override public void onToken(String token) {
+                RollCallAuthRepository repository = new RollCallAuthRepository(MainActivity.this);
+                com.google.android.gms.tasks.Task<com.google.firebase.auth.AuthResult> operation;
+                try {
+                    operation = linkToCurrentAccount ? repository.linkGoogle(token) : repository.signInWithGoogle(token);
+                } catch (Exception error) {
+                    Toast.makeText(MainActivity.this, RollCallAuthRepository.userMessage(error), Toast.LENGTH_LONG).show();
+                    return;
+                }
+                operation.addOnCompleteListener(MainActivity.this, task -> {
+                    if (!task.isSuccessful()) {
+                        Exception error = task.getException() instanceof Exception ? (Exception) task.getException()
+                                : new IllegalStateException("Sign-in failed.");
+                        Toast.makeText(MainActivity.this, RollCallAuthRepository.userMessage(error), Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                    if (user == null) return;
+                    if (linkToCurrentAccount && (accountToKeep == null || !accountToKeep.getUid().equals(user.getUid()))) {
+                        Toast.makeText(MainActivity.this, "The Rollcall account changed during linking. No data was moved.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    if (!linkToCurrentAccount) rememberSignedInAccount(user);
+                    Toast.makeText(MainActivity.this, linkToCurrentAccount
+                            ? "Google is connected to your existing Rollcall account."
+                            : "Signed in to your Rollcall account. Cloud sync remains off until you connect this phone.", Toast.LENGTH_LONG).show();
+                    if (connectedOnce) showAbout();
+                    showCloudAccountDialog();
+                });
+            }
+            @Override public void onError(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void rememberSignedInAccount(FirebaseUser user) {
+        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putString("last_auth_uid", user.getUid()).apply();
+    }
+
+    private void confirmCloudSyncAndConnect() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) return;
+        String priorOwner = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("cloud_sync_uid", "");
+        String message = priorOwner.isEmpty()
+                ? "Connect this phone and enable cloud sync? Rollcall will upload attendance, schedule, leave/OD, and academic marks so you can view them on the web."
+                : (priorOwner.equals(user.getUid())
+                    ? "Connect this phone to your Rollcall account? The cloud copy stays associated with this account."
+                    : "This phone previously synced data to a different Rollcall account. Connecting will upload the current local snapshot to "
+                        + (user.getEmail() == null ? "this account" : user.getEmail())
+                        + ". The previous account's cloud copy will remain separate.");
+        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Enable cloud sync")
+                .setMessage(message).setPositiveButton("Connect and sync", (d, w) -> registerCloudDevice(null))
                 .setNegativeButton("Not now", null).show();
     }
 
@@ -1643,28 +1855,35 @@ public class MainActivity extends Activity {
 
     private void cloudCreateAccount(String email, String password) {
         if (email.isEmpty() || password.length() < 8) { Toast.makeText(this, "Enter a valid email and a password with at least 8 characters.", Toast.LENGTH_LONG).show(); return; }
-        FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) { Toast.makeText(this, task.getException() == null ? "Account creation failed." : task.getException().getMessage(), Toast.LENGTH_LONG).show(); return; }
+        new RollCallAuthRepository(this).createWithPassword(email, password).addOnCompleteListener(this, task -> {
+            if (!task.isSuccessful()) { Toast.makeText(this, task.getException() == null ? "Account creation failed." : RollCallAuthRepository.userMessage(task.getException()), Toast.LENGTH_LONG).show(); return; }
             FirebaseUser user = task.getResult().getUser();
             if (user == null) return;
             user.sendEmailVerification().addOnCompleteListener(this, sent -> {
-                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", true).apply();
-                Toast.makeText(this, sent.isSuccessful() ? "Account created. Verify your email, then sign in here to connect this phone." : "Account created, but the verification email could not be sent. Use Resend verification.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, sent.isSuccessful() ? "Account created. Verify your email, then sign in to connect this phone." : "Account created, but the verification email could not be sent. Use Resend verification.", Toast.LENGTH_LONG).show();
                 if (connectedOnce) showAbout();
+                showCloudAccountDialog();
             });
         });
     }
 
     private void cloudSignIn(String email, String password) {
-        FirebaseAuth.getInstance().signInWithEmailAndPassword(email, password).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) { Toast.makeText(this, task.getException() == null ? "Sign-in failed." : task.getException().getMessage(), Toast.LENGTH_LONG).show(); return; }
+        new RollCallAuthRepository(this).signInWithPassword(email, password).addOnCompleteListener(this, task -> {
+            if (!task.isSuccessful()) { Toast.makeText(this, task.getException() == null ? "Sign-in failed." : RollCallAuthRepository.userMessage(task.getException()), Toast.LENGTH_LONG).show(); return; }
             FirebaseUser user = task.getResult().getUser();
             if (user == null) return;
+            rememberSignedInAccount(user);
             if (!user.isEmailVerified()) {
-                user.sendEmailVerification();
-                Toast.makeText(this, "Verify your email before connecting the web dashboard.", Toast.LENGTH_LONG).show();
+                user.sendEmailVerification().addOnCompleteListener(this, sent -> {
+                    Toast.makeText(this, sent.isSuccessful() ? "Verify your email before connecting the web dashboard." : "Could not send a verification email. Try again from account settings.", Toast.LENGTH_LONG).show();
+                    showCloudAccountDialog();
+                });
                 if (connectedOnce) showAbout();
-            } else registerCloudDevice(null);
+            } else {
+                Toast.makeText(this, "Signed in. Cloud sync stays off until you connect this phone.", Toast.LENGTH_LONG).show();
+                if (connectedOnce) showAbout();
+                showCloudAccountDialog();
+            }
         });
     }
 
@@ -1676,7 +1895,12 @@ public class MainActivity extends Activity {
                 String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                 String fcm = Tasks.await(FirebaseMessaging.getInstance().getToken(), 20, TimeUnit.SECONDS);
                 CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, emailCode);
-                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", false).putString("registered_device_id", CloudAccountClient.deviceId(this)).apply();
+                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit()
+                        .putString("registered_device_id", CloudAccountClient.deviceId(this))
+                        .putString("registered_uid", user.getUid())
+                        .putString("cloud_sync_uid", user.getUid())
+                        .putString("last_auth_uid", user.getUid())
+                        .apply();
                 CloudAccountClient.enqueueSnapshotSync(this);
                 runOnUiThread(() -> {
                     Toast.makeText(this, "This phone is linked to your Rollcall web account.", Toast.LENGTH_LONG).show();
@@ -1764,6 +1988,8 @@ public class MainActivity extends Activity {
     }
 
     private void signOutCloudAccount() {
+        WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("rollcall-cloud-snapshot");
+        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("pending_web_challenge_id").apply();
         FirebaseAuth.getInstance().signOut();
         Toast.makeText(this, "Signed out of Rollcall web account. Your cloud snapshot remains available when you sign in again.", Toast.LENGTH_LONG).show();
         showAbout();
@@ -1771,26 +1997,57 @@ public class MainActivity extends Activity {
 
     private void confirmCloudAccountDelete() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null) return;
-        EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Rollcall account password");
         new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Delete Rollcall cloud account")
                 .setMessage("This deletes your Rollcall web account, synced cloud snapshot, and trusted-phone approval. MyCamu and your phone’s local snapshot remain unchanged. This cannot be undone.")
-                .setView(password).setPositiveButton("Delete account", (d, w) -> {
-                    if (user.getEmail() == null) return;
-                    user.reauthenticate(EmailAuthProvider.getCredential(user.getEmail(), password.getText().toString())).addOnCompleteListener(this, reauth -> {
-                        if (!reauth.isSuccessful()) { Toast.makeText(this, "Password check failed. Account was not deleted.", Toast.LENGTH_LONG).show(); return; }
-                        new Thread(() -> {
-                            try {
-                                if (user.isEmailVerified()) {
-                                    String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
-                                    CloudAccountClient.deleteCloudAccount(token);
-                                }
-                                Tasks.await(user.delete(), 20, TimeUnit.SECONDS);
-                                FirebaseAuth.getInstance().signOut();
-                                runOnUiThread(() -> { Toast.makeText(this, "Rollcall cloud account deleted. Your phone data is unchanged.", Toast.LENGTH_LONG).show(); showAbout(); });
-                            } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "Could not delete the account. Try again while online.", Toast.LENGTH_LONG).show()); }
-                        }, "rollcall-delete-account").start();
-                    });
-                }).setNegativeButton("Cancel", null).show();
+                .setPositiveButton("Continue", (d, w) -> beginAccountDeletionReauthentication(user))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void beginAccountDeletionReauthentication(FirebaseUser user) {
+        boolean google = false, email = false;
+        for (com.google.firebase.auth.UserInfo provider : user.getProviderData()) {
+            google |= "google.com".equals(provider.getProviderId());
+            email |= "password".equals(provider.getProviderId());
+        }
+        int webClientId = getResources().getIdentifier("default_web_client_id", "string", getPackageName());
+        if (google && webClientId != 0) {
+            new GoogleIdentityClient(this).requestIdToken(new GoogleIdentityClient.Callback() {
+                @Override public void onToken(String token) {
+                    new RollCallAuthRepository(MainActivity.this).reauthenticateWithGoogle(token)
+                            .addOnCompleteListener(MainActivity.this, task -> {
+                                if (task.isSuccessful()) deleteReauthenticatedCloudAccount();
+                                else Toast.makeText(MainActivity.this, task.getException() == null ? "Google verification failed. Account was not deleted."
+                                        : RollCallAuthRepository.userMessage(task.getException()), Toast.LENGTH_LONG).show();
+                            });
+                }
+                @Override public void onError(String message) { Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); }
+            });
+        } else if (email && user.getEmail() != null) {
+            new RollCallAuthRepository(this).sendEmailReauthenticationLink(user.getEmail()).addOnCompleteListener(this, task ->
+                    Toast.makeText(this, task.isSuccessful() ? "A secure confirmation link was sent to your account email. Open it on this device to finish deleting the account."
+                            : "Could not send a confirmation link. Your account was not deleted.", Toast.LENGTH_LONG).show());
+        } else Toast.makeText(this, "This account has no supported sign-in method for secure deletion. Contact support.", Toast.LENGTH_LONG).show();
+    }
+
+    private void deleteReauthenticatedCloudAccount() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
+        new Thread(() -> {
+            try {
+                if (user.isEmailVerified()) {
+                    String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                    CloudAccountClient.deleteCloudAccount(token);
+                }
+                Tasks.await(user.delete(), 20, TimeUnit.SECONDS);
+                FirebaseAuth.getInstance().signOut();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Rollcall cloud account deleted. Your phone data is unchanged.", Toast.LENGTH_LONG).show();
+                    showAbout();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this, "Could not delete the account. Try again while online.", Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-delete-account").start();
     }
 
     private void showPendingWebCode(String challengeId) {
@@ -3245,8 +3502,9 @@ public class MainActivity extends Activity {
             getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putString("pending_web_challenge_id", launchChallenge).apply();
         }
         FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
-        if (cloudUser != null && (getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getBoolean("registration_pending", false)
-                || !CloudAccountClient.deviceId(this).equals(getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("registered_device_id", ""))))
+        SharedPreferences cloudAccountPrefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        if (cloudUser != null && CloudSyncPolicy.allowsUpload(cloudUser.getUid(), cloudAccountPrefs.getString("cloud_sync_uid", ""))
+                && !CloudAccountClient.deviceId(this).equals(cloudAccountPrefs.getString("registered_device_id", "")))
             cloudUser.reload().addOnCompleteListener(task -> { if (task.isSuccessful() && cloudUser.isEmailVerified()) registerCloudDevice(null); });
         String challengeId = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("pending_web_challenge_id", "");
         if (!challengeId.isEmpty()) {
@@ -3268,6 +3526,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        handleRollCallEmailLink(intent);
         String challengeId = intent.getStringExtra("rollcall_web_challenge_id");
         intent.removeExtra("rollcall_web_challenge_id");
         getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("pending_web_challenge_id").apply();

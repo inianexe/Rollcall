@@ -90,15 +90,20 @@
   <dialog id="web-account-dialog" class="dialog">
     <canvas id="auth-shape-grid" aria-hidden="true"></canvas>
     <form id="web-account-form" method="dialog">
-      <div class="dialog-head"><div><h2>Sign in to Rollcall</h2><p>Your week, wherever you open it.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
-      <p class="dialog-copy">Use your Rollcall email and password. We’ll send a code to your linked phone before showing your attendance and marks here.</p>
+      <div class="dialog-head"><div><h2>Your Rollcall account</h2><p>Your academic world, connected.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
+      <p class="dialog-copy">Attendance stays on your phone unless you choose to sync it. Your web data still needs approval from your trusted Rollcall device.</p>
+      <button type="button" class="button button-primary" id="web-google-signin">Continue with Google</button>
       <label>Email<input name="email" type="email" autocomplete="username" required></label>
-      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="button" class="button button-quiet" id="web-email-link">Continue with email</button>
+      <button type="button" class="panel-link" id="web-password-toggle">Sign in with password</button>
+      <label id="web-password-row" hidden>Password<input name="password" type="password" autocomplete="current-password"></label>
+      <button type="button" class="panel-link" id="web-reset-password" hidden>Forgot password?</button>
+      <button type="button" class="panel-link" id="web-link-google" hidden>Connect Google to this account</button>
       <label id="web-code-row" hidden>Six-digit app code<input name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6"></label>
       <button type="button" class="panel-link" id="web-resend-code" hidden>Resend code</button>
       <p id="web-account-feedback" class="notification-feedback" role="status" aria-live="polite"></p>
-      <p class="web-signup-note"><b>No account yet?</b> Create one in the Rollcall Android app, then return here to sign in.</p>
-      <div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Continue locally</button><button type="submit" class="button button-primary" id="web-account-submit">Sign in</button></div>
+      <p class="web-signup-note">New here? Continue with email to create an account, or use your existing password.</p>
+      <div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Continue locally</button><button type="submit" class="button button-primary" id="web-account-submit">Verify code</button></div>
     </form>
   </dialog>
   <script src="shape-grid.js" defer></script>

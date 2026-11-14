@@ -47,9 +47,12 @@ final class CloudAccountClient {
 
     static void registerCurrentDevice(Context context, String fcmToken) {
         com.google.firebase.auth.FirebaseUser user = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null || !user.isEmailVerified()) return;
+        if (user == null || !user.isEmailVerified() || !CloudSyncPolicy.allowsUpload(user.getUid(),
+                context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("cloud_sync_uid", ""))) return;
         String deviceId = deviceId(context);
-        if (!deviceId.equals(context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("registered_device_id", ""))) return;
+        SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!deviceId.equals(prefs.getString("registered_device_id", ""))
+                || !user.getUid().equals(prefs.getString("registered_uid", user.getUid()))) return;
         user.getIdToken(false).addOnSuccessListener(token -> new Thread(() -> {
             try { registerDevice(token.getToken(), deviceId, fcmToken, ""); }
             catch (Exception ignored) { }
@@ -103,7 +106,9 @@ final class CloudAccountClient {
     }
 
     static void enqueueSnapshotSync(Context context) {
-        if (com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        com.google.firebase.auth.FirebaseUser user = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !CloudSyncPolicy.allowsUpload(user.getUid(), context.getApplicationContext()
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("cloud_sync_uid", ""))) return;
         Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(CloudSnapshotSyncWorker.class)
                 .setConstraints(constraints).setInitialDelay(2, TimeUnit.SECONDS)
