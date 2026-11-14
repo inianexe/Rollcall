@@ -1,89 +1,64 @@
-# Rollcall V1
+# RollCall
 
-Hey! I made Rollcall because I kept asking myself: **“Can I skip this class and still stay above 75%?”** 😅
+RollCall is a student attendance companion: a native Android app with an optional browser dashboard.
 
-I wanted a quick way to check my attendance and stop guessing. Then I added my timetable, a little *what if?* calculator, themes, reminders… and suddenly this was a whole app. I’m still making it mostly for myself, but figured other students might find it handy too. Hope it helps you stay on track (and make it to class sometimes 😭).
+| Home | Week | Courses | Academics |
+|---|---|---|---|
+| ![RollCall home screen](release/android-v1/screenshots/01-home.png) | ![Weekly attendance](release/android-v1/screenshots/02-week.png) | ![Course attendance](release/android-v1/screenshots/03-courses.png) | ![Academic records](release/android-v1/screenshots/04-lab.png) |
 
-## Getting started
+## What it does
 
-1. Download **[Rollcall V1 for Android](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0)** from the release assets.
-2. Open it and follow Android’s install prompts.
-3. Open Rollcall and tap **Continue with MyCamu**.
-4. Sign in with your usual account.
-5. Once you’re signed in, you’ll land on the dashboard. Pick a theme and make yourself at home 🎨
+- **Android:** review attendance, weekly trends, courses, timetable, class history, leave records and academic results; connect MyCamu or KCT; set reminders and widgets.
+- **Web:** view a local dashboard or sign in to read the latest phone snapshot. Web sync is read-only; attendance calculations and provider access remain on the phone.
+- **Phone and web:** Firebase Authentication identifies the account; Cloudflare Pages Functions and D1 manage trusted-device verification, browser sessions and account-scoped snapshots. Firebase Cloud Messaging sends web sign-in requests to the trusted phone.
 
-If you close the app before finishing sign-in, just open it again and tap **Continue with MyCamu**.\n\n**Already installed the earlier V1 preview?** The new release signature cannot update over that debug-signed copy. Uninstall the old preview, then install this one. Uninstalling clears Rollcall’s locally saved data, so you’ll need to sign in and sync again.
+The Android app uses Java and native Views with the Torch Genesis design system. The website is lightweight JavaScript served by Cloudflare Pages/Workers; it is not a second Android UI. See [the API contract](docs/architecture/API_CONTRACT.md) and [Torch Genesis design notes](android/TORCH_GENESIS_DESIGN.md).
 
-## What’s where?
+## Install Android
 
-**Home** — your overall attendance, courses that need attention, next class, and the latest class update. Tap the latest class to open your attendance history.
+Download the APK from [GitHub Releases](https://github.com/inianexe/Rollcall/releases). Android may ask you to allow installation from your browser or file manager because the app is distributed outside Google Play. Only install RollCall releases signed with the established RollCall release key.
 
-**Courses** — search for a subject and see your attendance, target, and how many classes you need to attend. Tap **What If** on a course to try out “what if I attend?” or “what if I miss?” without changing your real attendance.
+Current Java source baseline: **version 1.0.24 (versionCode 25)**. The public `v1.0.0` release and checked-in root APK are older and are not an upgrade build for this source. Do not publish the checked-in APK as a current release.
 
-**Week** — your timetable, day by day. Tap a day to see its classes. Switch to **Attendance** for the class history.
+## Development
 
-**Lab** — pick a course, choose **If I miss** or **If I attend**, then change the class count. It’ll estimate your new percentage. Nothing gets changed in your actual record.
+Requirements: Java 17, Android SDK Platform 35 and Android Build Tools. Install the Android SDK, then run:
 
-**Themes** — after sign-in, tap the paintbrush for colors or the moon/sun to switch dark and light. Your choice sticks around.
+```sh
+cd android
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+```
 
-**Reminders** — turn on class reminders in Week if you want a heads-up before class. Android may ask to allow notifications.
+The debug APK is at `android/app/build/outputs/apk/debug/app-debug.apk`. To run the browser Worker tests and syntax checks:
 
-## If Chrome or Android blocks the install
+```sh
+cd web
+npm test
+node --check app.js
+node --check cloud-auth.js
+node --check _worker.js
+node --check functions/_api.js
+```
 
-The APK is signed with Rollcall’s dedicated release key, but it is still distributed outside Google Play, so Chrome or Android may show extra warnings. Only use the [Rollcall GitHub release](https://github.com/inianexe/Rollcall/releases/tag/v1.0.0), check that the file is named **Rollcall-V1.apk**, and keep Chrome Safe Browsing and Play Protect turned on.
+Read [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [development setup](docs/development/README.md) before changing code. Never commit Firebase service credentials, keystores, signing passwords, `local.properties`, APKs built for local use, or private student data.
 
-### Chrome says the file may be dangerous or blocks the download
+## Repository map
 
-Chrome’s Safe Browsing setting lives under **⋮ → Settings → Privacy and security → Safe Browsing**. It can warn about an APK because it is uncommon or not yet recognized. That warning is a real security check, not proof that a file is safe or unsafe. Google’s [Chrome download help](https://support.google.com/chrome/answer/6261569) explains the warning types.
+```text
+android/                  Java Android app, tests, Gradle wrapper
+web/                      Browser UI, Pages Functions, D1 migrations and API tests
+docs/architecture/        Feature inventory and Android–Web API contract
+docs/development/          Local setup and release workflow
+release/android-v1/       Historical screenshots and release notes
+.github/workflows/         Android/Web CI and guarded release workflow
+```
 
-- First, make sure the address is the official GitHub release above. Don’t install an APK from an ad, mirror, message, or lookalike URL.
-- If Chrome offers a scan, choose **Scan**. If it only shows an unfamiliar-file warning and you’ve confirmed the release and filename, you can decide whether to keep the download.
-- If Chrome says the file is dangerous, the download is blocked by your school/work administrator, or there is no option to continue, stop. Don’t switch Safe Browsing off to force it. Try again later or ask your administrator if the device is managed.
+## Privacy and security
 
-### Android says “For your security, your phone isn’t allowed to install unknown apps”
+Attendance records are personal student data. The Android app stores its working data locally; optional cloud snapshots are account-scoped and read-only in the browser. Provider sessions are handled on the phone. Review [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md), and do not attach real student records to issues or pull requests.
 
-Allow the app that downloaded the APK (usually Chrome or Files) to install it:
+## Releases and project status
 
-1. Tap **Settings** on the warning, or open **Settings → Apps → Special app access → Install unknown apps**.
-2. Choose **Chrome** or **Files**—whichever you used to open the APK.
-3. Turn on **Allow from this source**, return to the APK, and tap **Install**.
-4. Afterward, turn **Allow from this source** off again.
+The Java + Web implementation is maintained on [`refactor/rollcall-java-torch`](https://github.com/inianexe/Rollcall/tree/refactor/rollcall-java-torch). The repository's default branch still contains historical Compose work. Promotion is intentionally paused until the divergent branch histories and deployment/release settings are reviewed; see [the transition notes](docs/development/README.md#github-branch-transition).
 
-The menu names can vary a bit by phone. Google has [steps for installing apps from other sources](https://support.google.com/pixelphone/answer/7391672).
-
-### Play Protect says Rollcall is unknown, unverified, or potentially harmful
-
-Play Protect checks apps installed outside Google Play, and some phones may block an unverified app entirely. You can ask Play Protect to scan the APK first. If Android gives you an **Install anyway** option and you have verified that you downloaded this exact release, it’s your choice whether to proceed. Keep Play Protect on. If Android says installation is blocked and offers no supported continue option, stop; don’t turn Play Protect off or try to bypass the device’s block. See [Google’s Play Protect help](https://support.google.com/android/answer/2812853).
-
-Some devices and regions also enforce Android developer verification for sideloaded apps. If you see a separate **developer isn’t verified** block, follow only the official Android flow shown on your phone. If it offers no way to continue, this GitHub preview may not install on that device yet. [Android developer verification details](https://support.google.com/android/answer/17065026).
-
-### Samsung Galaxy says Auto Blocker stopped the install
-
-Auto Blocker can stop apps installed outside Google Play or Galaxy Store. Check **Settings → Security and privacy → Auto Blocker**. If you choose to install Rollcall, turn it off only long enough to install the APK from the official release, then turn it back on. Samsung’s [Auto Blocker guide](https://www.samsung.com/us/support/answer/ANS10003636/) has more detail.
-
-### It says “App not installed” or the download won’t open
-
-- Delete the incomplete download and download **Rollcall-V1.apk** again from the release page.
-- Check that your phone has free storage, then restart the phone and try again.
-- If an older Rollcall preview is already installed, Android may reject this APK if that copy was signed differently. Uninstalling the old copy can fix that, but it also deletes Rollcall’s saved data on that phone—only do this if you’re okay losing it.
-- If the message says the device is managed or installation is disabled by an administrator, only that administrator can change the policy. Don’t try to work around a school/work restriction.
-
-The release includes a SHA-256 checksum file beside the APK for anyone who wants to verify the downloaded file before installing.\n\nThe release signing certificate’s SHA-256 fingerprint is `19117b6b5320c6adb907834880f031d00040e0a3114a9a8d3633539349bf1bc6`. This identifies the signing key used for continuity; it is not a Google Play review or endorsement.
-
-## A couple things to know
-
-Sometimes the portal doesn’t give enough detail to match an attendance record to a specific class. Rollcall will show **Unable to confirm** instead of making something up. For anything important, double-check your student portal.
-
-Updates can take a while in the background, depending on Android. Open Rollcall and sync when you need the latest info.
-
-## Screenshots
-
-Here’s what the main screens look like in monochrome mode:
-
-| Home | Week | Courses | Lab |
-|:---:|:---:|:---:|:---:|
-| <img src="release/android-v1/screenshots/01-home.png" width="145" alt="Rollcall Home"> | <img src="release/android-v1/screenshots/02-week.png" width="145" alt="Rollcall Week"> | <img src="release/android-v1/screenshots/03-courses.png" width="145" alt="Rollcall Courses"> | <img src="release/android-v1/screenshots/04-lab.png" width="145" alt="Rollcall Lab"> |
-
-If Rollcall’s useful to you, a ⭐ on the repo would make my day — and help other students find it too!
-
-Rollcall is an independent project. It isn’t affiliated with MyCamu or any school.
+No license has been selected for this repository yet. Until the owner chooses one, no open-source reuse license is granted. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.

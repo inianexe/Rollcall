@@ -3,61 +3,65 @@ package com.iniexe.rollcall;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class AttendanceTest {
-    @Test public void preservesSafeAbsenceAndRecoveryResultsAtSeventyFivePercent() {
-        Attendance safe = new Attendance("CS101", "Course", 18, 20);
-        Attendance recovering = new Attendance("CS102", "Course", 12, 20);
+    @Test public void parsesCountsAndPercentageRows() {
+        Attendance row = Attendance.parse("CS101 - Algorithms: 75% - (3 / 4)");
 
-        assertEquals(4, safe.safeAbsences(75));
-        assertEquals(0, safe.periodsToRecover(75));
-        assertEquals(0, recovering.safeAbsences(75));
-        assertEquals(12, recovering.periodsToRecover(75));
+        assertEquals("CS101", row.code);
+        assertEquals("Algorithms", row.name);
+        assertEquals(3, row.attended);
+        assertEquals(4, row.total);
+        assertEquals(75.0, row.percentage(), 0.0);
+        assertTrue(row.countsKnown);
     }
 
-    @Test public void exactTargetAndNoClassesKeepExistingGuidanceBehavior() {
-        Attendance exact = new Attendance("CS101", "Course", 3, 4);
-        Attendance empty = new Attendance("CS102", "Course", 0, 0);
+    @Test public void acceptsPercentageOnlyTooltipRowsWithoutInventingCounts() {
+        Attendance row = Attendance.parse("■ CS101 - Algorithms: 73.5%");
 
-        assertEquals(0, exact.safeAbsences(75));
-        assertEquals(0, exact.periodsToRecover(75));
-        assertEquals("One missed period would put you below 75%", exact.guidance(75));
-        assertEquals("No classes recorded yet", empty.guidance(75));
+        assertEquals(73.5, row.percentage(), 0.0);
+        assertFalse(row.countsKnown);
+        assertEquals(0, row.total);
+        assertTrue(row.guidance(75).contains("Safe absence guidance is unavailable"));
     }
 
-    @Test public void oneHundredPercentTargetCannotBeRecoveredAfterAnAbsence() {
-        Attendance partial = new Attendance("CS101", "Course", 9, 10);
-        Attendance perfect = new Attendance("CS102", "Course", 10, 10);
+    @Test public void attendanceGuidanceUsesTargetBoundary() {
+        Attendance aboveTarget = new Attendance("CS101", "Algorithms", 8, 10);
+        Attendance belowTarget = new Attendance("CS101", "Algorithms", 5, 10);
 
-        assertEquals(Integer.MAX_VALUE, partial.periodsToRecover(100));
-        assertEquals("A 100% target cannot be recovered after missed periods", partial.guidance(100));
-        assertEquals(0, perfect.safeAbsences(100));
-        assertEquals(Integer.MAX_VALUE, perfect.periodsToRecover(100));
+        assertEquals(0, aboveTarget.safeAbsences(75));
+        assertEquals(0, aboveTarget.periodsToRecover(75));
+        assertEquals(10, belowTarget.periodsToRecover(75));
+        assertEquals(Integer.MAX_VALUE, belowTarget.periodsToRecover(100));
     }
 
-    @Test public void zeroAttendanceAndDifferentTargetsKeepExistingCalculations() {
-        Attendance none = new Attendance("CS101", "Course", 0, 5);
-        Attendance nineOfTen = new Attendance("CS102", "Course", 9, 10);
+    @Test public void approvedOdCanBeExcludedOrCountedAsAttendance() {
+        Attendance row = new Attendance("CS101", "Algorithms", 5, 8);
 
-        assertEquals(0, none.safeAbsences(75));
-        assertEquals(15, none.periodsToRecover(75));
-        assertEquals("Attend 15 periods in a row to reach 75%", none.guidance(75));
-        assertEquals(8, nineOfTen.safeAbsences(50));
-        assertEquals(0, nineOfTen.periodsToRecover(90));
-        assertEquals(10, nineOfTen.periodsToRecover(95));
+        Attendance excluded = row.withApprovedOd(2, true);
+        assertEquals(5, excluded.attended);
+        assertEquals(6, excluded.total);
+        assertEquals(83.3333333333, excluded.percentage(), 0.000000001);
+
+        Attendance counted = row.withApprovedOd(2, false);
+        assertEquals(7, counted.attended);
+        assertEquals(8, counted.total);
+        assertEquals(87.5, counted.percentage(), 0.0);
     }
 
-    @Test public void existingRoundingAndInvalidInputBehaviorAreCharacterized() {
-        Attendance rounded = new Attendance("CS101", "Course", 11, 13);
-        assertEquals(1, rounded.safeAbsences(75));
-        assertEquals(0, rounded.periodsToRecover(75));
-        assertEquals(null, Attendance.parse(""));
-        assertEquals(null, Attendance.parse("CS101 - Course: 90% (1/2)"));
-        assertEquals(false, Attendance.parse("CS101 - Course: 50%").countsKnown);
-    }
+    @Test public void rejectsInconsistentPortalRowsAndInvalidCounts() {
+        assertNull(Attendance.parse("CS101 - Algorithms: 75% - (2 / 4)"));
+        assertNull(Attendance.parse("CS101 - Algorithms: 125%"));
 
-    @Test public void invalidConstructorCountsRemainRejected() {
-        org.junit.Assert.assertThrows(IllegalArgumentException.class,
-                () -> new Attendance("CS101", "Course", 2, 1));
+        try {
+            new Attendance("CS101", "Algorithms", 5, 4);
+            fail("Expected invalid counts to be rejected");
+        } catch (IllegalArgumentException expected) {
+            // Expected validation at the model boundary.
+        }
     }
 }

@@ -1,4 +1,4 @@
-name: Publish Rollcall V1 APK and notify users
+name: Publish versioned Rollcall APK and notify users
 
 on:
   push:
@@ -7,11 +7,13 @@ on:
       - "Rollcall V1.apk"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out release files
         uses: actions/checkout@v4
@@ -28,7 +30,6 @@ jobs:
         run: |
           set -euo pipefail
           apk="Rollcall V1.apk"
-          release_apk="Rollcall-V1.apk"
           test -s "$apk"
           size="$(stat -c %s "$apk")"
           test "$size" -gt 1000000
@@ -40,34 +41,39 @@ jobs:
           test "$package_name" = "com.iniexe.rollcall"
           [[ "$version_code" =~ ^[0-9]+$ ]]
           [[ "$version_name" =~ ^[A-Za-z0-9._-]{1,80}$ ]]
+          expected_version_code="$(sed -nE 's/.*versionCode ([0-9]+).*/\1/p' android/app/build.gradle | head -1)"
+          expected_version_name="$(sed -nE "s/.*versionName '([^']+)'.*/\\1/p" android/app/build.gradle | head -1)"
+          test "$version_code" = "$expected_version_code"
+          test "$version_name" = "$expected_version_name"
 
+          expected_signer="19117b6b5320c6adb907834880f031d00040e0a3114a9a8d3633539349bf1bc6"
+          signer="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr '[:upper:]' '[:lower:]' | head -1)"
+          test "$signer" = "$expected_signer"
+
+          release_apk="Rollcall-${version_name}.apk"
           cp "$apk" "$release_apk"
           sha256sum "$release_apk" > "$release_apk.sha256"
 
           cat > /tmp/rollcall-release-notes.md <<NOTES
           <!-- rollcall-version-code: $version_code -->
           <!-- rollcall-version-name: $version_name -->
-          # Rollcall V1
+          # Rollcall $version_name
 
-          Download **Rollcall-V1.apk** below. It is signed with Rollcall’s release key and distributed outside Google Play, so Chrome or Android may still show security warnings. Install steps and screenshots are in the README.
+          Download **$release_apk** below. It is signed with Rollcall’s release key and distributed outside Google Play, so Chrome or Android may still show security warnings. Install steps and screenshots are in the README.
 
           The matching SHA-256 checksum is included alongside the APK.
           NOTES
 
-          tag="v1.0.0"
+          tag="v${version_name}"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$release_apk" "$release_apk.sha256" --clobber
-            gh release edit "$tag" --title "Rollcall V1 — Android Preview" --notes-file /tmp/rollcall-release-notes.md
-          else
-            gh release create "$tag" "$release_apk" "$release_apk.sha256" --target "$GITHUB_SHA" \
-              --title "Rollcall V1 — Android Preview" --notes-file /tmp/rollcall-release-notes.md --latest
+            echo "::error::Release $tag already exists. Historical releases and assets are never overwritten by this workflow."
+            exit 1
           fi
+          gh release create "$tag" "$release_apk" "$release_apk.sha256" --target "$GITHUB_SHA" \
+            --title "Rollcall ${version_name} — Android Preview" --notes-file /tmp/rollcall-release-notes.md --latest
 
-          uploaded_size="$(gh api "repos/inianexe/Rollcall/releases/tags/$tag" --jq '.assets[] | select(.name == "Rollcall-V1.apk") | .size')"
+          uploaded_size="$(gh api "repos/inianexe/Rollcall/releases/tags/$tag" --jq '.assets[] | select(.name | endswith(".apk")) | .size')"
           test "$uploaded_size" -eq "$size"
-          for stale_asset in app-debug.apk app-debug.apk.sha256 Rollcall.V1.apk Rollcall.V1.apk.sha256; do
-            gh release delete-asset "$tag" "$stale_asset" --yes || true
-          done
 
           npm install --prefix "$RUNNER_TEMP/firebase-admin" firebase-admin@13
           NODE_PATH="$RUNNER_TEMP/firebase-admin/node_modules" \
@@ -86,8 +92,8 @@ jobs:
                 type: 'update',
                 versionCode: process.env.VERSION_CODE,
                 versionName: process.env.VERSION_NAME,
-                releaseTag: 'v1.0.0',
-                releaseTitle: 'Rollcall V1'
+                releaseTag: `v${process.env.VERSION_NAME}`,
+                releaseTitle: `Rollcall ${process.env.VERSION_NAME}`
               },
               android: { priority: 'high' }
             });

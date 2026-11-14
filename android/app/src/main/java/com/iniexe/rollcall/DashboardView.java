@@ -1,24 +1,5 @@
 package com.iniexe.rollcall;
 
-import com.iniexe.rollcall.ui.bridge.RollcallHeroIdentityView;
-import com.iniexe.rollcall.ui.bridge.LatestClassAttendanceCardView;
-import com.iniexe.rollcall.ui.bridge.CoursesScreenView;
-import com.iniexe.rollcall.ui.bridge.WeekScreenView;
-import com.iniexe.rollcall.ui.bridge.UpcomingExamCardView;
-import com.iniexe.rollcall.ui.screens.home.HomeHeroIdentityState;
-import com.iniexe.rollcall.ui.screens.home.LatestClassAttendanceState;
-import com.iniexe.rollcall.ui.screens.courses.CourseCardUiState;
-import com.iniexe.rollcall.ui.screens.courses.CourseMetricUiState;
-import com.iniexe.rollcall.ui.screens.courses.CourseFilter;
-import com.iniexe.rollcall.ui.screens.courses.CoursesScreenUiState;
-import com.iniexe.rollcall.ui.screens.home.UpcomingExamCardState;
-import com.iniexe.rollcall.ui.screens.week.AttendanceHistoryUiState;
-import com.iniexe.rollcall.ui.screens.week.ScheduleClassUiState;
-import com.iniexe.rollcall.ui.screens.week.ScheduleDayUiState;
-import com.iniexe.rollcall.ui.screens.week.WeekPulseUiState;
-import com.iniexe.rollcall.ui.screens.week.WeekScreenUiState;
-import com.iniexe.rollcall.ui.screens.week.WeekDataStatus;
-
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -35,8 +16,10 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.Drawable;
+import android.text.Editable;
 import android.text.SpannableString;
 import android.text.Spanned;
+import android.text.TextWatcher;
 import android.text.style.ReplacementSpan;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -55,6 +38,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -82,6 +66,7 @@ final class DashboardView extends FrameLayout {
         void onTheme();
         void onPalette();
         void onAbout();
+        void onRemindersToggle();
         void onFilter(boolean belowOnly);
         void onQuery(String value);
         void onCourse(String code);
@@ -89,6 +74,7 @@ final class DashboardView extends FrameLayout {
 
     static final class State {
         boolean dark;
+        boolean remindersEnabled;
         String name = "MyCamu student", initials = "R";
         String status = "", heroMessage = "— / —";
         String overallCaption = "classes attended", targetHint = "";
@@ -121,7 +107,6 @@ final class DashboardView extends FrameLayout {
 
     static final class Course {
         String code = "", name = "", percentLabel = "", status = "", counts = "", guidance = "", targetCount = "";
-        String canMissText = "—", mustAttendText = "—";
         float percent;
         int attended, total, color, odCredit, odCount;
         boolean odReconciled;
@@ -179,16 +164,18 @@ final class DashboardView extends FrameLayout {
     private final Typeface cyberpunkTypeface;
     private final FrameLayout pages = new FrameLayout(getContext());
     private final ScrollView[] pageScrolls = new ScrollView[5];
-    private final View[] pageViews = new View[5];
     private final LinearLayout[] pageBodies = new LinearLayout[5];
-    private final LinearLayout[] courseLists = new LinearLayout[1];
+    private final LinearLayout[] courseLists = new LinearLayout[2];
     private final ArrayList<CourseRow> courseViews = new ArrayList<>();
+    private final ArrayList<CourseGroupRow> courseGroupViews = new ArrayList<>();
     private final ArrayList<TextView> avatars = new ArrayList<>();
     private final HashSet<String> expandedScheduleDays = new HashSet<>();
+    private final Set<String> revealedContent = new HashSet<>();
     private boolean scheduleExpansionInitialized;
     private String pendingScheduleRevealDate = "";
-    private SyncGlyphView dashboardSyncGlyph;
+    private StatusMarkView dashboardSyncGlyph;
     private final Typeface uiTypeface;
+    private final Typeface uiBoldTypeface;
     private final Typeface displayTypeface;
     private final LinearLayout nav = new LinearLayout(getContext());
     private NavBackgroundDrawable navBackground;
@@ -196,13 +183,15 @@ final class DashboardView extends FrameLayout {
     private final LinearLayout[] navTabs = new LinearLayout[5];
     private final ImageView[] navIcons = new ImageView[5];
     private AttendanceRail attendanceRail;
-    private TextView overviewGoal, decisionCourse, decisionLabel, decisionAction, plannerBaseline;
+    private TextView overviewGoal, courseSummary, decisionCourse, decisionLabel, decisionAction, plannerBaseline;
     private String decisionCode = "";
     private ModeSwitchButtonView homeThemeButton;
     private final TextView[] navItems = new TextView[5];
 
+    private ShuffleTextView headlineView;
     private TextView statusView, heroMessageView, captionView, targetHintView, rulerTargetLabel;
-    private CoursesScreenView coursesScreenView;
+    private TextView allCoursesFilter, focusCoursesFilter;
+    private TextView coursesEmptyView;
     private TextView attendancePercentView, onTrackView, overviewEmptyView, targetView;
     private TextView attendForecastView, skipForecastView, forecastStatusView;
     private LinearLayout attendForecastTile, skipForecastTile;
@@ -214,20 +203,32 @@ final class DashboardView extends FrameLayout {
     private final Runnable classStartRefresh = () -> { updateDecision(); updateOverviewSchedule(); };
     private TextView overviewLeaveSummary;
     private View overviewCourseHeader;
-    private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewExamSection;
-    private UpcomingExamCardView overviewExamBlock;
-    private LatestClassAttendanceCardView overviewAttendanceBlock;
+    private LinearLayout overviewScheduleBlock, overviewWeekBlock, overviewLeaveBlock, overviewAttendanceBlock, overviewExamSection;
+    private LinearLayout overviewExamBlock;
+    private TextView overviewExamTitle, overviewExamWhen, overviewExamDate, overviewExamDetails, overviewExamType, overviewExamSession;
+    private TextView overviewAttendanceTitle, overviewAttendanceCourse, overviewAttendanceStatus;
     private LinearLayout overviewScheduleRows;
     private TextView overviewWeekMeta;
     private WeekPulseView overviewWeekPulse;
-    private TextView projectionView, projectionStatusView, plannerCountView;
+    private TextView projectionView, projectionStatusView, plannerCountView, plannerCurrentPercentView;
     private final java.util.Map<String, Float> previousCourseProgress = new java.util.HashMap<>();
-    private RollcallHeroIdentityView homeHeroIdentity;
+    private TextView welcomeView;
+    private TextView homeDateView, homeWeekNumberView, homeWeekMonthView, homeTicketLabelView, homeEncouragementView;
+    private TextView broadcastStatusView, broadcastCaptionView, broadcastNextView;
+    private FrameLayout homeTicketView;
+    private int homeTicketDestination = 2;
+    private final int linkInk;
     private boolean wasSyncing;
     private PlannerMeter plannerMeter;
     private TextView plannerFeedback;
-    private WeekScreenView weekScreenView;
-    private LinearLayout odOptions;
+    private TextView scheduleUpdatedView, scheduleEmptyView, historyEmptyView;
+    private LinearLayout scheduleEmptyPanel;
+    private TextView scheduleEmptyTitle, scheduleEmptyDetail;
+    private WeekPulseView weekPulse;
+    private BellToggleView weekBell;
+    private TextView weekPulseMeta;
+    private LinearLayout scheduleRows, historyRows, scheduleContent, historyContent;
+    private LinearLayout scheduleExtras, odOptions;
     private ScrollView odDetailsPage;
     private LinearLayout odDetailsRows;
     private TextView currentSemesterOdFilter, allOdFilter;
@@ -238,20 +239,24 @@ final class DashboardView extends FrameLayout {
     private TextView odNotice;
     private final TextView[] odChips = new TextView[3];
     private int odMode;
-    private boolean showingHistory;
+    private JellyRadioView coursesRadio, weekRadio, plannerRadio;
+    private boolean showingHistory = true;
     private int historyLimit = 30;
+    private boolean scheduleDirty = true;
+    private boolean historyDirty = true;
     private FrameLayout coursePicker;
     private TextView coursePickerText;
     private PopupWindow coursePopup;
+    private EditText coursesSearch;
     private FrameLayout dashboardSyncButton;
     private State state = new State();
     private String query = "";
     private boolean belowOnly;
     private boolean plannerAttend;
-    private TextView plannerMissView, plannerAttendView;
     private int plannerCount = 1, plannerCourse;
     private int selectedPage;
     private LinearLayout academicsContent;
+    private String selectedSemester = "";
     private boolean initialized;
     private int swipeTouchSlop;
     private float swipeDownX, swipeDownY;
@@ -264,6 +269,10 @@ final class DashboardView extends FrameLayout {
         try { loadedTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/JetBrainsMono-Regular.ttf"); }
         catch (RuntimeException ignored) { loadedTypeface = Typeface.create("monospace", Typeface.NORMAL); }
         uiTypeface = loadedTypeface;
+        Typeface loadedBold;
+        try { loadedBold = Typeface.createFromAsset(context.getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
+        catch (RuntimeException ignored) { loadedBold = Typeface.create(uiTypeface, Typeface.BOLD); }
+        uiBoldTypeface = loadedBold;
         cyberpunk = "Night City 2077".equals(palette.name);
         Typeface themeDisplayTypeface;
         if (cyberpunk) {
@@ -277,7 +286,7 @@ final class DashboardView extends FrameLayout {
                 themeDisplayTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/NovaRound-Bold.ttf");
             } catch (RuntimeException ignored) { /* Keep the readable system fallback. */ }
         }
-        displayTypeface = cyberpunk ? themeDisplayTypeface : Typeface.create(uiTypeface, Typeface.BOLD);
+        displayTypeface = cyberpunk ? themeDisplayTypeface : uiBoldTypeface;
         Typeface themeTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
         if (cyberpunk) {
             try { themeTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/Cyberpunk-Regular.ttf"); }
@@ -290,7 +299,9 @@ final class DashboardView extends FrameLayout {
         surface = palette.surface; border = palette.border; soft = palette.soft;
         green = palette.green; red = palette.red; amber = palette.amber;
         hero = palette.hero; heroText = palette.heroText; heroMuted = palette.heroMuted;
-        lime = palette.highlight; track = palette.track;
+        lime = palette.canvas == 0xFF121212 ? palette.button : 0xFF365000;
+        linkInk = palette.canvas == 0xFF121212 ? palette.button : palette.highlight;
+        track = palette.track;
         focusSurface = palette.focusSurface;
         labBadgeBackground = palette.button; labBadgeForeground = palette.buttonText;
         setBackgroundColor(canvas);
@@ -301,14 +312,11 @@ final class DashboardView extends FrameLayout {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             swipeDownX = event.getX();
             swipeDownY = event.getY();
-            View page = selectedPage >= 0 && selectedPage < pageViews.length
-                    ? pageViews[selectedPage] : null;
-            float pageX = page == null ? 0 : event.getX() - pages.getLeft() - page.getLeft();
-            float pageY = page == null ? 0 : event.getY() - pages.getTop() - page.getTop();
-            boolean searchTouch = page instanceof CoursesScreenView
-                    && ((CoursesScreenView) page).isSearchTouch(pageX, pageY);
-            swipeAllowed = !odDetailsOpen && page instanceof ViewGroup
-                    && !searchTouch && !startsOnHorizontalControl((ViewGroup) page, pageX, pageY);
+            ScrollView page = selectedPage >= 0 && selectedPage < pageScrolls.length
+                    ? pageScrolls[selectedPage] : null;
+            swipeAllowed = !odDetailsOpen && page != null
+                    && !startsOnHorizontalControl(page, event.getX() - pages.getLeft() - page.getLeft(),
+                    event.getY() - pages.getTop() - page.getTop());
             swipingPages = false;
             return false;
         }
@@ -345,32 +353,85 @@ final class DashboardView extends FrameLayout {
     void update(State next) {
         if (next == null) return;
         state = next;
+        scheduleDirty = true;
+        historyDirty = true;
         query = next.query == null ? query : next.query;
         belowOnly = next.belowOnly;
-        if (homeHeroIdentity == null) return;
+        if (headlineView == null) return;
         String displayName = next.name == null ? "MyCamu student"
                 : next.name.trim().replaceAll("\\s+", " ").replaceAll("\\s+([,.;:!?])", "$1")
                         .replaceAll("\\.$", "");
+        String name = displayName.toUpperCase(Locale.ROOT);
+        String heroHeadline = name + ".\nYOU GOT THIS.";
+        SpannableString heroSpans = new SpannableString(heroHeadline);
+        heroSpans.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                name.length(), name.length() + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        heroSpans.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                heroHeadline.length() - 1, heroHeadline.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        headlineView.setShuffledText(heroSpans);
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         String greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+        welcomeView.setText(greeting + ",");
         SimpleDateFormat broadcastDate = new SimpleDateFormat("EEE / dd MMM", Locale.ENGLISH);
-        Calendar currentWeek = Calendar.getInstance();
-        String encouragement = next.rows.isEmpty() ? "YOUR ACADEMIC WEEK, DECODED."
-                : next.below == 0 ? "YOU’RE KEEPING UP. ONE CLASS AT A TIME."
-                : "ONE CLASS AT A TIME. YOUR WEEK, DECODED.";
-        homeHeroIdentity.setIdentity(new HomeHeroIdentityState(
-                greeting + ",", displayName.toUpperCase(Locale.ROOT) + ".",
-                broadcastDate.format(new Date()).toUpperCase(Locale.ROOT),
-                String.format(Locale.ROOT, "%02d", currentWeek.get(Calendar.WEEK_OF_YEAR)),
-                new SimpleDateFormat("MMMM", Locale.ENGLISH).format(new Date()).toUpperCase(Locale.ROOT),
-                encouragement));
+        homeDateView.setText(broadcastDate.format(new Date()).toUpperCase(Locale.ROOT));
+        // The physical calendar represents a real date, not a decorative week number.
+        long now = System.currentTimeMillis();
+        long eventAt = Long.MAX_VALUE;
+        String eventLabel = "TODAY";
+        homeTicketDestination = 2;
+        for (ScheduleItem scheduled : next.timetable) {
+            if (!scheduled.cancelled && !scheduled.allDay && scheduled.startsAt >= now
+                    && scheduled.startsAt < eventAt) {
+                eventAt = scheduled.startsAt;
+                eventLabel = "NEXT CLASS";
+            }
+        }
+        boolean futureExam = next.upcomingExamAt > 0 && !next.upcomingExamTitle.isEmpty()
+                && (next.upcomingExamAt >= now || (!next.upcomingExamHasTime
+                && new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date(next.upcomingExamAt))
+                .equals(new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date(now)))));
+        if (futureExam && (eventAt == Long.MAX_VALUE || next.upcomingExamAt < eventAt)) {
+            eventAt = next.upcomingExamAt;
+            eventLabel = "EXAM DATE";
+            homeTicketDestination = 4;
+        }
+        Date displayedDate = new Date(eventAt == Long.MAX_VALUE ? now : eventAt);
+        homeTicketLabelView.setText(eventLabel);
+        homeWeekNumberView.setText(new SimpleDateFormat("dd", Locale.ENGLISH).format(displayedDate));
+        homeWeekMonthView.setText(new SimpleDateFormat("EEE · MMM", Locale.ENGLISH)
+                .format(displayedDate).toUpperCase(Locale.ROOT));
+        if (homeTicketView != null) {
+            homeTicketView.setContentDescription(eventLabel + ", "
+                    + new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH).format(displayedDate)
+                    + ". Open " + (homeTicketDestination == 4 ? "marks and exams" : "your week"));
+        }
+        homeEncouragementView.setText("One class at a time. Your academic week, decoded.");
+        if (broadcastStatusView != null) {
+            if (!next.attendanceLoaded) {
+                broadcastStatusView.setText("WAITING ↗");
+                broadcastCaptionView.setText("Connect to see your snapshot");
+            } else if (next.below > 0) {
+                broadcastStatusView.setText(next.below + " NEED FOCUS");
+                broadcastCaptionView.setText("Courses below your target");
+            } else {
+                broadcastStatusView.setText("ON TRACK ↗");
+                broadcastCaptionView.setText("Academic snapshot");
+            }
+            broadcastNextView.setText(next.upcomingExamAt > System.currentTimeMillis()
+                    ? "One exam.\nOne step\nahead." : "Don't miss\nyour next\nmove.");
+        }
         String avatarLabel = next.initials == null || next.initials.isEmpty()
                 ? "R." : next.initials.substring(0, 1) + ".";
         for (TextView avatar : avatars) avatar.setText(avatarLabel);
         if (homeThemeButton != null) homeThemeButton.setDark(next.dark);
+        if (weekBell != null) weekBell.setChecked(next.remindersEnabled);
         if (attendanceRail != null) attendanceRail.invalidate();
         if (overviewGoal != null) overviewGoal.setText(next.target + "% target  ↗");
         if (rulerTargetLabel != null) rulerTargetLabel.setText(next.target + "% target");
+        if (courseSummary != null) {
+            courseSummary.setVisibility(next.rows.isEmpty() ? GONE : VISIBLE);
+            courseSummary.setText(next.courses + " courses  ·  " + next.below + " below target");
+        }
         boolean completedSync = wasSyncing && !next.syncing && next.syncSucceeded && !next.syncError && !next.sessionExpired;
         wasSyncing = next.syncing;
         statusView.setText(next.syncing ? "Checking your latest attendance…" : next.status);
@@ -378,7 +439,7 @@ final class DashboardView extends FrameLayout {
             statusView.announceForAccessibility("Attendance updated. You’re ready to plan.");
             settleFeedback(statusView);
         }
-        statusView.setTextColor(next.syncError ? 0xFF762B1E : next.syncing ? 0xFF704400 : heroMuted);
+        statusView.setTextColor(heroText);
         statusView.setContentDescription(next.syncError ? "Attendance refresh failed. " + next.status : next.status);
         statusView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         statusView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
@@ -409,11 +470,18 @@ final class DashboardView extends FrameLayout {
             String statusLabel = "present".equals(next.latestClassStatus) ? "Present"
                     : "absent".equals(next.latestClassStatus) ? "Absent"
                     : "not_taken".equals(next.latestClassStatus) ? "Not marked yet" : "Unable to confirm";
-            overviewAttendanceBlock.setAttendanceState(new LatestClassAttendanceState(
-                    next.latestClassName, statusLabel, next.latestClassStatus,
-                    "Latest class attendance. " + next.latestClassName + ": " + statusLabel + ". Open attendance history"));
+            int statusColor = "present".equals(next.latestClassStatus) ? green
+                    : "absent".equals(next.latestClassStatus) ? red
+                    : "not_taken".equals(next.latestClassStatus) ? amber : muted;
+            overviewAttendanceTitle.setText("LATEST CLASS");
+            overviewAttendanceTitle.setTextColor(muted);
+            overviewAttendanceCourse.setText(next.latestClassName);
+            overviewAttendanceStatus.setText(statusLabel);
+            overviewAttendanceStatus.setTextColor(statusColor);
+            overviewAttendanceStatus.setBackground(shape(statusTint(statusColor), 9, 0));
         }
         updateSyncIndicator(next.syncing, next.syncError || next.sessionExpired || next.partialSync, next.syncSucceeded);
+        updateSearchFields();
         rebuildCourseRows();
         updatePlannerCourses();
         refreshVisibleRows();
@@ -435,7 +503,9 @@ final class DashboardView extends FrameLayout {
             if (state.sessionExpired) actions.onPortal();
             else actions.onSync();
         });
-        dashboardSyncGlyph.show(syncing, failed, succeeded);
+        dashboardSyncGlyph.setState(syncing ? StatusMarkView.State.RUNNING
+                : failed ? StatusMarkView.State.FAILED
+                : succeeded ? StatusMarkView.State.DONE : StatusMarkView.State.PENDING);
     }
 
     private void build() {
@@ -455,9 +525,9 @@ final class DashboardView extends FrameLayout {
         buildTimetablePage();
         buildLabPage();
         buildAcademicsPage();
-        for (int i = 0; i < pageViews.length; i++) {
-            pageViews[i].setVisibility(i == 0 ? VISIBLE : GONE);
-            pages.addView(pageViews[i], new FrameLayout.LayoutParams(-1, -1));
+        for (int i = 0; i < pageScrolls.length; i++) {
+            pageScrolls[i].setVisibility(i == 0 ? VISIBLE : GONE);
+            pages.addView(pageScrolls[i], new FrameLayout.LayoutParams(-1, -1));
         }
         buildOdDetailsPage();
         buildNavigation(shell);
@@ -466,27 +536,85 @@ final class DashboardView extends FrameLayout {
     private void buildOverview() {
         LinearLayout body = newPage(0);
         LinearLayout heroCard = column();
-        heroCard.setPadding(dp(16), dp(14), dp(16), dp(14));
-        heroCard.setBackground(shape(hero, 18, 0));
-        homeHeroIdentity = new RollcallHeroIdentityView(getContext(), palette.toComposeColors());
-        heroCard.addView(homeHeroIdentity, lp(-1, -2));
+        heroCard.setPadding(dp(22), dp(22), dp(22), dp(18));
+        heroCard.setBackground(new BroadcastBackgroundDrawable());
+        LinearLayout transmission = row();
+        transmission.setGravity(Gravity.CENTER_VERTICAL);
+        TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 10, heroText, Typeface.BOLD);
+        transmission.addView(transmissionLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        homeDateView = text("THU / 12 NOV", 9, heroText, Typeface.BOLD);
+        homeDateView.setGravity(Gravity.CENTER);
+        homeDateView.setPadding(dp(8), dp(6), dp(8), dp(6));
+        homeDateView.setBackground(shape(hero, 100, heroText));
+        transmission.addView(homeDateView, lp(-2, -2));
+        heroCard.addView(transmission);
+
+        LinearLayout identityRow = row();
+        identityRow.setGravity(Gravity.CENTER_VERTICAL);
+        identityRow.setClipChildren(false);
+        LinearLayout identity = column();
+        welcomeView = text("Good afternoon,", 11, 0xFF343A26, Typeface.NORMAL);
+        identity.addView(welcomeView);
+        headlineView = new ShuffleTextView(getContext());
+        headlineView.setText("YOU GOT THIS.");
+        headlineView.setTextSize(25);
+        headlineView.setTextColor(heroText);
+        headlineView.setTypeface(uiBoldTypeface);
+        headlineView.setLetterSpacing(-.07f);
+        headlineView.setMaxLines(4);
+        headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        identity.addView(headlineView, topLp(-1, -2, 4));
+        homeEncouragementView = text("One class at a time. Your academic week, decoded.", 10, heroText, Typeface.NORMAL);
+        homeEncouragementView.setMaxLines(3);
+        identity.addView(homeEncouragementView, topLp(-1, -2, 3));
+        identityRow.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
+        identityRow.addView(homeWeekTicket(), lp(dp(112), dp(140)));
+        heroCard.addView(identityRow, topLp(-1, -2, 14));
 
         LinearLayout syncLine = row();
         syncLine.setGravity(Gravity.CENTER_VERTICAL);
         statusView = text("", 10, heroMuted, Typeface.NORMAL);
         syncLine.addView(statusView, new LinearLayout.LayoutParams(0, -2, 1));
         dashboardSyncButton = new FrameLayout(getContext());
-        dashboardSyncButton.setBackground(shape(0x223F4B16, 100, 0x663F4B16));
+        dashboardSyncButton.setBackground(shape(0x33FFFFFF, 100, 0x55111111));
         dashboardSyncButton.setClickable(true);
         dashboardSyncButton.setFocusable(true);
-        dashboardSyncGlyph = new SyncGlyphView(getContext());
+        dashboardSyncGlyph = new StatusMarkView(getContext(), heroText, heroText, 0xFF9A2E00);
         dashboardSyncButton.addView(dashboardSyncGlyph,
                 new FrameLayout.LayoutParams(-1, -1));
         dashboardSyncButton.setContentDescription("Refresh attendance from MyCamu");
         dashboardSyncButton.setOnClickListener(v -> actions.onSync());
         syncLine.addView(dashboardSyncButton, lp(dp(48), dp(48)));
         heroCard.addView(syncLine, topLp(-1, -2, 8));
-        addTop(body, heroCard, 10);
+        addTop(body, animated(heroCard, "home-hero"), 10);
+
+        // HTML reference: two-card STATUS / LIVE and WHAT'S NEXT? broadcast beneath the hero.
+        LinearLayout broadcasts = row();
+        LinearLayout live = column();
+        live.setPadding(dp(15), dp(13), dp(13), dp(14));
+        live.setBackground(shape(surface, 15, border));
+        live.addView(label("STATUS / LIVE", 9, muted, Typeface.BOLD));
+        broadcastStatusView = text("WAITING ↗", 18, palette.button, Typeface.BOLD);
+        broadcastStatusView.setMaxLines(2);
+        broadcastStatusView.setLetterSpacing(-.045f);
+        live.addView(broadcastStatusView, topLp(-1, -2, 10));
+        broadcastCaptionView = text("Academic snapshot", 9, muted, Typeface.NORMAL);
+        live.addView(broadcastCaptionView, topLp(-1, -2, 5));
+        live.addView(new LetterGlitchView(getContext(), muted, palette.highlight), topLp(-1, dp(36), 6));
+        broadcasts.addView(live, new LinearLayout.LayoutParams(0, dp(154), 1f));
+        LinearLayout whatsNext = column();
+        whatsNext.setPadding(dp(15), dp(13), dp(10), dp(10));
+        whatsNext.setBackground(shape(0xFFC8C8FF, 15, 0xFF111111));
+        whatsNext.addView(label("WHAT'S NEXT?  ✱", 9, 0xFF111111, Typeface.BOLD));
+        broadcastNextView = text("Don't miss\nyour next\nmove.", 15, 0xFF111111, Typeface.BOLD);
+        broadcastNextView.setLetterSpacing(-.05f);
+        whatsNext.addView(broadcastNextView, topLp(-1, -2, 7));
+        whatsNext.setOnClickListener(v -> showPage(2));
+        setTactileFeedback(whatsNext);
+        LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(0, dp(112), 1f);
+        nextParams.leftMargin = dp(10);
+        broadcasts.addView(whatsNext, nextParams);
+        addTop(body, animated(broadcasts, "home-broadcasts"), 11);
         courseLists[0] = column();
         LinearLayout summary = column();
         summary.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -560,17 +688,56 @@ final class DashboardView extends FrameLayout {
         });
         setTactileFeedback(decisionAction);
         summary.addView(decisionAction, topLp(-1, -2, 14));
-        addTop(body, summary, 12);
+        // Keep the interactive next-class forecast, but lower in the broadcast hierarchy.
 
         overviewExamSection = column();
         LinearLayout radarHeading = row();
         radarHeading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView radarTitle = text("On your radar", 17, ink, Typeface.BOLD);
+        TextView radarTitle = text("On your radar", 21, ink, Typeface.BOLD);
         radarTitle.setTypeface(displayTypeface, Typeface.BOLD);
         radarHeading.addView(radarTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        radarHeading.addView(label("01 / EXAM", 9, palette.highlight, Typeface.BOLD));
+        radarHeading.addView(label("01 / EXAM", 10, palette.highlight, Typeface.BOLD));
         overviewExamSection.addView(radarHeading);
-        overviewExamBlock = new UpcomingExamCardView(getContext(), palette.toComposeColors());
+        overviewExamBlock = column();
+        overviewExamBlock.setPadding(dp(16), dp(14), dp(16), dp(14));
+        overviewExamBlock.setBackground(industrialSurface(surface, 16, border));
+        overviewExamBlock.addView(label("● UPCOMING EXAM", 10, palette.highlight, Typeface.BOLD));
+        overviewExamTitle = text("", 17, ink, Typeface.BOLD);
+        overviewExamTitle.setMaxLines(4);
+        overviewExamTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        overviewExamBlock.addView(overviewExamTitle, topLp(-1, -2, 5));
+        LinearLayout examBadges = row();
+        examBadges.setGravity(Gravity.CENTER_VERTICAL);
+        overviewExamType = text("", 10, ink, Typeface.BOLD);
+        overviewExamType.setPadding(dp(9), dp(5), dp(9), dp(5));
+        overviewExamType.setBackground(shape(palette.canvas == 0xFF121212 ? 0xFF34352B : soft, 7, 0));
+        examBadges.addView(overviewExamType, lp(-2, -2));
+        overviewExamSession = text("", 10, ink, Typeface.BOLD);
+        overviewExamSession.setPadding(dp(9), dp(5), dp(9), dp(5));
+        LinearLayout.LayoutParams sessionParams = lp(-2, -2);
+        sessionParams.leftMargin = dp(6);
+        examBadges.addView(overviewExamSession, sessionParams);
+        overviewExamBlock.addView(examBadges, topLp(-1, -2, 7));
+        LinearLayout examTiming = row();
+        examTiming.setGravity(Gravity.CENTER_VERTICAL);
+        overviewExamWhen = text("", 13, linkInk, Typeface.BOLD);
+        overviewExamWhen.setPadding(dp(11), dp(7), dp(11), dp(7));
+        overviewExamWhen.setBackground(shape(soft, 8, 0));
+        examTiming.addView(overviewExamWhen, lp(-2, -2));
+        overviewExamDate = text("", 13, ink, Typeface.BOLD);
+        overviewExamDate.setPadding(dp(10), dp(7), dp(10), dp(7));
+        overviewExamDate.setSingleLine(true);
+        overviewExamDate.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        overviewExamDate.setBackground(shape(soft, 8, 0));
+        LinearLayout.LayoutParams examDateParams = new LinearLayout.LayoutParams(0, -2, 1f);
+        examDateParams.leftMargin = dp(8);
+        examTiming.addView(overviewExamDate, examDateParams);
+        overviewExamBlock.addView(examTiming, topLp(-1, -2, 8));
+        overviewExamDetails = text("", 11, muted, Typeface.NORMAL);
+        overviewExamDetails.setMaxLines(2);
+        overviewExamDetails.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        overviewExamBlock.addView(overviewExamDetails, topLp(-1, -2, 3));
+        overviewExamBlock.setVisibility(GONE);
         overviewExamSection.addView(overviewExamBlock, topLp(-1, -2, 8));
         addTop(body, overviewExamSection, 14);
 
@@ -588,24 +755,43 @@ final class DashboardView extends FrameLayout {
         overviewWeekPulse = new WeekPulseView(getContext());
         overviewWeekPulse.setContentDescription("Weekly timetable preview. Open the full week schedule");
         overviewWeekPulse.setOnClickListener(v -> showPage(2));
-        overviewWeekBlock.addView(overviewWeekPulse, topLp(-1, dp(64), 2));
+        overviewWeekBlock.addView(overviewWeekPulse, topLp(-1, weekPulseHeight(), 2));
         overviewWeekBlock.setVisibility(GONE);
         addTop(body, overviewWeekBlock, 18);
 
-        overviewAttendanceBlock = new LatestClassAttendanceCardView(getContext(), palette.toComposeColors(),
-                this::openAttendanceHistory);
+        overviewAttendanceBlock = column();
+        overviewAttendanceBlock.setPadding(dp(12), dp(9), dp(12), dp(9));
+        overviewAttendanceBlock.setBackground(industrialSurface(surface, 12, border));
+        overviewAttendanceTitle = label("LAST CLASS", 11, muted, Typeface.BOLD);
+        overviewAttendanceBlock.addView(overviewAttendanceTitle);
+        LinearLayout latestClassRow = row();
+        latestClassRow.setGravity(Gravity.CENTER_VERTICAL);
+        overviewAttendanceCourse = text("", 12, ink, Typeface.BOLD);
+        overviewAttendanceCourse.setMaxLines(2);
+        overviewAttendanceCourse.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        latestClassRow.addView(overviewAttendanceCourse, new LinearLayout.LayoutParams(0, -2, 1));
+        overviewAttendanceStatus = text("", 10, ink, Typeface.BOLD);
+        overviewAttendanceStatus.setGravity(Gravity.CENTER);
+        overviewAttendanceStatus.setPadding(dp(9), dp(5), dp(9), dp(5));
+        latestClassRow.addView(overviewAttendanceStatus, lp(-2, -2));
+        overviewAttendanceBlock.addView(latestClassRow, topLp(-1, -2, 3));
         overviewAttendanceBlock.setVisibility(GONE);
+        overviewAttendanceBlock.setOnClickListener(v -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
+        overviewAttendanceBlock.setContentDescription("Latest class attendance. Open attendance history");
         addTop(body, overviewAttendanceBlock, 10);
 
-        overviewCourseHeader = overviewSectionHeader("Below target", "All courses", () -> showPage(1));
+        overviewCourseHeader = overviewSectionHeader("Needs attention", "All courses", () -> showPage(1));
         addTop(body, overviewCourseHeader, 18);
         body.addView(courseLists[0], lp(-1, -2));
         overviewEmptyView = text("", 12, green, Typeface.BOLD);
         addTop(body, overviewEmptyView, 6);
 
+        addTop(body, overviewSectionHeader("Next class", "What if?", () -> showPage(3)), 24);
+        addTop(body, summary, 8);
+
         overviewLeaveBlock = column();
         overviewLeaveBlock.setPadding(dp(14), dp(12), dp(14), dp(12));
-        overviewLeaveBlock.setBackground(shape(surface, 14, border));
+        overviewLeaveBlock.setBackground(shape(surface, 16, border));
         overviewLeaveBlock.addView(overviewSectionHeader("Leave & OD", "Open", this::openOdDetails));
         overviewLeaveSummary = text("", 12, muted, Typeface.NORMAL);
         overviewLeaveSummary.setPadding(0, dp(5), 0, 0);
@@ -616,30 +802,80 @@ final class DashboardView extends FrameLayout {
         addBottom(body, 24);
     }
 
+    private FrameLayout homeWeekTicket() {
+        FrameLayout ticket = new FrameLayout(getContext());
+        ticket.setClipChildren(false);
+        ticket.setClipToPadding(false);
+        View backing = new View(getContext());
+        backing.setBackground(shape(0xFFC8C8FF, 7, 0xFF121212));
+        backing.setRotation(9f);
+        FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(82), dp(102), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        backParams.rightMargin = dp(2);
+        ticket.addView(backing, backParams);
+        LinearLayout face = column();
+        face.setGravity(Gravity.CENTER_HORIZONTAL);
+        face.setPadding(dp(8), dp(9), dp(8), dp(8));
+        face.setBackground(shape(0xFFF1EEDA, 7, 0xFF121212));
+        face.setRotation(-4f);
+        homeTicketLabelView = text("TODAY", 8, 0xFF121212, Typeface.BOLD);
+        homeWeekNumberView = text("—", 38, 0xFF121212, Typeface.BOLD);
+        homeWeekNumberView.setIncludeFontPadding(false);
+        TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
+        homeWeekMonthView = text("—", 8, 0xFF121212, Typeface.BOLD);
+        face.addView(homeTicketLabelView);
+        face.addView(homeWeekNumberView, topLp(-1, -2, 4));
+        face.addView(ticketRule, topLp(-1, -2, 1));
+        face.addView(homeWeekMonthView, topLp(-1, -2, 2));
+        FrameLayout.LayoutParams faceParams = new FrameLayout.LayoutParams(dp(78), dp(100), Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        faceParams.rightMargin = dp(10);
+        ticket.addView(face, faceParams);
+        // Printed ticket binder rings from the source design, drawn with native shapes.
+        for (int index = 0; index < 2; index++) {
+            View ring = new View(getContext());
+            GradientDrawable metal = new GradientDrawable();
+            metal.setColor(Color.TRANSPARENT);
+            metal.setCornerRadius(dp(11));
+            metal.setStroke(dp(4), 0xFF707775);
+            ring.setBackground(metal);
+            ring.setRotation(-5f);
+            FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(
+                    dp(15), dp(24), Gravity.TOP | Gravity.RIGHT);
+            ringParams.topMargin = dp(10);
+            ringParams.rightMargin = dp(index == 0 ? 68 : 28);
+            ticket.addView(ring, ringParams);
+        }
+        homeTicketView = ticket;
+        ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        ticket.setFocusable(true);
+        ticket.setClickable(true);
+        ticket.setOnClickListener(v -> showPage(homeTicketDestination));
+        setTactileFeedback(ticket);
+        return ticket;
+    }
+
     private void buildCoursesPage() {
-        coursesScreenView = new CoursesScreenView(getContext(), palette.toComposeColors(), coursesScreenState(),
-                query -> {
-                    DashboardView.this.query = query;
-                    actions.onQuery(query);
-                    updateCoursesScreen();
-                    return kotlin.Unit.INSTANCE;
-                },
-                filter -> {
-                    setFilter(filter == CourseFilter.BELOW_TARGET);
-                    return kotlin.Unit.INSTANCE;
-                },
-                code -> { actions.onCourse(code); return kotlin.Unit.INSTANCE; },
-                code -> { openPlannerFor(code); return kotlin.Unit.INSTANCE; },
-                () -> {
-                    if (state.sessionExpired) actions.onPortal(); else actions.onSync();
-                    return kotlin.Unit.INSTANCE;
-                });
-        pageViews[1] = coursesScreenView;
+        LinearLayout body = newPage(1);
+        addTop(body, heading("02 / YOUR PROGRESS", "Courses", "Attendance, stripped down to what matters. Can miss. Must attend. No guessing."), 18);
+        courseSummary = text("", 12, muted, Typeface.NORMAL);
+        addTop(body, courseSummary, 0);
+        coursesSearch = searchField("Search by subject or code");
+        addTop(body, coursesSearch, 8);
+        addTop(body, filters(), 6);
+        courseLists[1] = column();
+        body.addView(courseLists[1], lp(-1, -2));
+        coursesEmptyView = text("", 13, muted, Typeface.NORMAL);
+        coursesEmptyView.setPadding(dp(14), dp(14), dp(14), dp(14));
+        coursesEmptyView.setMinHeight(dp(56));
+        coursesEmptyView.setBackground(shape(soft, 12, 0));
+        coursesEmptyView.setVisibility(GONE);
+        coursesEmptyView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        addTop(body, coursesEmptyView, 10);
+        addBottom(body, 24);
     }
 
     private void buildLabPage() {
         LinearLayout body = newPage(3);
-        addTop(body, heading("04 / ATTENDANCE LAB", "What if?", "See how attending or missing classes changes your target."), 8);
+        addTop(body, heading("04 / SCENARIO LAB", "What if?", "Try the possibilities. Your attendance records never change."), 18);
         addTop(body, plannerCard(), 2);
         addTop(body, targetCard(), 12);
         addTop(body, text("This is an estimate based on your latest MyCamu counts. It does not change your attendance record.",
@@ -693,19 +929,20 @@ final class DashboardView extends FrameLayout {
                 semesters.add(course.semester);
             }
             courses.add(course);
-            if (gradePoint(course.grade) >= 0 && course.credits > 0) eligible.add(course);
+            if (AcademicRecords.gradePoint(course.grade) >= 0 && course.credits > 0) eligible.add(course);
         }
-        Collections.sort(semesters, (a, b) -> Integer.compare(semesterNumber(b), semesterNumber(a)));
+        Collections.sort(semesters, (a, b) -> Integer.compare(AcademicRecords.semesterNumber(b), AcademicRecords.semesterNumber(a)));
+        if (!selectedSemester.isEmpty() && !semesters.contains(selectedSemester)) selectedSemester = "";
         double weighted = 0, creditTotal = 0;
         for (AcademicCourse course : eligible) {
-            weighted += course.credits * gradePoint(course.grade);
+            weighted += course.credits * AcademicRecords.gradePoint(course.grade);
             creditTotal += course.credits;
         }
         double cgpa = creditTotal == 0 ? Double.NaN : weighted / creditTotal;
 
         LinearLayout summary = column();
         summary.setPadding(dp(18), dp(16), dp(18), dp(16));
-        summary.setBackground(shape(palette.hero, 18, 0));
+        summary.setBackground(new EditorialCalloutDrawable(hero, 0xFF111111, "★", 26));
         summary.addView(label("CGPA", 10, palette.heroMuted, Typeface.BOLD));
         TextView value = text(Double.isNaN(cgpa) ? "—" : String.format(Locale.getDefault(), "%.2f", cgpa) + " / 10",
                 42, palette.heroText, Typeface.BOLD);
@@ -713,7 +950,7 @@ final class DashboardView extends FrameLayout {
         summary.addView(value, topLp(-1, -2, 2));
         double earnedCredits = 0;
         for (AcademicCourse course : eligible)
-            if (gradePoint(course.grade) >= 5) earnedCredits += course.credits;
+            if (AcademicRecords.gradePoint(course.grade) >= 5) earnedCredits += course.credits;
         summary.addView(text(String.format(Locale.getDefault(), "%.1f credits counted · %.1f earned · %d semesters",
                 creditTotal, earnedCredits, semesters.size()),
                 13, palette.heroMuted, Typeface.NORMAL), topLp(-1, -2, 1));
@@ -733,14 +970,14 @@ final class DashboardView extends FrameLayout {
         for (String semester : semesters) {
             double termWeighted = 0, termCredits = 0;
             for (AcademicCourse course : grouped.get(semester)) {
-                int point = gradePoint(course.grade);
+                int point = AcademicRecords.gradePoint(course.grade);
                 if (point < 0 || course.credits <= 0) continue;
                 termWeighted += course.credits * point;
                 termCredits += course.credits;
             }
             if (termCredits > 0) trend.add(new GpaPoint(semester, (float) (termWeighted / termCredits)));
         }
-        Collections.sort(trend, (a, b) -> Integer.compare(semesterNumber(a.semester), semesterNumber(b.semester)));
+        Collections.sort(trend, (a, b) -> Integer.compare(AcademicRecords.semesterNumber(a.semester), AcademicRecords.semesterNumber(b.semester)));
         if (!trend.isEmpty()) {
             addTop(academicsContent, text("Semester GPA trend", 18, ink, Typeface.BOLD), 20);
             SemesterGpaChart chart = new SemesterGpaChart(getContext(), palette.highlight, muted, uiTypeface);
@@ -749,12 +986,35 @@ final class DashboardView extends FrameLayout {
         }
 
         addTop(academicsContent, text("Semester results", 20, ink, Typeface.BOLD), 20);
+        ArrayList<String> wheelLabels = new ArrayList<>();
+        wheelLabels.add("All semesters");
+        for (String semester : semesters) wheelLabels.add(AcademicRecords.semesterTitle(semester));
+        LinearLayout wheelRow = row();
+        wheelRow.setGravity(Gravity.CENTER_VERTICAL);
+        OptionWheelView wheel = new OptionWheelView(getContext(), ink, muted, palette.highlight, uiBoldTypeface);
+        wheel.setItems(wheelLabels, selectedSemester.isEmpty() ? 0 : semesters.indexOf(selectedSemester) + 1,
+                index -> { selectedSemester = index == 0 ? "" : semesters.get(index - 1); updateAcademics(state); });
+        TextView previous = text("PREV", 10, linkInk, Typeface.BOLD);
+        previous.setGravity(Gravity.CENTER);
+        previous.setMinHeight(dp(48));
+        previous.setContentDescription("Previous semester");
+        previous.setOnClickListener(v -> wheel.select(wheel.selection() - 1));
+        wheelRow.addView(previous, lp(dp(56), dp(48)));
+        wheelRow.addView(wheel, new LinearLayout.LayoutParams(0, dp(150), 1));
+        TextView following = text("NEXT", 10, linkInk, Typeface.BOLD);
+        following.setGravity(Gravity.CENTER);
+        following.setMinHeight(dp(48));
+        following.setContentDescription("Next semester");
+        following.setOnClickListener(v -> wheel.select(wheel.selection() + 1));
+        wheelRow.addView(following, lp(dp(56), dp(48)));
+        academicsContent.addView(wheelRow);
         for (String semester : semesters) {
+            if (!selectedSemester.isEmpty() && !selectedSemester.equals(semester)) continue;
             ArrayList<AcademicCourse> courses = grouped.get(semester);
             if (courses == null || courses.isEmpty()) continue;
             double termWeighted = 0, termCredits = 0;
             for (AcademicCourse course : courses) {
-                int point = gradePoint(course.grade);
+                int point = AcademicRecords.gradePoint(course.grade);
                 if (point < 0 || course.credits <= 0) continue;
                 termWeighted += course.credits * point;
                 termCredits += course.credits;
@@ -765,7 +1025,7 @@ final class DashboardView extends FrameLayout {
             LinearLayout title = row();
             title.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout titleText = column();
-            titleText.addView(text(semesterTitle(semester) + " · SGPA", 16, ink, Typeface.BOLD));
+            titleText.addView(text(AcademicRecords.semesterTitle(semester) + " · SGPA", 16, ink, Typeface.BOLD));
             titleText.addView(text(String.format(Locale.getDefault(), "%d course records · %.1f GPA credits",
                     courses.size(), termCredits), 12, muted, Typeface.NORMAL), topLp(-1, -2, 2));
             title.addView(titleText, new LinearLayout.LayoutParams(0, -2, 1));
@@ -803,14 +1063,14 @@ final class DashboardView extends FrameLayout {
             }
             section.addView(courseRows, topLp(-1, -2, 4));
             section.setFocusable(true);
-            section.setContentDescription(semesterTitle(semester) + ", SGPA "
+            section.setContentDescription(AcademicRecords.semesterTitle(semester) + ", SGPA "
                     + (Double.isNaN(sgpa) ? "not available" : String.format(Locale.getDefault(), "%.2f", sgpa))
                     + ". Double tap to show or hide course grades.");
             section.setOnClickListener(v -> courseRows.setVisibility(courseRows.getVisibility() == VISIBLE ? GONE : VISIBLE));
             View divider = new View(getContext());
             divider.setBackgroundColor(border);
             section.addView(divider, topLp(-1, dp(1), 3));
-            academicsContent.addView(section, topLp(-1, -2, 4));
+            academicsContent.addView(animated(section, "marks-" + semester), topLp(-1, -2, 4));
         }
         if (next.academicUpdatedAt > 0) {
             TextView updated = text("Last read from KCT " + relativeAge(next.academicUpdatedAt), 11, muted, Typeface.NORMAL);
@@ -820,59 +1080,101 @@ final class DashboardView extends FrameLayout {
                 text(next.academicStatus, 12, muted, Typeface.NORMAL), 4);
     }
 
-    private static int gradePoint(String grade) {
-        if (grade == null) return -1;
-        switch (grade.trim().toUpperCase(Locale.ROOT)) {
-            case "O": case "S": return 10;
-            case "A+": return 9;
-            case "A": return 8;
-            case "B+": return 7;
-            case "B": return 6;
-            case "C": return 5;
-            case "U": case "SA": case "WD": return 0;
-            default: return -1;
-        }
-    }
-
-    private static int semesterNumber(String value) {
-        java.util.regex.Matcher match = java.util.regex.Pattern.compile("(?i)semester\\s*[-:]?\\s*(\\d+)").matcher(value);
-        if (!match.find()) return 0;
-        int term = Integer.parseInt(match.group(1));
-        java.util.regex.Matcher year = java.util.regex.Pattern.compile("20\\d{2}").matcher(value);
-        return year.find() ? Integer.parseInt(year.group()) * 10 + term : term;
-    }
-
-    private static String semesterTitle(String value) {
-        java.util.regex.Matcher match = java.util.regex.Pattern.compile("(?i)semester\\s*[-:]?\\s*\\d+").matcher(value);
-        return match.find() ? match.group().replaceAll("\\s+", " ") : value;
-    }
-
-    private static String semesterShortLabel(String value) {
-        java.util.regex.Matcher match = java.util.regex.Pattern.compile("(?i)semester\\s*[-:]?\\s*(\\d+)").matcher(value);
-        return match.find() ? "S" + match.group(1) : "Sem";
-    }
-
     private void buildTimetablePage() {
-        weekScreenView = new WeekScreenView(getContext(), palette.toComposeColors(), weekScreenState(),
-                history -> { showingHistory = history; updateTimetable(); return kotlin.Unit.INSTANCE; },
-                date -> {
-                    if (expandedScheduleDays.contains(date)) expandedScheduleDays.remove(date);
-                    else expandedScheduleDays.add(date);
-                    scheduleExpansionInitialized = true;
-                    updateTimetable();
-                    return kotlin.Unit.INSTANCE;
-                },
-                () -> { historyLimit += 30; updateTimetable(); return kotlin.Unit.INSTANCE; },
-                () -> { if (state.sessionExpired) actions.onPortal(); else actions.onSync(); return kotlin.Unit.INSTANCE; },
-                () -> { openOdDetails(); return kotlin.Unit.INSTANCE; });
-        pageViews[2] = weekScreenView;
-    }
+        LinearLayout body = newPage(2);
+        addTop(body, heading("03 / TIME & ATTENDANCE", "Your week", "Every class. Every record. In one place."), 18);
+        scheduleExtras = column();
+        LinearLayout pulseCard = column();
+        pulseCard.setPadding(0, dp(16), 0, dp(8));
+        LinearLayout pulseHeading = row();
+        pulseHeading.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout pulseCopy = column();
+        pulseCopy.addView(label(cyberpunk ? "CITY PULSE · CLASSES" : "WEEK RHYTHM", 10, green, Typeface.BOLD));
+        weekPulseMeta = text("Sync MyCamu to map your timetable.", 10, muted, Typeface.NORMAL);
+        pulseCopy.addView(weekPulseMeta, topLp(-1, -2, 3));
+        pulseHeading.addView(pulseCopy, new LinearLayout.LayoutParams(0, -2, 1));
+        
+        pulseCard.addView(pulseHeading);
+        weekPulse = new WeekPulseView(getContext());
+        pulseCard.addView(weekPulse, topLp(-1, weekPulseHeight(), 5));
+        addTop(scheduleExtras, pulseCard, 2);
+        weekBell = new BellToggleView(getContext(), soft, hero, ink, heroText);
+        weekBell.onToggle(actions::onRemindersToggle);
+        scheduleExtras.addView(weekBell, topLp(-2, dp(52), 8));
+        scheduleUpdatedView = text("Waiting for MyCamu timetable", 11, muted, Typeface.NORMAL);
 
-    private void openAttendanceHistory() {
-        showingHistory = true;
-        updateTimetable();
-        showPage(2);
-        weekScreenView.scrollToTop();
+        weekRadio = new JellyRadioView(getContext(), new String[]{"ATTENDANCE", "SCHEDULE"},
+                showingHistory ? 0 : 1, hero, soft, heroText, muted, uiBoldTypeface);
+        weekRadio.onSelection(index -> { showingHistory = index == 0; updateTimetable(); });
+        addTop(body, weekRadio, 10);
+        addTop(body, scheduleExtras, 10);
+        addTop(body, scheduleUpdatedView, 8);
+
+        scheduleContent = column();
+        body.addView(scheduleContent, topLp(-1, -2, 10));
+        LinearLayout weekHeading = row();
+        weekHeading.setGravity(Gravity.CENTER_VERTICAL);
+        weekHeading.addView(text("This week", 16, ink, Typeface.BOLD), new LinearLayout.LayoutParams(0, -2, 1));
+        scheduleContent.addView(weekHeading);
+        scheduleRows = column();
+        scheduleContent.addView(scheduleRows, topLp(-1, -2, 24));
+        scheduleEmptyPanel = column();
+        scheduleEmptyPanel.setPadding(dp(18), dp(17), dp(18), dp(14));
+        scheduleEmptyPanel.setMinimumHeight(dp(205));
+        scheduleEmptyPanel.setBackground(shape(0xFFC8C8FF, 16, 0xFF121212));
+        scheduleEmptyPanel.addView(label("THE WEEK / LIVE SCHEDULE", 9, 0xFF343A26, Typeface.BOLD));
+        scheduleEmptyTitle = text("NO CLASSES\nON YOUR\nSCHEDULE.", 22, 0xFF121212, Typeface.BOLD);
+        scheduleEmptyTitle.setLineSpacing(0f, .92f);
+        scheduleEmptyPanel.addView(scheduleEmptyTitle, topLp(-1, -2, 12));
+        scheduleEmptyDetail = text("Your connected timetable will appear here when classes are scheduled.", 11, 0xFF343A26, Typeface.NORMAL);
+        scheduleEmptyDetail.setMaxLines(2);
+        scheduleEmptyDetail.setLineSpacing(dp(2), 1f);
+        scheduleEmptyPanel.addView(scheduleEmptyDetail, topLp(-1, -2, 8));
+        scheduleEmptyView = text("Refresh timetable  →", 11, 0xFF121212, Typeface.BOLD);
+        scheduleEmptyView.setGravity(Gravity.CENTER);
+        scheduleEmptyView.setMinHeight(dp(44));
+        scheduleEmptyView.setBackground(shape(0xFFCCFF00, 9, 0));
+        scheduleEmptyPanel.addView(scheduleEmptyView, topLp(-1, -2, 10));
+        scheduleEmptyView.setFocusable(true);
+        scheduleEmptyView.setClickable(true);
+        scheduleEmptyView.setOnClickListener(v -> {
+            if (state.sessionExpired) actions.onPortal(); else actions.onSync();
+        });
+        scheduleEmptyView.setContentDescription("Sync timetable from MyCamu");
+        scheduleEmptyPanel.setFocusable(true);
+        scheduleEmptyPanel.setOnClickListener(v -> {
+            if (state.sessionExpired) actions.onPortal(); else actions.onSync();
+        });
+        addTop(scheduleContent, scheduleEmptyPanel, 14);
+
+        historyContent = column();
+        historyContent.setVisibility(GONE);
+        body.addView(historyContent, topLp(-1, -2, 10));
+        LinearLayout historyHeading = row();
+        historyHeading.setGravity(Gravity.CENTER_VERTICAL);
+        historyHeading.addView(text("Attendance history", 16, ink, Typeface.BOLD),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        historyContent.addView(historyHeading);
+        FolderFloatView folder = new FolderFloatView(getContext(), 0xFFC8C8FF, ink, soft, uiBoldTypeface,
+                () -> { showAllOd = false; openOdDetails(); },
+                () -> { showAllOd = true; openOdDetails(); });
+        historyContent.addView(folder, topLp(-1, -2, 8));
+        historyRows = column();
+        historyContent.addView(historyRows, topLp(-1, -2, 6));
+        historyEmptyView = text("Go to Home and tap refresh to load attendance history.", 12, muted, Typeface.NORMAL);
+        historyEmptyView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        historyEmptyView.setMinHeight(dp(48));
+        historyEmptyView.setTextColor(linkInk);
+        historyEmptyView.setTypeface(uiTypeface, Typeface.BOLD);
+        historyEmptyView.setBackground(shape(soft, 14, 0));
+        historyEmptyView.setFocusable(true);
+        historyEmptyView.setClickable(true);
+        historyEmptyView.setOnClickListener(v -> {
+            if (state.sessionExpired) actions.onPortal(); else actions.onSync();
+        });
+        historyEmptyView.setContentDescription("Sync attendance history from MyCamu");
+        addTop(historyContent, historyEmptyView, 4);
+        addBottom(body, 24);
     }
 
     private View legendItem(String title, int color) {
@@ -890,11 +1192,11 @@ final class DashboardView extends FrameLayout {
     private View overviewSectionHeader(String title, String action, Runnable onAction) {
         LinearLayout header = row();
         header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 17, ink, Typeface.BOLD);
+        TextView heading = text(cyberpunk ? title.toUpperCase(Locale.ROOT) : title, 21, ink, Typeface.BOLD);
         heading.setTypeface(displayTypeface);
-        heading.setLetterSpacing(cyberpunk ? .04f : -.02f);
+        heading.setLetterSpacing(cyberpunk ? .04f : -.065f);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView button = text(action + "  →", 11, green, Typeface.BOLD);
+        TextView button = text(action.toUpperCase(Locale.ROOT) + "  ↗", 10, linkInk, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setMinWidth(dp(48));
         button.setMinHeight(dp(48));
@@ -980,15 +1282,30 @@ final class DashboardView extends FrameLayout {
                 : dateKey.format(new Date(next.upcomingExamAt)).compareTo(dateKey.format(new Date())) >= 0)
                 && !next.upcomingExamTitle.isEmpty();
         boolean connected = next.academicConnected || !next.academicCourses.isEmpty();
-        overviewExamSection.setVisibility(connected ? VISIBLE : GONE);
-        if (!connected) return;
+        overviewExamSection.setVisibility(VISIBLE);
+        overviewExamBlock.setVisibility(VISIBLE);
+        // Radar remains visible as an honest empty state until KCT has been connected.
         if (!upcoming) {
-            overviewExamBlock.setExamState(new UpcomingExamCardState(
-                    false, "No upcoming exam found", "", "", "", "",
-                    "Refresh KCT from Marks & academics to check the latest schedule.",
-                    "No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule."));
+            overviewExamTitle.setText("No upcoming exam found");
+            overviewExamType.setVisibility(GONE);
+            overviewExamSession.setVisibility(GONE);
+            overviewExamWhen.setVisibility(GONE);
+            overviewExamDate.setVisibility(GONE);
+            overviewExamDetails.setText("Refresh KCT from Marks & academics to check the latest schedule.");
+            overviewExamDetails.setVisibility(VISIBLE);
+            overviewExamBlock.setContentDescription("No upcoming exam found. Refresh KCT from Marks and academics to check the latest schedule.");
             return;
         }
+        overviewExamWhen.setVisibility(VISIBLE);
+        overviewExamDate.setVisibility(VISIBLE);
+        overviewExamTitle.setText(next.upcomingExamTitle);
+        overviewExamType.setText(next.upcomingExamType);
+        overviewExamType.setVisibility(next.upcomingExamType.isEmpty() ? GONE : VISIBLE);
+        overviewExamSession.setText(next.upcomingExamSession);
+        overviewExamSession.setVisibility(next.upcomingExamSession.isEmpty() ? GONE : VISIBLE);
+        int sessionColor = "AN".equals(next.upcomingExamSession) ? palette.highlight : amber;
+        overviewExamSession.setTextColor(sessionColor);
+        overviewExamSession.setBackground(shape(statusTint(sessionColor), 8, 0));
         SimpleDateFormat format = new SimpleDateFormat(next.upcomingExamHasTime
                 ? "EEE, d MMM · h:mm a" : "EEE, d MMM", Locale.getDefault());
         java.util.Calendar day = java.util.Calendar.getInstance();
@@ -1008,17 +1325,18 @@ final class DashboardView extends FrameLayout {
             daysUntil++;
         }
         String countdown = daysUntil == 0 ? "Today" : daysUntil == 1 ? "Tomorrow" : "In " + daysUntil + " days";
-        String examDate = format.format(new Date(next.upcomingExamAt));
+        overviewExamWhen.setText(countdown);
+        overviewExamDate.setText(format.format(new Date(next.upcomingExamAt)));
         String details = next.upcomingExamCode;
         if (!next.upcomingExamDetails.isEmpty())
             details += (details.isEmpty() ? "" : " · ") + next.upcomingExamDetails;
-        String accessibleDescription = "Upcoming exam: " + next.upcomingExamTitle
+        overviewExamDetails.setText(details);
+        overviewExamDetails.setVisibility(details.isEmpty() ? GONE : VISIBLE);
+        overviewExamBlock.setContentDescription("Upcoming exam: " + next.upcomingExamTitle
                 + (next.upcomingExamType.isEmpty() ? "" : ", " + next.upcomingExamType)
                 + (next.upcomingExamSession.isEmpty() ? "" : ", session " + next.upcomingExamSession)
-                + ", " + countdown + ", " + examDate + (details.isEmpty() ? "" : ", " + details);
-        overviewExamBlock.setExamState(new UpcomingExamCardState(
-                true, next.upcomingExamTitle, next.upcomingExamType, next.upcomingExamSession,
-                countdown, examDate, details, accessibleDescription));
+                + ", " + overviewExamWhen.getText() + ", " + overviewExamDate.getText()
+                + (details.isEmpty() ? "" : ", " + details));
     }
 
     private LinearLayout forecastTile(LinearLayout parent, String title) {
@@ -1082,41 +1400,23 @@ final class DashboardView extends FrameLayout {
     }
 
     private void updateTimetable() {
-        if (weekScreenView != null) weekScreenView.update(palette.toComposeColors(), weekScreenState());
-    }
-
-    private WeekScreenUiState weekScreenState() {
-        WeekPulseView pulseSource = overviewWeekPulse;
-        int total = pulseSource == null ? 0 : pulseSource.setSchedule(state.timetable);
-        int[] pulseCounts = pulseSource == null ? new int[7] : pulseSource.counts;
-        int today = pulseSource == null ? Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY
-                : pulseSource.today;
-        int nextClassDay = pulseSource == null ? -1 : pulseSource.nextClassDay;
-        int campusDays = 0;
-        ArrayList<Integer> counts = new ArrayList<>(7);
-        for (int count : pulseCounts) { counts.add(count); if (count > 0) campusDays++; }
-        String[] dayNames = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-        Calendar visibleWeek = Calendar.getInstance();
-        visibleWeek.setFirstDayOfWeek(Calendar.SUNDAY);
-        visibleWeek.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY);
-        visibleWeek.set(Calendar.HOUR_OF_DAY, 0); visibleWeek.set(Calendar.MINUTE, 0);
-        visibleWeek.set(Calendar.SECOND, 0); visibleWeek.set(Calendar.MILLISECOND, 0);
-        SimpleDateFormat dateFormat = new SimpleDateFormat("d", Locale.getDefault());
-        ArrayList<String> dateLabels = new ArrayList<>(7);
-        for (int i = 0; i < 7; i++) {
-            Calendar day = (Calendar) visibleWeek.clone();
-            day.add(Calendar.DAY_OF_YEAR, i);
-            dateLabels.add(dateFormat.format(day.getTime()));
+        if (scheduleRows == null || state == null) return;
+        scheduleContent.setVisibility(showingHistory ? GONE : VISIBLE);
+        historyContent.setVisibility(showingHistory ? VISIBLE : GONE);
+        scheduleExtras.setVisibility(showingHistory ? GONE : VISIBLE);
+        weekRadio.select(showingHistory ? 0 : 1, false);
+        if (weekPulse != null) {
+            int total = weekPulse.setSchedule(state.timetable);
+            int campusDays = 0;
+            for (int count : weekPulse.counts) if (count > 0) campusDays++;
+            weekPulse.setVisibility(VISIBLE);
+            weekPulseMeta.setText(!state.timetableLoaded ? "Sync MyCamu to map your timetable."
+                    : state.timetable.isEmpty() ? "No classes scheduled!"
+                    : total == 0 ? "No class periods mapped this week."
+                    : total + (total == 1 ? " class" : " classes") + " across " + campusDays
+                    + (campusDays == 1 ? " campus day" : " campus days"));
         }
-        String pulseMeta = !state.timetableLoaded ? "Sync MyCamu to map your timetable."
-                : state.timetable.isEmpty() ? "No classes scheduled!"
-                : total == 0 ? "No class periods mapped this week."
-                : total + (total == 1 ? " class" : " classes") + " across " + campusDays
-                    + (campusDays == 1 ? " campus day" : " campus days");
-        WeekPulseUiState pulse = new WeekPulseUiState(cyberpunk ? "CITY PULSE · CLASSES" : "WEEK RHYTHM",
-                cyberpunk, counts, java.util.Arrays.asList(dayNames), today, nextClassDay, dateLabels, pulseMeta);
-
-        String updatedText = showingHistory
+        scheduleUpdatedView.setText(showingHistory
                 ? state.classMarksUpdatedAt > 0
                     ? (state.syncError ? "Sync issue · attendance log last updated " : "Attendance log · Updated ")
                         + relativeAge(state.classMarksUpdatedAt)
@@ -1124,108 +1424,145 @@ final class DashboardView extends FrameLayout {
                 : state.timetableLoaded
                     ? (state.syncError ? "Sync issue · timetable last updated " : "MyCamu timetable · Updated ")
                         + relativeAge(state.timetableUpdatedAt)
-                    : state.syncError ? "Sync issue · open Home and refresh your timetable" : "Waiting for MyCamu timetable";
-
-        ArrayList<ScheduleDayUiState> days = new ArrayList<>();
-        if (!showingHistory) {
-            HashSet<String> dates = new HashSet<>();
-            for (ScheduleItem item : state.timetable) dates.add(item.date);
-            boolean stillHasExpandedDay = false;
-            for (String date : expandedScheduleDays) if (dates.contains(date)) { stillHasExpandedDay = true; break; }
-            if (scheduleExpansionInitialized && !expandedScheduleDays.isEmpty() && !stillHasExpandedDay) {
-                expandedScheduleDays.clear();
-                scheduleExpansionInitialized = false;
-            }
-            if (!scheduleExpansionInitialized && !state.timetable.isEmpty()) {
-                Calendar todayDate = Calendar.getInstance();
-                todayDate.set(Calendar.HOUR_OF_DAY, 0); todayDate.set(Calendar.MINUTE, 0);
-                todayDate.set(Calendar.SECOND, 0); todayDate.set(Calendar.MILLISECOND, 0);
-                long todayStart = todayDate.getTimeInMillis();
-                String defaultDate = state.timetable.get(0).date;
-                for (ScheduleItem item : state.timetable) {
-                    if (item.startsAt >= todayStart) { defaultDate = item.date; break; }
-                }
-                expandedScheduleDays.add(defaultDate);
-                scheduleExpansionInitialized = true;
-            }
-            int index = 0;
-            while (index < state.timetable.size()) {
-                int end = index + 1;
-                String date = state.timetable.get(index).date == null ? "" : state.timetable.get(index).date;
-                while (end < state.timetable.size() && date.equals(state.timetable.get(end).date)) end++;
-                boolean expanded = expandedScheduleDays.contains(date);
-                ArrayList<ScheduleClassUiState> classes = new ArrayList<>();
-                if (expanded) for (int i = index; i < end; i++) {
-                    ScheduleItem item = state.timetable.get(i);
-                    String time = item.time == null ? "" : item.time;
-                    if (item.allDay) time = "All day";
-                    else {
-                        String[] range = time.split("\\s*[–—-]\\s*", 2);
-                        if (range.length == 2) time = range[0] + "\n" + range[1];
-                    }
-                    classes.add(new ScheduleClassUiState(date + "#" + i, time,
-                            item.name == null ? "" : item.name, item.code == null ? "" : item.code,
-                            item.details == null ? "" : item.details, item.allDay, item.cancelled));
-                }
-                days.add(new ScheduleDayUiState(date, daySummary(index, end), end - index, expanded, classes));
-                index = end;
-            }
+                    : state.syncError ? "Sync issue · open Home and refresh your timetable" : "Waiting for MyCamu timetable");
+        if (showingHistory) {
+            if (historyDirty) updateClassHistory();
+            return;
         }
-
-        ArrayList<AttendanceHistoryUiState> history = new ArrayList<>();
-        int shown = Math.min(historyLimit, state.classMarks.size());
-        String activeDay = "";
-        for (int i = 0; i < shown; i++) {
-            ClassMarkItem mark = state.classMarks.get(i);
-            String day = mark.day == null ? "" : mark.day;
-            String dayHeading = day.equals(activeDay) ? "" : day;
-            activeDay = day;
-            String status = "present".equals(mark.status) ? "Present"
-                    : "absent".equals(mark.status) ? "Absent"
-                    : "not_taken".equals(mark.status) ? "Not marked" : "Unable to confirm";
-            String details = mark.code == null || mark.code.isEmpty() ? safe(mark.time) : mark.code + "  ·  " + safe(mark.time);
-            if (mark.leaveType != null && !mark.leaveType.isEmpty())
-                details += "\n" + mark.leaveType + " · " + safe(mark.leaveStatus);
-            history.add(new AttendanceHistoryUiState(day + "#" + i + "#" + mark.startsAt,
-                    dayHeading, safe(mark.time), safe(mark.name), safe(mark.code), details, status, mark.color));
-        }
-        String historyEmpty = state.classMarks.isEmpty()
-                ? state.sessionExpired ? "Reconnect MyCamu to load attendance history  →"
-                : state.syncError ? "Sync failed · tap to retry attendance history  →"
-                : state.classMarksUpdatedAt > 0 ? "No attendance records returned · tap to refresh  →"
-                : "Tap to sync MyCamu and load attendance history  →" : null;
-        String historyAction = state.sessionExpired ? "Reconnect MyCamu  →" : "Refresh attendance history  →";
-        String historyActionDescription = state.sessionExpired
-                ? "Reconnect MyCamu to load attendance history" : "Sync attendance history from MyCamu";
-        String emptyTitle = state.sessionExpired ? "RECONNECT TO\nSEE YOUR WEEK."
+        if (!scheduleDirty) return;
+        scheduleDirty = false;
+        scheduleRows.removeAllViews();
+        boolean hasSchedule = state.timetableLoaded && !state.timetable.isEmpty();
+        scheduleEmptyPanel.setVisibility(hasSchedule ? GONE : VISIBLE);
+        scheduleEmptyTitle.setText(state.sessionExpired ? "RECONNECT TO\nSEE YOUR WEEK."
                 : state.timetableLoaded && state.timetable.isEmpty() ? "NO CLASSES\nON YOUR\nSCHEDULE."
-                : state.syncError ? "YOUR WEEK\nNEEDS A\nREFRESH." : "YOUR WEEK\nIS WAITING.";
-        String emptyDetail = state.sessionExpired ? "Sign in to MyCamu again to refresh your timetable."
+                : state.syncError ? "YOUR WEEK\nNEEDS A\nREFRESH."
+                : "YOUR WEEK\nIS WAITING.");
+        scheduleEmptyDetail.setText(state.sessionExpired
+                ? "Sign in to MyCamu again to refresh your timetable."
                 : state.timetableLoaded && state.timetable.isEmpty()
                     ? "MyCamu has no classes scheduled this week. Your attendance history is still available."
                     : state.syncError ? "Rollcall could not refresh the timetable. Try again when the connection is ready."
-                    : "Sync MyCamu to display your connected classes here.";
-        String actionLabel = state.sessionExpired ? "Reconnect MyCamu  →"
+                    : "Sync MyCamu to display your connected classes here.");
+        scheduleEmptyView.setText(state.sessionExpired ? "Reconnect MyCamu  →"
                 : state.timetableLoaded && state.timetable.isEmpty() ? "Refresh timetable  →"
-                : state.syncError ? "Try again  →" : "Sync timetable  →";
-        WeekDataStatus timetableStatus = weekDataStatus(state.timetableLoaded, !state.timetable.isEmpty(),
-                state.syncError, state.sessionExpired);
-        boolean historyLoaded = state.classMarksUpdatedAt > 0 || !state.classMarks.isEmpty();
-        WeekDataStatus historyStatus = weekDataStatus(historyLoaded, !state.classMarks.isEmpty(),
-                state.syncError, state.sessionExpired);
-        return new WeekScreenUiState(showingHistory, timetableStatus, historyStatus, updatedText, pulse,
-                state.timetableLoaded, days,
-                emptyTitle, emptyDetail, actionLabel,
-                state.sessionExpired ? "Reconnect MyCamu to load the timetable" : "Sync timetable from MyCamu",
-                history, historyEmpty, historyAction, historyActionDescription,
-                Math.max(0, state.classMarks.size() - shown));
-    }
+                : state.syncError ? "Try again  →" : "Sync timetable  →");
+        scheduleEmptyView.setContentDescription(state.sessionExpired ? "Reconnect MyCamu to load the timetable"
+                : "Refresh timetable from MyCamu");
+        HashSet<String> dates = new HashSet<>();
+        for (ScheduleItem item : state.timetable) dates.add(item.date);
+        boolean stillHasExpandedDay = false;
+        for (String date : expandedScheduleDays) if (dates.contains(date)) { stillHasExpandedDay = true; break; }
+        if (scheduleExpansionInitialized && !expandedScheduleDays.isEmpty() && !stillHasExpandedDay) {
+            expandedScheduleDays.clear();
+            scheduleExpansionInitialized = false;
+        }
+        if (!scheduleExpansionInitialized && !state.timetable.isEmpty()) {
+            Calendar today = Calendar.getInstance();
+            today.set(Calendar.HOUR_OF_DAY, 0); today.set(Calendar.MINUTE, 0);
+            today.set(Calendar.SECOND, 0); today.set(Calendar.MILLISECOND, 0);
+            long todayStart = today.getTimeInMillis();
+            String defaultDate = state.timetable.get(0).date;
+            for (ScheduleItem item : state.timetable) {
+                if (item.startsAt >= todayStart) { defaultDate = item.date; break; }
+            }
+            expandedScheduleDays.add(defaultDate);
+            scheduleExpansionInitialized = true;
+        }
+        int index = 0;
+        while (index < state.timetable.size()) {
+            int end = index + 1;
+            String date = state.timetable.get(index).date;
+            while (end < state.timetable.size() && date.equals(state.timetable.get(end).date)) end++;
 
-    private WeekDataStatus weekDataStatus(boolean loaded, boolean hasData, boolean syncError, boolean sessionExpired) {
-        if (sessionExpired) return WeekDataStatus.SESSION_EXPIRED;
-        if (syncError) return hasData ? WeekDataStatus.CACHED : WeekDataStatus.SYNC_FAILED;
-        if (!loaded) return WeekDataStatus.NOT_LOADED;
-        return hasData ? WeekDataStatus.POPULATED : WeekDataStatus.LOADED_EMPTY;
+            LinearLayout dayCard = column();
+            dayCard.setPadding(dp(16), dp(8), dp(16), dp(8));
+            dayCard.setBackground(industrialSurface(surface, 20, border));
+            LinearLayout dayHeader = row();
+            dayHeader.setGravity(Gravity.CENTER_VERTICAL);
+            TextView day = text(date, 15, ink, Typeface.BOLD);
+            day.setIncludeFontPadding(false);
+            day.setMinHeight(dp(40));
+            day.setGravity(Gravity.CENTER_VERTICAL);
+            dayHeader.addView(day, new LinearLayout.LayoutParams(0, -2, 1));
+            int count = end - index;
+            dayHeader.addView(text(count + (count == 1 ? " class" : " classes"), 12, muted, Typeface.NORMAL));
+            boolean expanded = expandedScheduleDays.contains(date);
+            TextView expansionIcon = text(expanded ? "−" : "+", 18, green, Typeface.BOLD);
+            expansionIcon.setGravity(Gravity.CENTER);
+            expansionIcon.setPadding(dp(8), 0, 0, 0);
+            dayHeader.addView(expansionIcon, lp(dp(40), dp(48)));
+            dayCard.addView(dayHeader);
+
+            TextView daySummary = text(daySummary(index, end), 11, muted, Typeface.NORMAL);
+            daySummary.setPadding(0, dp(4), 0, dp(6));
+            daySummary.setVisibility(expanded ? GONE : VISIBLE);
+            dayCard.addView(daySummary);
+            LinearLayout dayItems = column();
+            dayItems.setVisibility(expanded ? VISIBLE : GONE);
+            dayCard.addView(dayItems);
+            dayHeader.setContentDescription(date + ", " + count + (count == 1 ? " class" : " classes")
+                    + (expanded ? ", collapse" : ", expand"));
+            dayHeader.setOnClickListener(v -> {
+                if (expandedScheduleDays.contains(date)) expandedScheduleDays.remove(date);
+                else expandedScheduleDays.add(date);
+                pendingScheduleRevealDate = date;
+                scheduleDirty = true;
+                updateTimetable();
+            });
+
+            for (int i = expanded ? index : end; i < end; i++) {
+                ScheduleItem item = state.timetable.get(i);
+                LinearLayout line = row();
+                line.setGravity(Gravity.CENTER_VERTICAL);
+                line.setPadding(0, dp(7), 0, dp(7));
+                String timeLabel = item.time;
+                if (!item.allDay) {
+                    String[] range = item.time.split("\\s*[–—-]\\s*", 2);
+                    if (range.length == 2) timeLabel = range[0] + "\n" + range[1];
+                } else timeLabel = "All day";
+                TextView time = text(timeLabel, 11, green, Typeface.BOLD);
+                time.setGravity(Gravity.CENTER_VERTICAL);
+                time.setMaxLines(2);
+                time.setIncludeFontPadding(false);
+                line.addView(time, lp(dp(72), -2));
+                LinearLayout copy = column();
+                String title = item.name + (item.code.isEmpty() ? "" : "  ·  " + item.code);
+                TextView course = text(title, 13, ink, Typeface.BOLD);
+                course.setMaxLines(2);
+                copy.addView(course);
+                if (!item.details.isEmpty()) copy.addView(text(item.details, 11, muted, Typeface.NORMAL), topLp(-1, -2, 2));
+                line.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+                if (item.cancelled) {
+                    TextView canceled = text("Cancelled", 8, muted, Typeface.BOLD);
+                    canceled.setPadding(dp(5), dp(4), dp(5), dp(4));
+                    canceled.setBackground(shape(soft, 8, 0));
+                    line.addView(canceled, lp(-2, -2));
+                }
+                dayItems.addView(line);
+                if (i < end - 1) {
+                    View divider = new View(getContext());
+                    divider.setBackgroundColor(border);
+                    LinearLayout.LayoutParams dividerParams = lp(-1, dp(1));
+                    dividerParams.leftMargin = dp(72);
+                    dayItems.addView(divider, dividerParams);
+                }
+            }
+            LinearLayout.LayoutParams dayParams = lp(-1, -2);
+            dayParams.bottomMargin = dp(8);
+            scheduleRows.addView(animated(dayCard, "week-" + date), dayParams);
+            if (date.equals(pendingScheduleRevealDate)) {
+                pendingScheduleRevealDate = "";
+                View revealed = expanded ? dayItems : daySummary;
+                if (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()) {
+                    revealed.setAlpha(.9f);
+                    revealed.setTranslationY(dp(4));
+                    revealed.animate().alpha(1f).translationY(0f).setDuration(180)
+                            .setInterpolator(new android.view.animation.PathInterpolator(.2f, 0f, 0f, 1f)).start();
+                }
+            }
+            index = end;
+        }
     }
 
     private void buildOdDetailsPage() {
@@ -1267,7 +1604,7 @@ final class DashboardView extends FrameLayout {
         odDetailsReturnPage = selectedPage;
         updateOdDetails();
         odDetailsOpen = true;
-        for (View page : pageViews) if (page != null) {
+        for (ScrollView page : pageScrolls) if (page != null) {
             page.animate().cancel();
             page.setVisibility(GONE);
         }
@@ -1284,7 +1621,7 @@ final class DashboardView extends FrameLayout {
             odDetailsPage.animate().cancel();
             odDetailsPage.setVisibility(GONE);
         }
-        View returnPage = pageViews[odDetailsReturnPage];
+        ScrollView returnPage = pageScrolls[odDetailsReturnPage];
         returnPage.setVisibility(VISIBLE);
         returnPage.bringToFront();
         nav.setVisibility(VISIBLE);
@@ -1533,7 +1870,63 @@ final class DashboardView extends FrameLayout {
         return shortName.length() == 0 ? name : shortName.toString();
     }
 
-    private static String safe(String value) { return value == null ? "" : value; }
+    private void updateClassHistory() {
+        historyDirty = false;
+        historyRows.removeAllViews();
+        historyEmptyView.setVisibility(state.classMarks.isEmpty() ? VISIBLE : GONE);
+        historyEmptyView.setText(state.sessionExpired ? "Reconnect MyCamu to load attendance history  →"
+                : state.syncError ? "Sync failed · tap to retry attendance history  →"
+                : state.classMarksUpdatedAt > 0 ? "No attendance records returned · tap to refresh  →"
+                : "Tap to sync MyCamu and load attendance history  →");
+        historyEmptyView.setContentDescription(state.sessionExpired ? "Reconnect MyCamu to load attendance history"
+                : "Sync attendance history from MyCamu");
+        int shown = Math.min(historyLimit, state.classMarks.size());
+        String activeDay = "";
+        for (int i = 0; i < shown; i++) {
+            ClassMarkItem mark = state.classMarks.get(i);
+            if (!mark.day.equals(activeDay)) {
+                activeDay = mark.day;
+                TextView day = label(activeDay.toUpperCase(Locale.ROOT), 9, muted, Typeface.BOLD);
+                day.setPadding(dp(2), dp(9), dp(2), dp(3));
+                historyRows.addView(day);
+            }
+            LinearLayout line = row();
+            line.setGravity(Gravity.CENTER_VERTICAL);
+            line.setPadding(dp(10), dp(8), dp(10), dp(8));
+            line.setBackground(shape(surface, 11, border));
+            LinearLayout copy = column();
+            TextView title = text(mark.name, 12, ink, Typeface.BOLD);
+            title.setMaxLines(2);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            copy.addView(title);
+            String detail = mark.code.isEmpty() ? mark.time : mark.code + "  ·  " + mark.time;
+            if (!mark.leaveType.isEmpty()) detail += "\n" + mark.leaveType + " · " + mark.leaveStatus;
+            TextView sub = text(detail, 10, muted, Typeface.NORMAL);
+            sub.setMaxLines(1);
+            copy.addView(sub, topLp(-1, -2, 2));
+            line.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+            String status = "present".equals(mark.status) ? "Present"
+                    : "absent".equals(mark.status) ? "Absent"
+                    : "not_taken".equals(mark.status) ? "Not marked"
+                    : "Unable to confirm";
+            TextView badge = text(status, 9, mark.color, Typeface.BOLD);
+            badge.setGravity(Gravity.CENTER);
+            badge.setPadding(dp(8), dp(5), dp(8), dp(5));
+            badge.setBackground(shape(soft, 9, 0));
+            badge.setContentDescription(mark.name + ", " + status);
+            line.addView(badge, lp(-2, -2));
+            LinearLayout.LayoutParams params = lp(-1, -2);
+            params.bottomMargin = dp(5);
+            historyRows.addView(line, params);
+        }
+        if (shown < state.classMarks.size()) {
+            TextView more = text("Show older · " + (state.classMarks.size() - shown) + " more", 11, green, Typeface.BOLD);
+            more.setGravity(Gravity.CENTER);
+            more.setMinHeight(dp(44));
+            more.setOnClickListener(v -> { historyLimit += 30; updateClassHistory(); });
+            historyRows.addView(more, lp(-1, dp(44)));
+        }
+    }
 
     private String daySummary(int start, int end) {
         String first = "", last = "";
@@ -1570,7 +1963,6 @@ final class DashboardView extends FrameLayout {
         body.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         pageScrolls[index] = scroll;
-        pageViews[index] = scroll;
         pageBodies[index] = body;
         return body;
     }
@@ -1647,7 +2039,11 @@ final class DashboardView extends FrameLayout {
         RollcallLogo logo = new RollcallLogo(getContext(), palette);
         logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         bar.addView(logo, lp(dp(34), dp(34)));
-        TextView brand = text("rollcall", 19, ink, Typeface.BOLD);
+        TextView brand = text("rollcall.", 24, ink, Typeface.BOLD);
+        SpannableString wordmark = new SpannableString("rollcall.");
+        wordmark.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                8, 9, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        brand.setText(wordmark);
         brand.setPadding(dp(8), 0, 0, 0);
         brand.setGravity(Gravity.CENTER_VERTICAL);
         if (cyberpunk) {
@@ -1659,13 +2055,21 @@ final class DashboardView extends FrameLayout {
         }
         bar.addView(brand, new LinearLayout.LayoutParams(0, -1, 1));
         if (showTheme) {
-            homeThemeButton = new ModeSwitchButtonView(getContext());
-            homeThemeButton.setDark(state.dark);
-            bar.addView(homeThemeButton, lp(dp(48), dp(48)));
+            ImageView settings = new ImageView(getContext());
+            settings.setImageResource(R.drawable.ic_nav_settings);
+            settings.setColorFilter(ink);
+            settings.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            settings.setPadding(dp(12), dp(12), dp(12), dp(12));
+            settings.setBackground(shape(surface, 12, border));
+            settings.setContentDescription("Open Rollcall settings");
+            settings.setOnClickListener(v -> actions.onAbout());
+            setTactileFeedback(settings);
+            bar.addView(settings, lp(dp(46), dp(46)));
         }
         TextView avatar = text("R", 12, ink, Typeface.BOLD);
         avatar.setGravity(Gravity.CENTER);
-        avatar.setBackground(new android.graphics.drawable.InsetDrawable(shape(soft, 100, 0), dp(4)));
+        avatar.setBackground(new android.graphics.drawable.InsetDrawable(
+                shape(palette.canvas == 0xFF121212 ? 0xFF3A3C2F : soft, 100, 0), dp(4)));
         avatar.setContentDescription("About Rollcall and student profile");
         avatar.setFocusable(true);
         avatar.setOnClickListener(v -> actions.onAbout());
@@ -1677,13 +2081,13 @@ final class DashboardView extends FrameLayout {
 
     private View heading(String index, String title, String subtitle) {
         LinearLayout box = column();
-        box.addView(label(index, 9, lime, Typeface.BOLD));
+        box.addView(label(index, 10, linkInk, Typeface.BOLD));
         SpannableString titleText = new SpannableString(title + ".");
         titleText.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight), title.length(), titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        TextView heading = text(titleText.toString(), 32, ink, Typeface.BOLD);
+        TextView heading = text(titleText.toString(), 35, ink, Typeface.BOLD);
         heading.setText(titleText);
         heading.setTypeface(displayTypeface, Typeface.BOLD);
-        heading.setLetterSpacing(-.055f);
+        heading.setLetterSpacing(-.075f);
         box.addView(heading, topLp(-1, -2, 6));
         TextView sub = text(subtitle, 12, muted, Typeface.NORMAL);
         sub.setLineSpacing(dp(2), 1f);
@@ -1703,7 +2107,7 @@ final class DashboardView extends FrameLayout {
         copy.addView(targetView, topLp(-1, -2, 2));
         copy.addView(text("A goal that keeps you on track.", 10, muted, Typeface.NORMAL), topLp(-1, -2, 1));
         card.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView adjust = text("Adjust target  ↗", 10, hero, Typeface.BOLD);
+        TextView adjust = text("Adjust target  ↗", 10, linkInk, Typeface.BOLD);
         adjust.setOnClickListener(v -> actions.onTarget());
         card.addView(adjust);
         card.setOnClickListener(v -> actions.onTarget());
@@ -1711,20 +2115,55 @@ final class DashboardView extends FrameLayout {
     }
 
 
+    private View filters() {
+        coursesRadio = new JellyRadioView(getContext(),
+                new String[]{"All courses · " + state.courses, "Below target · " + state.below},
+                belowOnly ? 1 : 0, hero, soft, heroText, muted, uiBoldTypeface);
+        allCoursesFilter = coursesRadio.chip(0);
+        focusCoursesFilter = coursesRadio.chip(1);
+        coursesRadio.onSelection(index -> setFilter(index == 1));
+        return coursesRadio;
+    }
+
     private TextView filterChip(String label) {
         TextView chip = text(label, 10, muted, Typeface.BOLD);
         chip.setPadding(dp(11), dp(8), dp(11), dp(8));
         chip.setGravity(Gravity.CENTER);
         chip.setMinHeight(dp(34));
-        chip.setBackground(shape(soft, 6, 0));
+        chip.setBackground(shape(soft, 10, border));
         return chip;
     }
 
+    private EditText searchField(String hint) {
+        EditText field = new EditText(getContext());
+        field.setSingleLine(true);
+        field.setTextSize(14);
+        field.setMinHeight(dp(48));
+        field.setTextColor(ink);
+        field.setHintTextColor(muted);
+        field.setHint(hint);
+        field.setTypeface(uiTypeface);
+        field.setContentDescription(hint);
+        field.setPadding(dp(12), 0, dp(12), 0);
+        field.setBackground(shape(soft, 9, border));
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                query = s.toString();
+                refreshVisibleRows();
+                actions.onQuery(query);
+            }
+            @Override public void afterTextChanged(Editable e) { }
+        });
+        return field;
+    }
+
     private View plannerCard() {
-        LinearLayout card = card();
-        card.addView(label("Choose a course", 13, muted, Typeface.BOLD));
+        LinearLayout card = column();
+        card.setPadding(0, 0, 0, 0);
+        card.addView(label("CHOOSE A COURSE", 10, muted, Typeface.BOLD));
         coursePicker = new FrameLayout(getContext());
-        coursePicker.setBackground(shape(surface, 12, border));
+        coursePicker.setBackground(shape(soft, 9, border));
         coursePickerText = text("Choose a course", 14, ink, Typeface.NORMAL);
         coursePickerText.setGravity(Gravity.CENTER_VERTICAL);
         coursePickerText.setMaxLines(2);
@@ -1736,7 +2175,35 @@ final class DashboardView extends FrameLayout {
         FrameLayout.LayoutParams arrowParams = new FrameLayout.LayoutParams(dp(40), -1, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         coursePicker.addView(spinnerArrow, arrowParams);
         coursePicker.setOnClickListener(v -> showCoursePopup());
-        card.addView(coursePicker, topLp(-1, dp(72), 12));
+        card.addView(coursePicker, topLp(-1, dp(56), 12));
+        LinearLayout result = column();
+        result.setPadding(dp(20), dp(20), dp(20), dp(20));
+        result.setBackground(new EditorialCalloutDrawable(0xFFC8C8FF, 0xFFFF4400, "↗", 38));
+        result.addView(label("YOUR ATTENDANCE / PROJECTED", 10, 0xFF111111, Typeface.BOLD));
+        LinearLayout comparison = row();
+        comparison.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout current = column();
+        current.addView(text("CURRENT", 10, 0xFF111111, Typeface.BOLD));
+        plannerCurrentPercentView = text("—", 35, 0xFF111111, Typeface.BOLD);
+        plannerCurrentPercentView.setIncludeFontPadding(false);
+        current.addView(plannerCurrentPercentView, topLp(-1, -2, 7));
+        comparison.addView(current, new LinearLayout.LayoutParams(0, -2, 1));
+        comparison.addView(text("→", 25, 0xFF111111, Typeface.BOLD), lp(-2, -2));
+        LinearLayout projection = column();
+        projection.setGravity(Gravity.RIGHT);
+        TextView after = text("AFTER PLAN", 10, 0xFF111111, Typeface.BOLD);
+        after.setGravity(Gravity.RIGHT);
+        projection.addView(after);
+        projectionView = text("—", 35, 0xFF111111, Typeface.BOLD);
+        projectionView.setGravity(Gravity.RIGHT);
+        projectionView.setIncludeFontPadding(false);
+        projection.addView(projectionView, topLp(-1, -2, 7));
+        comparison.addView(projection, new LinearLayout.LayoutParams(0, -2, 1));
+        result.addView(comparison, topLp(-1, -2, 21));
+        projectionStatusView = text("Counts unavailable", 11, 0xFF333344, Typeface.BOLD);
+        result.addView(projectionStatusView, topLp(-1, -2, 17));
+        card.addView(result, topLp(-1, -2, 19));
+
         plannerBaseline = text("", 12, muted, Typeface.NORMAL);
         card.addView(plannerBaseline, topLp(-1, -2, 10));
         odNotice = text("", 12, muted, Typeface.NORMAL);
@@ -1757,58 +2224,54 @@ final class DashboardView extends FrameLayout {
         }
         card.addView(odOptions, topLp(-1, -2, 8));
 
-        LinearLayout mode = row();
-        TextView miss = filterChip("If I miss");
-        TextView attend = filterChip("If I attend");
-        plannerMissView = miss;
-        plannerAttendView = attend;
-        miss.setContentDescription("Project attendance if I miss the next classes");
-        attend.setContentDescription("Project attendance if I attend the next classes");
-        miss.setGravity(Gravity.CENTER);
-        attend.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams missParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        missParams.rightMargin = dp(5);
-        LinearLayout.LayoutParams attendParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        attendParams.leftMargin = dp(5);
-        mode.addView(miss, missParams);
-        mode.addView(attend, attendParams);
-        card.addView(label("Plan a scenario", 13, muted, Typeface.BOLD), topLp(-1, -2, 14));
-        card.addView(mode, topLp(-1, -2, 10));
-        miss.setOnClickListener(v -> { plannerAttend = false; plannerFeedback(v); });
-        attend.setOnClickListener(v -> { plannerAttend = true; plannerFeedback(v); });
+        plannerRadio = new JellyRadioView(getContext(), new String[]{"MISS", "ATTEND"},
+                plannerAttend ? 1 : 0, hero, soft, heroText, muted, uiBoldTypeface);
+        plannerRadio.onSelection(index -> {
+            plannerAttend = index == 1;
+            plannerFeedback(plannerRadio.chip(index));
+        });
+        card.addView(label("SIMULATE / CLASSES", 10, muted, Typeface.BOLD), topLp(-1, -2, 18));
+        card.addView(plannerRadio, topLp(-1, -2, 10));
 
-        LinearLayout stepper = row();
-        stepper.setGravity(Gravity.CENTER_VERTICAL);
-        Button minus = compactButton("−", soft, ink);
-        Button plus = compactButton("+", hero, heroText);
-        minus.setContentDescription("Decrease projected classes");
-        plus.setContentDescription("Increase projected classes");
-        plannerCountView = text("1 class", 20, ink, Typeface.NORMAL);
-        plannerCountView.setGravity(Gravity.CENTER);
-        stepper.addView(minus, lp(dp(48), dp(48)));
-        stepper.addView(plannerCountView, new LinearLayout.LayoutParams(0, dp(48), 1));
-        stepper.addView(plus, lp(dp(48), dp(48)));
-        card.addView(stepper, topLp(-1, -2, 16));
-        minus.setOnClickListener(v -> { plannerCount = Math.max(1, plannerCount - 1); plannerFeedback(v); });
-        plus.setOnClickListener(v -> { plannerCount = Math.min(50, plannerCount + 1); plannerFeedback(v); });
+        // Native implementation of the prototype's 1–20 class slider.
+        LinearLayout countRow = row();
+        countRow.addView(label("NUMBER OF CLASSES", 10, muted, Typeface.BOLD),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        plannerCountView = text("01", 27, linkInk, Typeface.BOLD);
+        plannerCountView.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        countRow.addView(plannerCountView);
+        card.addView(countRow, topLp(-1, -2, 20));
 
-        LinearLayout result = row();
-        result.setGravity(Gravity.CENTER_VERTICAL);
-        result.setPadding(dp(13), dp(12), dp(13), dp(12));
-        result.setBackground(shape(soft, 12, 0));
-        LinearLayout projection = column();
-        projection.addView(text("Projected attendance", 10, muted, Typeface.NORMAL));
-        projectionView = text("—", 36, ink, Typeface.BOLD);
-        projection.addView(projectionView, topLp(-1, -2, 3));
-        result.addView(projection, new LinearLayout.LayoutParams(0, -2, 1));
-        projectionStatusView = text("Counts unavailable", 9, muted, Typeface.NORMAL);
-        projectionStatusView.setPadding(dp(8), dp(7), dp(8), dp(7));
-        projectionStatusView.setBackground(shape(surface, 100, 0));
-        result.addView(projectionStatusView);
-        card.addView(result, topLp(-1, -2, 14));
+        SeekBar amount = new SeekBar(getContext());
+        amount.setMax(19);
+        amount.setProgress(Math.max(0, Math.min(19, plannerCount - 1)));
+        amount.setProgressTintList(android.content.res.ColorStateList.valueOf(hero));
+        amount.setThumbTintList(android.content.res.ColorStateList.valueOf(hero));
+        amount.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(track));
+        amount.setContentDescription("Number of classes to simulate, one to twenty");
+        amount.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
+                if (!fromUser) return;
+                plannerCount = value + 1;
+                updatePlanner();
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) { }
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                bar.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            }
+        });
+        card.addView(amount, topLp(-1, dp(40), 7));
+        LinearLayout range = row();
+        for (String mark : new String[]{"01", "05", "10", "15", "20"}) {
+            TextView m = text(mark, 10, muted, Typeface.NORMAL);
+            m.setGravity(Gravity.CENTER);
+            range.addView(m, new LinearLayout.LayoutParams(0, -2, 1));
+        }
+        card.addView(range);
+
         plannerMeter = new PlannerMeter(getContext());
         card.addView(plannerMeter, topLp(-1, 28, 12));
-        plannerFeedback = text("Choose a course to explore your options.", 12, muted, Typeface.NORMAL);
+        plannerFeedback = text("Choose a course to explore your options.", 11, ink, Typeface.NORMAL);
         card.addView(plannerFeedback, topLp(-1, -2, 6));
         
         return card;
@@ -1817,12 +2280,13 @@ final class DashboardView extends FrameLayout {
     private void buildNavigation(LinearLayout shell) {
         LinearLayout holder = new LinearLayout(getContext());
         holder.setGravity(Gravity.CENTER);
-        holder.setPadding(dp(16), dp(8), dp(16), dp(8));
+        holder.setPadding(dp(16), dp(7), dp(16), dp(10));
         shell.addView(holder, lp(-1, -2));
-        nav.setPadding(dp(4), dp(3), dp(4), dp(3));
+        nav.setPadding(dp(5), dp(5), dp(5), dp(5));
         nav.setGravity(Gravity.CENTER);
         navBackground = new NavBackgroundDrawable();
         nav.setBackground(navBackground);
+        nav.setElevation(dp(8));
         holder.addView(nav, lp(-1, -2));
         int[] icons = {R.drawable.ic_nav_home, R.drawable.ic_nav_courses, R.drawable.ic_nav_week,
                 R.drawable.ic_nav_lab, R.drawable.ic_nav_academics};
@@ -1833,7 +2297,7 @@ final class DashboardView extends FrameLayout {
             tab.setOrientation(LinearLayout.VERTICAL);
             tab.setGravity(Gravity.CENTER);
             tab.setFocusable(true);
-            tab.setMinimumHeight(dp(56));
+            tab.setMinimumHeight(dp(66));
             tab.setPadding(dp(4), dp(6), dp(4), dp(6));
             tab.setOnClickListener(v -> showPage(page));
             setTactileFeedback(tab);
@@ -1841,13 +2305,9 @@ final class DashboardView extends FrameLayout {
             icon.setImageResource(icons[i]);
             icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
             icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            TextView label = text(labels[i], 11, muted, Typeface.NORMAL);
-            label.setMaxLines(2);
-            label.setEllipsize(null);
-            if (android.os.Build.VERSION.SDK_INT >= 26) {
-                label.setAutoSizeTextTypeUniformWithConfiguration(8, 11, 1,
-                        android.util.TypedValue.COMPLEX_UNIT_SP);
-            }
+            TextView label = text(labels[i], 10, muted, Typeface.BOLD);
+            label.setSingleLine(true);
+            label.setEllipsize(android.text.TextUtils.TruncateAt.END);
             label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             label.setGravity(Gravity.CENTER);
             icon.setVisibility(VISIBLE);
@@ -1863,7 +2323,7 @@ final class DashboardView extends FrameLayout {
 
     private void showPage(int page) {
         if (page < 0 || page >= pageScrolls.length || page == selectedPage) return;
-        View incoming = pageViews[page];
+        ScrollView incoming = pageScrolls[page];
         if (incoming == null) return;
 
         // Update visibility synchronously so rapid taps cannot hide the newly selected page.
@@ -1871,8 +2331,8 @@ final class DashboardView extends FrameLayout {
         selectedPage = page;
         if (homeThemeButton != null) homeThemeButton.setVisibility(page == 0 ? VISIBLE : GONE);
         if (page == 2) updateTimetable();
-        for (int i = 0; i < pageViews.length; i++) {
-            View candidate = pageViews[i];
+        for (int i = 0; i < pageScrolls.length; i++) {
+            ScrollView candidate = pageScrolls[i];
             if (candidate == null) continue;
             candidate.animate().cancel();
             candidate.setVisibility(i == page ? VISIBLE : GONE);
@@ -1897,8 +2357,8 @@ final class DashboardView extends FrameLayout {
     }
 
     void animateCurrentPageEntry() {
-        if (selectedPage >= 0 && selectedPage < pageViews.length && pageViews[selectedPage] != null)
-            animatePageArrival(pageViews[selectedPage], 1);
+        if (selectedPage >= 0 && selectedPage < pageScrolls.length && pageScrolls[selectedPage] != null)
+            animatePageArrival(pageScrolls[selectedPage], 1);
     }
 
     private void animatePageArrival(View page, int direction) {
@@ -1909,25 +2369,26 @@ final class DashboardView extends FrameLayout {
         page.setScaleY(1f);
         page.setAlpha(1f);
         if (android.os.Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
-        page.setTranslationX(direction * dp(40));
-        page.setAlpha(.72f);
-        page.animate().translationX(0f).alpha(1f).setStartDelay(0).setDuration(280)
-                .setInterpolator(new android.view.animation.PathInterpolator(.16f, 1f, .3f, 1f)).start();
+        // The source prototype fades from 50% and rises 10px; do not side-swipe screens.
+        page.setTranslationY(dp(10));
+        page.setAlpha(.5f);
+        page.animate().translationY(0f).alpha(1f).setStartDelay(0).setDuration(260)
+                .setInterpolator(new android.view.animation.PathInterpolator(.22f, .75f, .3f, 1f)).start();
     }
 
     /** Repairs page visibility after window reattachment or a background data refresh. */
     void restoreSelectedPage() {
         if (odDetailsOpen && odDetailsPage != null) {
-            for (View candidate : pageViews) if (candidate != null) candidate.setVisibility(GONE);
+            for (ScrollView candidate : pageScrolls) if (candidate != null) candidate.setVisibility(GONE);
             nav.setVisibility(GONE);
             odDetailsPage.setVisibility(VISIBLE);
             odDetailsPage.bringToFront();
             return;
         }
-        View selected = pageViews[selectedPage];
+        ScrollView selected = pageScrolls[selectedPage];
         if (selected == null) return;
-        for (int i = 0; i < pageViews.length; i++) {
-            View candidate = pageViews[i];
+        for (int i = 0; i < pageScrolls.length; i++) {
+            ScrollView candidate = pageScrolls[i];
             if (candidate == null) continue;
             candidate.animate().cancel();
             candidate.setVisibility(i == selectedPage ? VISIBLE : GONE);
@@ -1957,11 +2418,9 @@ final class DashboardView extends FrameLayout {
 
     private void updateNavigation() {
         nav.setVisibility(odDetailsOpen ? GONE : VISIBLE);
-        boolean showLabels = getResources().getConfiguration().fontScale <= 1.3f;
         boolean selectionChanged = false;
         for (int i = 0; i < navItems.length; i++) {
             TextView item = navItems[i];
-            item.setVisibility(showLabels ? VISIBLE : GONE);
             boolean selected = i == selectedPage;
             selectionChanged |= navTabs[i].isSelected() != selected;
             item.setTypeface(item.getTypeface(), selected ? Typeface.BOLD : Typeface.NORMAL);
@@ -1987,8 +2446,9 @@ final class DashboardView extends FrameLayout {
 
     private void setFilter(boolean focus) {
         belowOnly = focus;
+        refreshVisibleRows();
+        coursesRadio.select(focus ? 1 : 0, false);
         actions.onFilter(focus);
-        updateCoursesScreen();
     }
 
     private void settleFeedback(View view) {
@@ -2003,12 +2463,25 @@ final class DashboardView extends FrameLayout {
     private void setChipSelected(View chip, boolean selected) {
         if (chip instanceof TextView) {
             boolean changed = chip.isSelected() != selected;
-            ((TextView) chip).setTextColor(selected && cyberpunk ? heroText : selected ? ink : muted);
+            ((TextView) chip).setTextColor(selected ? heroText : muted);
             chip.setBackground(cyberpunk && selected ? new CutCornerDrawable(hero, hero, green, dp(7), dp(2))
-                    : shape(selected ? surface : soft, 9, selected ? border : 0));
+                    : shape(selected ? hero : soft, 9, selected ? hero : 0));
             chip.setSelected(selected);
             if (changed && selected && chip.isShown()) settleFeedback(chip);
         }
+    }
+
+    private void updateSearchFields() {
+        setTextWithoutCursorJump(coursesSearch, query);
+        if (allCoursesFilter != null) {
+            allCoursesFilter.setText("All courses · " + state.courses);
+            allCoursesFilter.setContentDescription("Show all " + state.courses + " courses");
+        }
+        if (focusCoursesFilter != null) {
+            focusCoursesFilter.setText("Below target · " + state.below);
+            focusCoursesFilter.setContentDescription("Show courses below your " + state.target + "% target");
+        }
+        coursesRadio.select(belowOnly ? 1 : 0, false);
     }
 
     private String courseHeading(Course course) {
@@ -2028,11 +2501,23 @@ final class DashboardView extends FrameLayout {
                 : identifier + "Class counts unavailable";
     }
 
+    private void setTextWithoutCursorJump(EditText view, String value) {
+        if (view != null && !view.getText().toString().equals(value)) view.setText(value);
+    }
+
     private void rebuildCourseRows() {
+        int[] scrollY = {pageScrolls[0].getScrollY(), pageScrolls[1].getScrollY()};
         courseViews.clear();
-        LinearLayout list = courseLists[0];
-        list.removeAllViews();
-        rebuildOverviewRows(list);
+        courseGroupViews.clear();
+        for (int page = 0; page < courseLists.length; page++) {
+            LinearLayout list = courseLists[page];
+            list.removeAllViews();
+            if (page == 0) rebuildOverviewRows(list);
+            else rebuildGroupedCourseRows(list);
+            final int restore = scrollY[page];
+            final ScrollView scroll = pageScrolls[page];
+            scroll.post(() -> scroll.scrollTo(0, restore));
+        }
     }
 
     private void rebuildOverviewRows(LinearLayout list) {
@@ -2056,11 +2541,19 @@ final class DashboardView extends FrameLayout {
         }
     }
 
+    private void rebuildGroupedCourseRows(LinearLayout list) {
+        for (CourseGroup group : groupedCourses()) {
+            CourseGroupRow item = new CourseGroupRow(group);
+            courseGroupViews.add(item);
+            list.addView(animated(item.root, "course-group-" + group.lecture.code), topLp(-1, -2, 8));
+        }
+    }
+
     private void addCourseRow(LinearLayout list, Course course, Course pairedLecture, int topMargin) {
         CourseRow item = new CourseRow(course, pairedLecture, list == courseLists[0]);
         courseViews.add(item);
         LinearLayout.LayoutParams params = topLp(-1, -2, topMargin);
-        list.addView(item.root, params);
+        list.addView(animated(item.root, (item.overviewPreview ? "home-course-" : "course-") + course.code), params);
     }
 
     private List<CourseGroup> groupedCourses() {
@@ -2082,60 +2575,37 @@ final class DashboardView extends FrameLayout {
     }
 
     private void refreshVisibleRows() {
+        boolean anyVisible = false;
         for (CourseRow row : courseViews) {
             boolean visible = row.overviewPreview || ((!belowOnly || row.course.below) && matches(row.course, query));
             row.root.setVisibility(visible ? VISIBLE : GONE);
         }
-        updateCoursesScreen();
-    }
-
-    private void updateCoursesScreen() {
-        if (coursesScreenView != null) coursesScreenView.update(palette.toComposeColors(), coursesScreenState());
-    }
-
-    private CoursesScreenUiState coursesScreenState() {
-        ArrayList<CourseCardUiState> cards = new ArrayList<>();
-        for (CourseGroup group : groupedCourses()) {
-            ArrayList<Course> subjects = new ArrayList<>();
-            subjects.add(group.lecture);
-            subjects.addAll(group.labs);
-            boolean hasMatch = false;
-            boolean hasFocus = false;
-            for (Course subject : subjects) {
-                hasMatch |= matches(subject, query);
-                hasFocus |= subject.below;
-            }
-            if (!hasMatch || belowOnly && !hasFocus) continue;
-
-            boolean atRisk = group.priority() < state.target;
-            ArrayList<CourseMetricUiState> metrics = new ArrayList<>();
-            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
-            for (Course subject : subjects) {
-                boolean lab = isLabCourse(subject.code);
-                metrics.add(CourseCardStateMapper.map(subject, lab ? "LAB" : "THEORY", courseHeading(subject)));
-                description.append(". ").append(lab ? "Lab" : "Theory").append(" ")
-                        .append(subject.percentLabel).append(", ").append(subject.counts);
-            }
-            cards.add(new CourseCardUiState(group.lecture.name, group.lecture.code,
-                    courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
-                            + ". Tap to expand course guidance.", description.toString(), metrics));
+        for (CourseGroupRow row : courseGroupViews) {
+            boolean visible = row.matches();
+            row.root.setVisibility(visible ? VISIBLE : GONE);
+            anyVisible |= visible;
         }
-
-        String emptyMessage = "";
-        String emptyActionLabel = null;
-        if (state.rows.isEmpty()) {
-            emptyMessage = state.attendanceLoaded
-                    ? "MyCamu returned no course attendance. Tap here to sync again."
-                    : "Your courses appear here after your first MyCamu sync. Tap to connect.";
-            emptyActionLabel = "Sync MyCamu to load course attendance";
-        } else if (cards.isEmpty()) {
-            emptyMessage = belowOnly && query.trim().isEmpty()
-                    ? "All courses are on track with your attendance target."
-                    : "No courses match this search and filter.";
+        if (coursesEmptyView != null) {
+            coursesEmptyView.setVisibility(anyVisible ? GONE : VISIBLE);
+            if (state.rows.isEmpty()) {
+                coursesEmptyView.setText(state.attendanceLoaded
+                        ? "MyCamu returned no course attendance. Tap here to sync again."
+                        : "Your courses appear here after your first MyCamu sync. Tap to connect.");
+                coursesEmptyView.setContentDescription("Sync MyCamu to load course attendance");
+                coursesEmptyView.setClickable(true);
+                coursesEmptyView.setOnClickListener(v -> {
+                    if (state.sessionExpired) actions.onPortal();
+                    else actions.onSync();
+                });
+            } else {
+                coursesEmptyView.setText(belowOnly && query.trim().isEmpty()
+                        ? "All courses are on track with your attendance target."
+                        : "No courses match this search and filter.");
+                coursesEmptyView.setContentDescription(coursesEmptyView.getText());
+                coursesEmptyView.setClickable(false);
+                coursesEmptyView.setOnClickListener(null);
+            }
         }
-        return new CoursesScreenUiState(state.courses + " courses  ·  " + state.below + " below target",
-                query, belowOnly ? CourseFilter.BELOW_TARGET : CourseFilter.ALL,
-                state.courses, state.below, cards, emptyMessage, emptyActionLabel);
     }
 
     private boolean matches(Course course, String needle) {
@@ -2371,9 +2841,8 @@ final class DashboardView extends FrameLayout {
 
     private void updatePlanner() {
         if (plannerCountView == null) return;
-        plannerCountView.setText(plannerCount + (plannerCount == 1 ? " class" : " classes"));
-        setChipSelected(plannerMissView, !plannerAttend);
-        setChipSelected(plannerAttendView, plannerAttend);
+        plannerCountView.setText(String.format(Locale.ROOT, "%02d", plannerCount));
+        plannerRadio.select(plannerAttend ? 1 : 0, false);
         Course course = state.rows.isEmpty() ? null : state.rows.get(Math.min(plannerCourse, state.rows.size() - 1));
         if (plannerBaseline != null) plannerBaseline.setText(course == null ? "" : course.percentLabel
                 + " now · " + course.counts + (course.targetCount.isEmpty() ? "" : "\n" + course.targetCount)
@@ -2387,9 +2856,10 @@ final class DashboardView extends FrameLayout {
             plannerMeter.setVisibility(GONE);
             plannerFeedback.setText("Sync your class counts to explore your options.");
             projectionView.setText("—");
-            projectionView.setTextColor(ink);
+            plannerCurrentPercentView.setText("—");
+            projectionView.setTextColor(0xFF111111);
             projectionStatusView.setText("Counts unavailable");
-            projectionStatusView.setTextColor(muted);
+            projectionStatusView.setTextColor(0xFF333333);
             return;
         }
         boolean canPreviewOd = course.odReconciled && course.odCredit > 0 && course.odCredit <= course.total - course.attended;
@@ -2420,6 +2890,7 @@ final class DashboardView extends FrameLayout {
                     : "Can miss " + baseline.safeAbsences(state.target)) + odCoverageSummary(course));
         }
         double projected = 100.0 * (baseline.attended + (plannerAttend ? plannerCount : 0)) / (baseline.total + plannerCount);
+        plannerCurrentPercentView.setText(String.format(Locale.getDefault(), "%.1f%%", baseline.percentage()));
         plannerMeter.setVisibility(VISIBLE);
         plannerMeter.update((float) projected, course.code);
         Attendance forecast = new Attendance(course.code, course.name,
@@ -2430,10 +2901,10 @@ final class DashboardView extends FrameLayout {
                 : "After this plan, attend " + forecast.periodsToRecover(state.target)
                     + " consecutive classes to reach " + state.target + "%.");
         projectionView.setText(String.format(Locale.getDefault(), "%.1f%%", projected));
-        projectionView.setTextColor(projected < state.target ? red : ink);
-        projectionStatusView.setText(String.format(Locale.getDefault(), "%+.1f pts\n%s",
-                projected - course.percent, projected >= state.target ? "Above target" : "Below target"));
-        projectionStatusView.setTextColor(projected < state.target ? red : muted);
+        projectionView.setTextColor(0xFF111111);
+        projectionStatusView.setText(String.format(Locale.getDefault(), "%+.1f POINTS · %s",
+                projected - baseline.percentage(), projected >= state.target ? "ON TRACK" : "BELOW TARGET"));
+        projectionStatusView.setTextColor(0xFF333333);
     }
 
     private String odCoverageSummary(Course course) {
@@ -2457,8 +2928,13 @@ final class DashboardView extends FrameLayout {
     private LinearLayout card() {
         LinearLayout card = column();
         card.setPadding(dp(16), dp(14), dp(16), dp(14));
-        card.setBackground(industrialSurface(surface, 20, border));
+        card.setBackground(industrialSurface(surface, 16, border));
         return card;
+    }
+
+    private AnimatedContentView animated(View content, String key) {
+        return new AnimatedContentView(getContext(), content, revealedContent.contains(key),
+                () -> revealedContent.add(key));
     }
 
     private TextView text(String value, float size, int color, int style) {
@@ -2466,13 +2942,13 @@ final class DashboardView extends FrameLayout {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
-        view.setTypeface(uiTypeface, style);
+        view.setTypeface(style == Typeface.BOLD ? uiBoldTypeface : uiTypeface);
         return view;
     }
 
     private TextView label(String value, float size, int color, int style) {
         TextView view = text(value, size, color, style);
-        view.setTypeface(cyberpunk ? displayTypeface : uiTypeface, Typeface.BOLD);
+        view.setTypeface(cyberpunk ? displayTypeface : uiBoldTypeface);
         view.setLetterSpacing(.055f);
         return view;
     }
@@ -2481,7 +2957,7 @@ final class DashboardView extends FrameLayout {
         Button button = new Button(getContext());
         button.setText(value);
         button.setTextSize(20);
-        button.setTypeface(uiTypeface, Typeface.BOLD);
+        button.setTypeface(uiBoldTypeface);
         button.setGravity(Gravity.CENTER);
         button.setIncludeFontPadding(false);
         button.setTextColor(foreground);
@@ -2497,7 +2973,7 @@ final class DashboardView extends FrameLayout {
     private Button roundedButton(String value, int background, int foreground) {
         Button button = compactButton(value, background, foreground);
         button.setTextSize(13);
-        button.setTypeface(uiTypeface, Typeface.BOLD);
+        button.setTypeface(uiBoldTypeface);
         button.setMinHeight(dp(48));
         return button;
     }
@@ -2629,6 +3105,84 @@ final class DashboardView extends FrameLayout {
         @Override public int getOpacity() { return PixelFormat.OPAQUE; }
     }
 
+    /** Non-interactive printed marks from the source's GPA and projection cards. */
+    private final class EditorialCalloutDrawable extends Drawable {
+        private final int background, mark, markAlpha;
+        private final String glyph;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF boundsRect = new RectF();
+
+        EditorialCalloutDrawable(int background, int mark, String glyph, int alpha) {
+            this.background = background;
+            this.mark = mark;
+            this.glyph = glyph;
+            this.markAlpha = alpha;
+        }
+
+        @Override public void draw(Canvas canvas) {
+            Rect area = getBounds();
+            boundsRect.set(area);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(background);
+            canvas.drawRoundRect(boundsRect, dp(17), dp(17), paint);
+            canvas.save();
+            Path clip = new Path();
+            clip.addRoundRect(boundsRect, dp(17), dp(17), Path.Direction.CW);
+            canvas.clipPath(clip);
+            paint.setColor(mark);
+            paint.setAlpha(markAlpha);
+            paint.setTypeface(Typeface.DEFAULT_BOLD);
+            paint.setTextSize(dp(125));
+            paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText(glyph, area.right + dp(15), area.top + dp(97), paint);
+            canvas.restore();
+            paint.setAlpha(255);
+        }
+        @Override public void setAlpha(int alpha) { invalidateSelf(); }
+        @Override public void setColorFilter(android.graphics.ColorFilter filter) { invalidateSelf(); }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    /** Minimal non-animated print marks that appear only inside the lime hero. */
+    private final class BroadcastBackgroundDrawable extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rectangle = new RectF();
+        private final android.graphics.DashPathEffect registration =
+                new android.graphics.DashPathEffect(new float[]{dp(7), dp(8)}, 0f);
+
+        @Override public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            rectangle.set(bounds);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(hero);
+            canvas.drawRoundRect(rectangle, dp(18), dp(18), paint);
+
+            canvas.save();
+            Path clip = new Path();
+            clip.addRoundRect(rectangle, dp(18), dp(18), Path.Direction.CW);
+            canvas.clipPath(clip);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(1));
+            paint.setColor(0x33111111);
+            paint.setPathEffect(registration);
+            canvas.drawCircle(bounds.right + dp(15), bounds.top - dp(35), dp(115), paint);
+            paint.setPathEffect(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(Typeface.create("monospace", Typeface.BOLD));
+            paint.setTextSize(dp(8));
+            paint.setColor(0x99111111);
+            paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText("ROLLCALL / 001", bounds.right - dp(19),
+                    bounds.bottom - dp(10), paint);
+            canvas.restore();
+        }
+        @Override public void setAlpha(int a) { paint.setAlpha(a); invalidateSelf(); }
+        @Override public void setColorFilter(android.graphics.ColorFilter f) {
+            paint.setColorFilter(f); invalidateSelf();
+        }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
     private final class NavBackgroundDrawable extends Drawable {
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -2638,7 +3192,7 @@ final class DashboardView extends FrameLayout {
         private float position;
 
         NavBackgroundDrawable() {
-            fill.setColor(surface);
+            fill.setColor(palette.canvas == 0xFF121212 ? 0xFF292929 : surface);
             outline.setColor(border);
             outline.setStyle(Paint.Style.STROKE);
             outline.setStrokeWidth(dp(1));
@@ -2671,7 +3225,7 @@ final class DashboardView extends FrameLayout {
             canvas.drawRoundRect(outer, dp(21), dp(21), fill);
             canvas.drawRoundRect(outer, dp(21), dp(21), outline);
             if (cyberpunk || bounds.width() == 0) return;
-            float inset = dp(4);
+            float inset = dp(5);
             float cellWidth = (bounds.width() - 2f * inset) / navTabs.length;
             float left = bounds.left + inset + cellWidth * position;
             selected.set(left, bounds.top + dp(3), left + cellWidth, bounds.bottom - dp(3));
@@ -2685,205 +3239,153 @@ final class DashboardView extends FrameLayout {
         @Override public int getOpacity() { return PixelFormat.OPAQUE; }
     }
 
-    private final class SyncGlyphView extends View {
-        private static final int MORPH_STEPS = 36;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF ring = new RectF();
-        private final Path morphPath = new Path();
-        private final android.animation.ArgbEvaluator colorEvaluator = new android.animation.ArgbEvaluator();
-        private final float[] loadingPoints = new float[MORPH_STEPS * 2];
-        private final float[] tickPoints = new float[MORPH_STEPS * 2];
-        private ValueAnimator spin;
-        private ValueAnimator markAnimator;
-        private float rotation;
-        private float markProgress;
-        private float morphStartRotation, morphStartSweep;
-        private boolean morphFromSpinner, morphPathsReady;
-        private int state = 2; // idle, loading, success, failure
+    private final class CourseGroupRow {
+        final CourseGroup group;
+        final LinearLayout root;
+        private final ArrayList<Course> subjects = new ArrayList<>();
 
-        SyncGlyphView(Context context) {
-            super(context);
-            setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        CourseGroupRow(CourseGroup group) {
+            this.group = group;
+            root = card();
+            root.setPadding(dp(17), dp(17), dp(17), dp(17));
+            subjects.add(group.lecture);
+            subjects.addAll(group.labs);
+
+            LinearLayout header = row();
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            TextView courseName = text(group.lecture.name, 16, ink, Typeface.BOLD);
+            courseName.setMaxLines(2);
+            courseName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            header.addView(courseName, new LinearLayout.LayoutParams(0, -2, 1));
+            boolean atRisk = group.priority() < state.target;
+            TextView percentage = text(group.lecture.percentLabel, 13,
+                    0xFF111111, Typeface.BOLD);
+            percentage.setGravity(Gravity.CENTER);
+            percentage.setPadding(dp(10), dp(8), dp(10), dp(8));
+            percentage.setBackground(shape(atRisk ? 0xFFFF8C73 : 0xFFCCFF00, 9, 0));
+            LinearLayout.LayoutParams percentageParams = lp(-2, -2);
+            percentageParams.leftMargin = dp(10);
+            header.addView(percentage, percentageParams);
+            header.setOnClickListener(v -> actions.onCourse(group.lecture.code));
+            header.setContentDescription(courseHeading(group.lecture) + (atRisk ? ", needs focus" : ", on track")
+                    + ". Tap to expand course guidance.");
+            root.addView(header);
+            View tape = new View(getContext());
+            tape.setBackground(shape(atRisk ? palette.highlight : palette.button, 0, 0));
+            LinearLayout.LayoutParams tapeParams = topLp(dp(48), dp(6), 7);
+            tapeParams.gravity = Gravity.RIGHT;
+            root.addView(tape, tapeParams);
+
+            // Full-width rows keep both attendance decisions readable, including lab/theory pairs.
+            LinearLayout meters = column();
+            for (int i = 0; i < subjects.size(); i++) {
+                Course subject = subjects.get(i);
+                String kind = isLabCourse(subject.code) ? "LAB" : "THEORY";
+                if (isLabCourse(group.lecture.code) && subject == group.lecture) kind = "LAB";
+                LinearLayout metric = metric(subject, kind);
+                LinearLayout.LayoutParams metricParams = topLp(-1, -2, i == 0 ? 0 : 10);
+                meters.addView(metric, metricParams);
+            }
+            root.addView(meters, topLp(-1, -2, 4));
+            for (Course subject : subjects) {
+                if (!subject.expanded) continue;
+                TextView guidance = text(subject.guidance, 10, muted, Typeface.NORMAL);
+                guidance.setPadding(dp(2), dp(8), dp(2), 0);
+                guidance.setContentDescription(subject.status + ". " + subject.guidance);
+                root.addView(guidance);
+                TextView planner = text("Try in What if?  →", 12, linkInk, Typeface.BOLD);
+                planner.setPadding(dp(2), dp(8), 0, dp(8));
+                planner.setMinHeight(dp(48));
+                planner.setGravity(Gravity.CENTER_VERTICAL);
+                planner.setOnClickListener(v -> openPlannerFor(subject.code));
+                root.addView(planner);
+            }
+            StringBuilder description = new StringBuilder(courseHeading(group.lecture));
+            for (Course subject : subjects) {
+                description.append(". ").append(isLabCourse(subject.code) ? "Lab" : "Theory")
+                        .append(" ").append(subject.percentLabel).append(", ").append(subject.counts);
+            }
+            root.setContentDescription(description.toString());
+            root.setFocusable(true);
         }
 
-        void show(boolean loading, boolean failed, boolean succeeded) {
-            int next = loading ? 0 : failed ? -1 : succeeded ? 1 : 2;
-            if (state == next) return;
-            boolean wasLoading = state == 0;
-            float lastRotation = rotation;
-            float lastSweep = 170f + 100f * (float) Math.sin(Math.toRadians(lastRotation));
-            state = next;
-            if (spin != null) {
-                spin.cancel();
-                spin = null;
-            }
-            if (markAnimator != null) {
-                markAnimator.cancel();
-                markAnimator = null;
-            }
-            animate().cancel();
-            setScaleX(1f); setScaleY(1f); setAlpha(1f);
-            boolean motionEnabled = android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled();
-            if (loading && motionEnabled) {
-                morphFromSpinner = false;
-                startSpinIfVisible();
+        private LinearLayout metric(Course subject, String kind) {
+            LinearLayout box = column();
+            box.setPadding(dp(2), dp(10), dp(2), dp(10));
+            box.setFocusable(true);
+            String identity = kind + (subject.code.isEmpty() ? "" : " / " + subject.code);
+            box.addView(label(identity, 10, muted, Typeface.BOLD));
+            TextView percent = text(subject.percentLabel, 15, subject.color, Typeface.BOLD);
+            box.addView(percent, topLp(-1, -2, 4));
+
+            final String canMiss;
+            final String mustAttend;
+            if (!subject.countsKnown || subject.total <= 0 || state.target <= 0) {
+                canMiss = "—";
+                mustAttend = "—";
             } else {
-                if (next == 1 || next == -1) {
-                    markProgress = motionEnabled ? 0f : 1f;
-                    if (motionEnabled) {
-                        morphFromSpinner = next == 1 && wasLoading;
-                        morphPathsReady = false;
-                        morphStartRotation = lastRotation;
-                        morphStartSweep = lastSweep;
-                        if (!morphFromSpinner) rotation = 0f;
-                        markAnimator = ValueAnimator.ofFloat(0f, 1f);
-                        markAnimator.setDuration(morphFromSpinner ? 200 : 220);
-                        markAnimator.setInterpolator(new LinearInterpolator());
-                        markAnimator.addUpdateListener(value -> {
-                            markProgress = (float) value.getAnimatedValue();
-                            if (markProgress >= 1f) morphFromSpinner = false;
-                            invalidate();
-                        });
-                        markAnimator.start();
-                    }
+                double target = state.target;
+                int available = Math.max(0, (int) Math.floor(
+                        (100d * subject.attended - target * subject.total) / target + 1e-9d));
+                canMiss = Integer.toString(available);
+                if (100d * subject.attended >= target * subject.total - 1e-9d) {
+                    mustAttend = "0";
+                } else if (target >= 100d) {
+                    mustAttend = "N/A";
                 } else {
-                    rotation = 0f;
-                    morphFromSpinner = false;
-                    markProgress = 0f;
+                    mustAttend = Integer.toString(Math.max(0, (int) Math.ceil(
+                            (target * subject.total - 100d * subject.attended) / (100d - target) - 1e-9d)));
                 }
             }
-            invalidate();
+            LinearLayout stats = row();
+            stats.addView(attendanceMetricTile("CAN MISS", canMiss, !subject.below && !"—".equals(canMiss),
+                    false), new LinearLayout.LayoutParams(0, -2, 1f));
+            LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1f);
+            second.leftMargin = dp(8);
+            stats.addView(attendanceMetricTile("MUST ATTEND", mustAttend, false, subject.below), second);
+            box.addView(stats, topLp(-1, -2, 9));
+            AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code,
+                    subject.percent, subject.color);
+            meter.setContentDescription("Attendance " + subject.percentLabel);
+            box.addView(meter, topLp(-1, dp(7), 12));
+            String detail = subject.countsKnown ? subject.attended + " / " + subject.total + " classes"
+                    : "Attendance counts unavailable";
+            box.addView(text(detail, 11, muted, Typeface.NORMAL), topLp(-1, -2, 6));
+            box.setContentDescription(kind + " " + courseHeading(subject) + ". "
+                    + subject.percentLabel + ". Can miss " + canMiss
+                    + ". Must attend " + ("N/A".equals(mustAttend) ? "not recoverable at 100% target" : mustAttend)
+                    + ". " + detail);
+            box.setOnClickListener(v -> actions.onCourse(subject.code));
+            return box;
         }
 
-        private void startSpinIfVisible() {
-            if (state != 0 || !isShown()
-                    || android.os.Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
-            if (spin == null) {
-                spin = ValueAnimator.ofFloat(rotation, rotation + 360f);
-                spin.setDuration(1200);
-                spin.setRepeatCount(ValueAnimator.INFINITE);
-                spin.setInterpolator(new LinearInterpolator());
-                spin.addUpdateListener(value -> { rotation = (float) value.getAnimatedValue(); invalidate(); });
-                spin.start();
-            } else if (spin.isPaused()) {
-                spin.resume();
+        private LinearLayout attendanceMetricTile(String title, String value, boolean positive, boolean warning) {
+            LinearLayout tile = column();
+            tile.setGravity(Gravity.CENTER);
+            tile.setPadding(dp(8), dp(13), dp(8), dp(13));
+            int background = positive ? hero : warning
+                    ? (palette.canvas == 0xFF121212 ? 0xFFFF4400 : 0xFFFF8C73) : surface;
+            int foreground = positive || warning ? 0xFF111111 : ink;
+            tile.setBackground(shape(background, 10, positive || warning ? 0 : border));
+            TextView labelText = text(title, 10, foreground, Typeface.BOLD);
+            labelText.setGravity(Gravity.CENTER);
+            tile.addView(labelText);
+            TextView number = text(value, 35, foreground, Typeface.BOLD);
+            number.setGravity(Gravity.CENTER);
+            number.setIncludeFontPadding(false);
+            tile.addView(number, topLp(-1, -2, 6));
+            return tile;
+        }
+
+        boolean matches() {
+            boolean hasMatch = false;
+            boolean hasFocus = false;
+            for (Course subject : subjects) {
+                hasMatch |= DashboardView.this.matches(subject, query);
+                hasFocus |= subject.below;
             }
+            return hasMatch && (!belowOnly || hasFocus);
         }
-
-        @Override protected void onVisibilityChanged(View changedView, int visibility) {
-            super.onVisibilityChanged(changedView, visibility);
-            if (isShown()) startSpinIfVisible();
-            else if (spin != null && spin.isRunning()) spin.pause();
-        }
-
-        @Override protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            if (state == 0 && spin == null) startSpinIfVisible();
-        }
-
-        @Override protected void onDetachedFromWindow() {
-            if (spin != null) { spin.cancel(); spin = null; }
-            if (markAnimator != null) { markAnimator.cancel(); markAnimator = null; }
-            if (morphFromSpinner) { morphFromSpinner = false; markProgress = 1f; }
-            if (navIndicatorAnimator != null) { navIndicatorAnimator.cancel(); navIndicatorAnimator = null; }
-            animate().cancel();
-            setScaleX(1f); setScaleY(1f); setAlpha(1f);
-            super.onDetachedFromWindow();
-        }
-
-        @Override protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float cx = getWidth() / 2f, cy = getHeight() / 2f, radius = dp(7.5f);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(dp(2));
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setStrokeJoin(Paint.Join.ROUND);
-            if (state == 0) {
-                ring.set(cx - radius, cy - radius, cx + radius, cy + radius);
-                paint.setColor(heroMuted);
-                paint.setAlpha(95);
-                canvas.drawArc(ring, 0, 360, false, paint);
-                paint.setColor(heroText);
-                paint.setAlpha(255);
-                float sweep = 170f + 100f * (float) Math.sin(Math.toRadians(rotation));
-                canvas.drawArc(ring, rotation, sweep, false, paint);
-            } else if (state == 1 || state == -1) {
-                if (state == 1 && morphFromSpinner) {
-                    drawSpinnerToTick(canvas, cx, cy);
-                    return;
-                }
-                paint.setColor(state == 1 ? green : red);
-                paint.setAlpha(Math.round(72 * (1f - markProgress)));
-                float ringRadius = radius * (1.28f - .28f * markProgress);
-                canvas.drawCircle(cx, cy, ringRadius, paint);
-                paint.setAlpha(255);
-                Path mark = new Path();
-                if (state == 1) {
-                    mark.moveTo(cx - dp(5), cy);
-                    mark.lineTo(cx - dp(1.5f), cy + dp(4));
-                    mark.lineTo(cx + dp(6), cy - dp(5));
-                    PathMeasure measure = new PathMeasure(mark, false);
-                    Path visible = new Path();
-                    measure.getSegment(0, measure.getLength() * markProgress, visible, true);
-                    canvas.drawPath(visible, paint);
-                } else {
-                    float first = Math.min(1f, markProgress * 2f);
-                    float second = Math.max(0f, (markProgress - .5f) * 2f);
-                    canvas.drawLine(cx - dp(4.5f), cy - dp(4.5f),
-                            cx - dp(4.5f) + dp(9f) * first, cy - dp(4.5f) + dp(9f) * first, paint);
-                    canvas.drawLine(cx + dp(4.5f), cy - dp(4.5f),
-                            cx + dp(4.5f) - dp(9f) * second, cy - dp(4.5f) + dp(9f) * second, paint);
-                }
-            } else {
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(heroText);
-                paint.setTextSize(dp(25));
-                paint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("↻", cx, cy - (paint.ascent() + paint.descent()) / 2f, paint);
-            }
-        }
-
-        private void drawSpinnerToTick(Canvas canvas, float cx, float cy) {
-            if (!morphPathsReady) prepareSpinnerToTick(cx, cy);
-            paint.setColor(heroMuted);
-            paint.setAlpha(Math.round(95 * (1f - markProgress)));
-            canvas.drawArc(ring, 0, 360, false, paint);
-            paint.setColor((int) colorEvaluator.evaluate(markProgress, heroText, green));
-            paint.setAlpha(255);
-            morphPath.reset();
-            for (int i = 0; i < MORPH_STEPS; i++) {
-                int offset = i * 2;
-                float x = loadingPoints[offset] + (tickPoints[offset] - loadingPoints[offset]) * markProgress;
-                float y = loadingPoints[offset + 1] + (tickPoints[offset + 1] - loadingPoints[offset + 1]) * markProgress;
-                if (i == 0) morphPath.moveTo(x, y);
-                else morphPath.lineTo(x, y);
-            }
-            canvas.drawPath(morphPath, paint);
-        }
-
-        private void prepareSpinnerToTick(float cx, float cy) {
-            Path loadingArc = new Path();
-            loadingArc.arcTo(ring, morphStartRotation, morphStartSweep, false);
-            Path tick = new Path();
-            tick.moveTo(cx - dp(5), cy);
-            tick.lineTo(cx - dp(1.5f), cy + dp(4));
-            tick.lineTo(cx + dp(6), cy - dp(5));
-            sample(loadingArc, loadingPoints);
-            sample(tick, tickPoints);
-            morphPathsReady = true;
-        }
-
-        private void sample(Path path, float[] points) {
-            PathMeasure measure = new PathMeasure(path, false);
-            float length = measure.getLength();
-            float[] point = new float[2];
-            for (int i = 0; i < MORPH_STEPS; i++) {
-                measure.getPosTan(length * i / (MORPH_STEPS - 1f), point, null);
-                points[i * 2] = point[0];
-                points[i * 2 + 1] = point[1];
-            }
-        }
-
     }
 
     private final class AttendanceRail extends View {
@@ -3050,6 +3552,11 @@ final class DashboardView extends FrameLayout {
         }
     }
 
+    private int weekPulseHeight() {
+        float fontScale = getResources().getConfiguration().fontScale;
+        return dp(76 + Math.max(0f, fontScale - 1f) * 40f);
+    }
+
     private final class WeekPulseView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final int[] counts = new int[7];
@@ -3098,8 +3605,8 @@ final class DashboardView extends FrameLayout {
             super.onDraw(canvas);
             float width = getWidth();
             float step = width / 7f;
-            float baseY = getHeight() - dp(16);
-            float graphTop = dp(20);
+            float baseY = getHeight() - sp(10) - sp(11) - dp(12);
+            float graphTop = Math.max(dp(20), sp(12) + dp(8));
             int max = 1;
             for (int count : counts) max = Math.max(max, count);
 
@@ -3153,10 +3660,10 @@ final class DashboardView extends FrameLayout {
                 date.add(Calendar.DAY_OF_YEAR, i);
                 paint.setTextSize(sp(10));
                 paint.setColor(i == today ? amber : muted);
-                canvas.drawText(labels[i], x, getHeight() - dp(13), paint);
+                canvas.drawText(labels[i], x, getHeight() - sp(11) - dp(4), paint);
                 paint.setTextSize(sp(11));
                 paint.setColor(i == today ? ink : muted);
-                canvas.drawText(String.valueOf(date.get(Calendar.DAY_OF_MONTH)), x, getHeight() - dp(1), paint);
+                canvas.drawText(String.valueOf(date.get(Calendar.DAY_OF_MONTH)), x, getHeight() - dp(2), paint);
             }
         }
 
@@ -3272,7 +3779,7 @@ final class DashboardView extends FrameLayout {
             points.addAll(values);
             StringBuilder description = new StringBuilder("Semester GPA trend. ");
             for (GpaPoint point : points)
-                description.append(semesterTitle(point.semester)).append(": ")
+                description.append(AcademicRecords.semesterTitle(point.semester)).append(": ")
                         .append(String.format(Locale.ROOT, "%.2f", point.value)).append(". ");
             setContentDescription(description.toString());
             invalidate();
@@ -3309,7 +3816,7 @@ final class DashboardView extends FrameLayout {
 
                 String score = String.format(Locale.getDefault(), "%.2f", point.value);
                 canvas.drawText(score, x - labels.measureText(score) / 2f, Math.max(dp(12), barTop - dp(6)), labels);
-                String term = semesterShortLabel(point.semester);
+                String term = AcademicRecords.semesterShortLabel(point.semester);
                 canvas.drawText(term, x - labels.measureText(term) / 2f, getHeight() - dp(5), labels);
             }
         }

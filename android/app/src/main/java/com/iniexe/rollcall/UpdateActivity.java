@@ -48,7 +48,7 @@ public final class UpdateActivity extends Activity {
 
     private String tag, title, notes, releaseUrl, apkName, downloadUrl, digest;
     private AppPalette palette;
-    private Typeface brandTypeface;
+    private Typeface brandTypeface, brandBoldTypeface;
     private LinearLayout root, content;
     private ProgressBar progressBar;
     private TextView progressLabel, statusLabel, stageLabel, backLabel;
@@ -88,6 +88,8 @@ public final class UpdateActivity extends Activity {
         palette = AppPalette.get(dark, index);
         try { brandTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Regular.ttf"); }
         catch (RuntimeException ignored) { brandTypeface = Typeface.MONOSPACE; }
+        try { brandBoldTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
+        catch (RuntimeException ignored) { brandBoldTypeface = Typeface.create(brandTypeface, Typeface.BOLD); }
         getWindow().setStatusBarColor(palette.canvas);
         getWindow().setNavigationBarColor(palette.canvas);
         getWindow().getDecorView().setSystemUiVisibility(dark ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
@@ -99,7 +101,7 @@ public final class UpdateActivity extends Activity {
         int statusInset = getResources().getDimensionPixelSize(getResources().getIdentifier("status_bar_height", "dimen", "android"));
         int navigationInset = getResources().getDimensionPixelSize(getResources().getIdentifier("navigation_bar_height", "dimen", "android"));
         root.setPadding(0, statusInset, 0, navigationInset + dp(24));
-        backLabel = text("‹   Rollcall", 14, palette.green, Typeface.BOLD);
+        backLabel = text("←  ROLLCALL / UPDATES", 12, palette.canvas == 0xFF121212 ? palette.button : palette.highlight, Typeface.BOLD);
         backLabel.setGravity(Gravity.CENTER_VERTICAL);
         backLabel.setPadding(dp(22), 0, dp(22), 0);
         backLabel.setOnClickListener(v -> finish());
@@ -156,29 +158,41 @@ public final class UpdateActivity extends Activity {
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         hero.setGravity(Gravity.CENTER);
-        hero.setPadding(dp(12), dp(14), dp(12), dp(10));
-        TextView mark = text(state == INSTALLED ? "✓" : state == FAILED ? "×" : "✦", 38,
-                state == FAILED ? palette.red : state == INSTALLED ? palette.green : palette.button, Typeface.BOLD);
+        hero.setPadding(dp(20), dp(22), dp(20), dp(22));
+        GradientDrawable broadcast = new GradientDrawable();
+        broadcast.setColor(0xFFCCFF00);
+        broadcast.setCornerRadius(dp(18));
+        hero.setBackground(broadcast);
+        TextView overline = text("TORCH GENESIS / RELEASE TRANSMISSION", 10,
+                0xFF111111, Typeface.BOLD);
+        overline.setLetterSpacing(.06f);
+        hero.addView(overline);
+        TextView mark = text(state == INSTALLED ? "✓" : state == FAILED ? "×" : "↗", 38,
+                0xFF111111, Typeface.BOLD);
         mark.setGravity(Gravity.CENTER);
         GradientDrawable badge = new GradientDrawable();
-        badge.setColor(palette.soft);
+        badge.setColor(0x44FFFFFF);
         badge.setCornerRadius(dp(100));
         mark.setBackground(badge);
         hero.addView(mark, centered(dp(54), dp(54)));
-        TextView heading = text(heading(), 23, palette.ink, Typeface.BOLD);
+        TextView heading = text(heading().toUpperCase(java.util.Locale.ROOT), 27, 0xFF111111, Typeface.BOLD);
+        heading.setLetterSpacing(-.065f);
         heading.setGravity(Gravity.CENTER);
         heading.setPadding(0, dp(10), 0, dp(3));
         hero.addView(heading);
         TextView version = text(state == INSTALLED ? "You’re on " + tag : "Version " + tag,
-                16, palette.muted, Typeface.BOLD);
+                12, 0xFF343A26, Typeface.BOLD);
         version.setGravity(Gravity.CENTER);
         hero.addView(version);
-        content.addView(hero);
+        content.addView(hero, topMargin(dp(8)));
 
         if (state == AVAILABLE || state == FAILED) {
             LinearLayout card = card();
-            card.addView(text(title == null || title.trim().isEmpty() ? "What’s new" : title, 16, palette.ink, Typeface.BOLD));
-            TextView note = text(cleanNotes(notes), 14, palette.muted, Typeface.NORMAL);
+            card.setBackground(makeCardBackground(0xFFC8C8FF, 0xFF111111));
+            card.addView(text("WHAT'S NEW / " + tag, 10, 0xFF111111, Typeface.BOLD));
+            card.addView(text(title == null || title.trim().isEmpty() ? "What's new" : title,
+                    19, 0xFF111111, Typeface.BOLD), topMargin(dp(8)));
+            TextView note = text(cleanNotes(notes), 13, 0xFF333344, Typeface.NORMAL);
             note.setLineSpacing(dp(3), 1f);
             note.setPadding(0, dp(10), 0, 0);
             card.addView(note);
@@ -218,7 +232,7 @@ public final class UpdateActivity extends Activity {
             content.addView(done);
         }
 
-        Button primary = button(primaryLabel());
+        Button primary = button(primaryLabel().toUpperCase(java.util.Locale.ROOT) + "  ↗");
         primary.setOnClickListener(v -> primaryAction());
         root.addView(primary, new LinearLayout.LayoutParams(-1, dp(50)) {{ leftMargin = dp(20); rightMargin = dp(20); topMargin = dp(8); bottomMargin = dp(2); }});
         if (state != INSTALLED) {
@@ -521,8 +535,16 @@ public final class UpdateActivity extends Activity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
-        view.setTypeface(brandTypeface, style);
+        view.setTypeface(style == Typeface.BOLD ? brandBoldTypeface : brandTypeface);
         return view;
+    }
+
+    private GradientDrawable makeCardBackground(int color, int stroke) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(dp(16));
+        if (stroke != 0) shape.setStroke(dp(1), stroke);
+        return shape;
     }
 
     private Button button(String value) {
@@ -530,10 +552,10 @@ public final class UpdateActivity extends Activity {
         button.setText(value);
         button.setTextColor(palette.buttonText);
         button.setAllCaps(false);
-        button.setTypeface(brandTypeface, Typeface.BOLD);
+        button.setTypeface(brandBoldTypeface);
         GradientDrawable background = new GradientDrawable();
         background.setColor(palette.button);
-        background.setCornerRadius(dp(8));
+        background.setCornerRadius(dp(10));
         button.setBackground(background);
         button.setEnabled(state != DOWNLOADING && state != VERIFYING && state != INSTALLING);
         return button;

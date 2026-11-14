@@ -1,0 +1,12 @@
+# Android and Gradle output
+**/.gradle/
+**/build/
+**/local.properties
+
+# Local IDE and operating-system files
+.idea/
+.DS_Store
+Thumbs.db
+
+# Web tooling created locally
+node_modules/

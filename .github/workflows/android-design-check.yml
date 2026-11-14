@@ -1,0 +1,69 @@
+name: Rollcall Android and Web checks
+on:
+  push:
+    branches:
+      - refactor/rollcall-java-torch
+      - refactor/rollcall-repository-consolidation
+    paths:
+      - 'android/**'
+      - 'web/**'
+      - '.github/workflows/android-design-check.yml'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'README.md'
+      - '.gitignore'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'docs/architecture/**'
+  pull_request:
+    branches:
+      - main
+      - refactor/rollcall-java-torch
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run JVM tests and build debug APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --no-daemon --stacktrace
+      - name: Upload JVM test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rollcall-jvm-test-reports
+          path: android/app/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 14
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Worker tests
+        working-directory: web
+        run: npm test
+      - name: Check browser and Worker JavaScript syntax
+        working-directory: web
+        run: |
+          node --check app.js
+          node --check cloud-auth.js
+          node --check _worker.js
+          node --check functions/_api.js

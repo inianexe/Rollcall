@@ -35,10 +35,14 @@ final class CloudAccountClient {
         return id;
     }
 
-    static JSONObject registerDevice(String idToken, String deviceId, String fcmToken, String recoveryCode) throws Exception {
+    static JSONObject registerDevice(String idToken, String deviceId, String fcmToken, String emailCode) throws Exception {
         JSONObject body = new JSONObject().put("deviceId", deviceId).put("fcmToken", fcmToken);
-        if (recoveryCode != null && !recoveryCode.trim().isEmpty()) body.put("recoveryCode", recoveryCode.trim());
+        if (emailCode != null && !emailCode.trim().isEmpty()) body.put("emailCode", emailCode.trim());
         return request("/device/register", "POST", body, idToken);
+    }
+
+    static void sendDeviceReplacementCode(String idToken) throws Exception {
+        request("/device/replacement-code", "POST", new JSONObject(), idToken);
     }
 
     static void registerCurrentDevice(Context context, String fcmToken) {
@@ -54,10 +58,6 @@ final class CloudAccountClient {
 
     static JSONObject fetchPendingCode(String idToken, String deviceId, String challengeId) throws Exception {
         return request("/auth/pending", "POST", new JSONObject().put("deviceId", deviceId).put("challengeId", challengeId), idToken);
-    }
-
-    static JSONObject generateRecoveryCodes(String idToken) throws Exception {
-        return request("/account/recovery-codes", "POST", new JSONObject(), idToken);
     }
 
     static void putSnapshot(String idToken, String deviceId, JSONObject snapshot) throws Exception {
@@ -90,9 +90,16 @@ final class CloudAccountClient {
                 while ((count = in.read(buffer)) != -1) output.write(buffer, 0, count);
             }
             JSONObject response = output.size() == 0 ? new JSONObject() : new JSONObject(output.toString(StandardCharsets.UTF_8));
-            if (status < 200 || status >= 300) throw new IllegalStateException(response.optString("error", "Cloud request failed (" + status + ")."));
+            if (status < 200 || status >= 300) throw new ApiException(status, response.optString("code"),
+                    response.optString("error", "Cloud request failed (" + status + ")."));
             return response;
         } finally { connection.disconnect(); }
+    }
+
+    static final class ApiException extends IllegalStateException {
+        final int status;
+        final String code;
+        ApiException(int status, String code, String message) { super(message); this.status = status; this.code = code; }
     }
 
     static void enqueueSnapshotSync(Context context) {
@@ -104,11 +111,4 @@ final class CloudAccountClient {
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork("rollcall-cloud-snapshot", ExistingWorkPolicy.REPLACE, request);
     }
 
-    static void setLastCloudSync(Context context, long time) {
-        context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong("last_sync", time).apply();
-    }
-
-    static long lastCloudSync(Context context) {
-        return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("last_sync", 0);
-    }
 }

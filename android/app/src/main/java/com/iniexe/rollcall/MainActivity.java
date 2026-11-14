@@ -2,8 +2,8 @@ package com.iniexe.rollcall;
 
 import android.annotation.SuppressLint;
 import android.animation.Animator;
+import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.Dialog;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -42,7 +42,6 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
-import androidx.activity.ComponentActivity;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -67,7 +66,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.android.gms.tasks.Tasks;
 import java.util.concurrent.TimeUnit;
 
-public class MainActivity extends ComponentActivity {
+public class MainActivity extends Activity {
     private static final int REMINDER_PERMISSION_REQUEST = 7301;
     private static final int ONBOARDING_NOTIFICATION_REQUEST = 7302;
     private static final String CONNECTED_KEY = "mycamu_connected";
@@ -84,7 +83,7 @@ public class MainActivity extends ComponentActivity {
     static final String EXTRA_WIDGET_DESTINATION = "widget_destination";
     private int INK, MUTED, CANVAS, GREEN, AMBER, RED, SURFACE, BORDER, SECONDARY, TRACK, BUTTON, BUTTON_TEXT;
     private int HIGHLIGHT, HERO, HERO_TEXT, HERO_MUTED;
-    private Typeface appTypeface;
+    private Typeface appTypeface, appBoldTypeface;
     private static final String HOME = "https://www.mycamu.co.in/v2/attendance";
     private static final long AUTO_SYNC_INTERVAL_MS = 30_000L;
     private static final long ACADEMIC_SYNC_INTERVAL_MS = 15 * 60_000L;
@@ -143,8 +142,7 @@ public class MainActivity extends ComponentActivity {
     private TextView myCamuConsentStatus;
     private Button myCamuConsentButton;
     private ScrollView aboutPage;
-    private Switch reminderSwitch;
-    private ImageView reminderBellIcon;
+    private BellToggleView reminderBell;
     private TextView reminderPermissionHint;
     private TextView settingsTargetValue;
     private TextView onboardingChoiceStatus;
@@ -494,6 +492,10 @@ public class MainActivity extends ComponentActivity {
             @Override public void onTheme() { toggleTheme(); }
             @Override public void onPalette() { choosePalette(); }
             @Override public void onAbout() { showAbout(); }
+            @Override public void onRemindersToggle() {
+                if (classRemindersEnabled) confirmDisableReminders();
+                else setClassRemindersEnabled(true);
+            }
             @Override public void onFilter(boolean belowOnly) { showBelowOnly = belowOnly; }
             @Override public void onQuery(String value) { searchQuery = value; }
             @Override public void onCourse(String code) {
@@ -576,7 +578,11 @@ public class MainActivity extends ComponentActivity {
         RollcallLogo brandMark = new RollcallLogo(this, palette);
         brandMark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         brand.addView(brandMark, new LinearLayout.LayoutParams(dp(36), dp(36)));
-        TextView brandName = text("Rollcall", 21, ink, Typeface.BOLD);
+        TextView brandName = text("rollcall.", 23, ink, Typeface.BOLD);
+        android.text.SpannableString wordmark = new android.text.SpannableString("rollcall.");
+        wordmark.setSpan(new android.text.style.ForegroundColorSpan(palette.highlight),
+                8, 9, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        brandName.setText(wordmark);
         LinearLayout.LayoutParams brandNameParams = new LinearLayout.LayoutParams(-2, -2);
         brandNameParams.leftMargin = dp(10);
         brand.addView(brandName, brandNameParams);
@@ -596,28 +602,36 @@ public class MainActivity extends ComponentActivity {
 
         if (step == 0) {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            content.addView(onboardingArtifact(0), new LinearLayout.LayoutParams(-1, dp(128)));
-            TextView headline = text("A little clarity.\nA better week.", 40, ink, Typeface.NORMAL);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
-            headline.setGravity(android.view.Gravity.CENTER);
-            content.addView(headline);
-            TextView intro = text("Your attendance, classes and next steps.\nTogether, in a place that feels like yours.", 15, muted, Typeface.NORMAL);
-            intro.setGravity(android.view.Gravity.CENTER);
-            intro.setLineSpacing(dp(5), 1f);
-            intro.setPadding(0, dp(20), 0, dp(30));
-            content.addView(intro);
+            // The Welcome screen is a brand statement: one lime hero and a quiet dark stage.
+            LinearLayout signal = new LinearLayout(this);
+            signal.setOrientation(LinearLayout.VERTICAL);
+            signal.setPadding(dp(22), dp(20), dp(22), dp(20));
+            signal.setBackground(background(HERO, 0, 18));
+            signal.addView(text("ROLLCALL / ACADEMIC TRANSMISSION 001",
+                    10, HERO_TEXT, Typeface.BOLD));
+            TextView headline = text("A LITTLE\nCLARITY.\nA BETTER\nWEEK.", 39,
+                    HERO_TEXT, Typeface.BOLD);
+            headline.setLetterSpacing(-.075f);
+            headline.setLineSpacing(0f, .97f);
+            signal.addView(headline, topMargin(-1, -2, 28));
+            TextView intro = text("Your attendance, classes and next steps. Together, in a place that feels like yours.",
+                    12, HERO_TEXT, Typeface.NORMAL);
+            intro.setLineSpacing(dp(3), 1f);
+            signal.addView(intro, topMargin(-1, -2, 18));
+            signal.addView(text("↗  ONE CLASS AT A TIME", 10, HERO_TEXT, Typeface.BOLD),
+                    topMargin(-1, -2, 20));
+            content.addView(signal, topMargin(-1, -2, 18));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
             TextView label = text("MADE FOR YOUR ACTUAL CLASS WEEK", 10, muted, Typeface.BOLD);
             label.setLetterSpacing(.1f);
             label.setGravity(android.view.Gravity.CENTER);
             label.setPadding(0, dp(22), 0, dp(12));
             content.addView(label);
-            content.addView(onboardingButton("Get started  →", palette.button, palette.buttonText,
-                    v -> showOnboardingStep(1)),
-                    new LinearLayout.LayoutParams(-1, dp(56)));
+            content.addView(onboardingButton("GET STARTED  ↗", palette.button, palette.buttonText,
+                    v -> showOnboardingStep(1)), new LinearLayout.LayoutParams(-1, dp(56)));
         } else if (step == 1) {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(42)));
-            TextView headline = text("Class reminders", 36, ink, Typeface.NORMAL);
+            TextView headline = text("Class reminders.", 35, ink, Typeface.BOLD);
             headline.setTypeface(appTypeface(), Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(1), topMargin(-1, dp(126), 12));
@@ -631,9 +645,10 @@ public class MainActivity extends ComponentActivity {
             detail.setPadding(0, dp(14), 0, dp(18));
             content.addView(detail);
             LinearLayout howItWorks = onboardingCard();
-            howItWorks.addView(text("HOW IT WORKS", 10, ink, Typeface.BOLD));
+            howItWorks.setBackground(background(palette.focusSurface, palette.focusBorder, 16));
+            howItWorks.addView(text("HOW IT WORKS", 10, 0xFF111111, Typeface.BOLD));
             TextView note = text("Rollcall checks for updates while open and refreshes in the background when Android allows. Class reminders use your saved timetable; event alerts follow Android notification settings.",
-                    13, muted, Typeface.NORMAL);
+                    13, 0xFF333344, Typeface.NORMAL);
             note.setLineSpacing(dp(3), 1f);
             note.setPadding(0, dp(8), 0, 0);
             howItWorks.addView(note);
@@ -654,7 +669,7 @@ public class MainActivity extends ComponentActivity {
         } else if (step == 2) {
             onboardingChoiceTransitioning = false;
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(22)));
-            TextView headline = text("What should we focus on?", 32, ink, Typeface.NORMAL);
+            TextView headline = text("What should\nwe focus on?", 35, ink, Typeface.BOLD);
             headline.setTypeface(appTypeface(), Typeface.BOLD);
             content.addView(headline);
             addOnboardingChoiceGroup(content, "What do you want help with first?",
@@ -662,24 +677,18 @@ public class MainActivity extends ComponentActivity {
                     new int[]{R.drawable.ic_onboarding_target, R.drawable.ic_nav_courses, R.drawable.ic_nav_week});
         } else {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            TextView headline = text("Sign in to Rollcall", 32, ink, Typeface.BOLD);
+            TextView headline = text("Your week.\nAll in one place.", 35, ink, Typeface.BOLD);
+            headline.setTypeface(appTypeface, Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(2), topMargin(-1, dp(112), 12));
-            TextView accountIntro = text("Keep your attendance and marks available on the web. Your Rollcall account uses its own password, separate from MyCamu.", 14, muted, Typeface.NORMAL);
+            TextView accountIntro = text("Connect MyCamu to build your attendance dashboard. Your Rollcall web account is optional and lives in Settings.", 14, muted, Typeface.NORMAL);
             accountIntro.setLineSpacing(dp(4), 1f);
             content.addView(accountIntro, topMargin(-1, -2, 12));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            content.addView(onboardingButton("Sign in to Rollcall  →", palette.button, palette.buttonText,
-                    v -> showCloudCredentials(false)), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView createAccount = text("No account yet? Create one", 14, ink, Typeface.BOLD);
-            createAccount.setGravity(android.view.Gravity.CENTER);
-            createAccount.setMinHeight(dp(48));
-            createAccount.setOnClickListener(v -> showCloudCredentials(true));
-            content.addView(createAccount, topMargin(-1, -2, 8));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            content.addView(onboardingButton("Continue to MyCamu  →", palette.surface, ink,
+            content.addView(onboardingButton("Connect MyCamu  →", palette.button, palette.buttonText,
                     v -> startMyCamuConnection()), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView note = text("MyCamu provides your classes. Sign in there to build your dashboard.",
+            TextView note = text("MyCamu provides your classes. Rollcall never asks for your MyCamu password.",
                     12, muted, Typeface.NORMAL);
             note.setGravity(android.view.Gravity.CENTER);
             note.setLineSpacing(dp(3), 1f);
@@ -702,10 +711,23 @@ public class MainActivity extends ComponentActivity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextSize(15);
-        button.setTypeface(appTypeface(), Typeface.BOLD);
+        button.setTypeface(boldAppTypeface());
         button.setTextColor(textColor);
         button.setBackground(background(fill, 0, 8));
         button.setOnClickListener(action);
+        button.setOnTouchListener((view, event) -> {
+            if (Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return false;
+            int type = event.getActionMasked();
+            if (type == android.view.MotionEvent.ACTION_DOWN) {
+                view.animate().cancel();
+                view.animate().scaleX(.975f).scaleY(.975f).setDuration(85).start();
+            } else if (type == android.view.MotionEvent.ACTION_UP
+                    || type == android.view.MotionEvent.ACTION_CANCEL) {
+                view.animate().scaleX(1f).scaleY(1f).setDuration(155)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator(1.7f)).start();
+            }
+            return false;
+        });
         return button;
     }
 
@@ -761,7 +783,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void addOnboardingChoiceGroup(LinearLayout parent, String question, String[] choices, int[] icons) {
-        final int ink = palette.ink, paper = palette.buttonText;
+        final int ink = palette.ink, paper = palette.heroText;
         TextView heading = text(question, 14, ink, Typeface.BOLD);
         heading.setPadding(0, dp(6), 0, dp(8));
         parent.addView(heading);
@@ -783,13 +805,13 @@ public class MainActivity extends ComponentActivity {
             LinearLayout option = new LinearLayout(this);
             option.setGravity(android.view.Gravity.CENTER_VERTICAL);
             option.setPadding(dp(14), 0, dp(14), 0);
-            option.setBackground(background(chosen ? palette.button : palette.surface,
-                    chosen ? palette.button : palette.border, 14));
+            option.setBackground(background(chosen ? palette.hero : palette.focusSurface,
+                    chosen ? palette.hero : palette.focusBorder, 12));
             ImageView mark = new ImageView(this);
             mark.setImageResource(icon);
-            mark.setColorFilter(chosen ? paper : ink);
+            mark.setColorFilter(chosen ? paper : 0xFF111111);
             option.addView(mark, new LinearLayout.LayoutParams(dp(20), dp(20)));
-            TextView label = text(choice, 14, chosen ? paper : ink, Typeface.BOLD);
+            TextView label = text(choice, 14, chosen ? paper : 0xFF111111, Typeface.BOLD);
             LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, -2, 1f);
             labelParams.leftMargin = dp(12);
             option.addView(label, labelParams);
@@ -809,10 +831,10 @@ public class MainActivity extends ComponentActivity {
                 for (int itemIndex = 0; itemIndex < group.getChildCount(); itemIndex++) {
                     boolean isChosen = choices[itemIndex].equals(choice);
                     View item = group.getChildAt(itemIndex);
-                    item.setBackground(background(isChosen ? palette.button : palette.surface,
-                            isChosen ? palette.button : palette.border, 14));
-                    labels[itemIndex].setTextColor(isChosen ? paper : ink);
-                    marks[itemIndex].setColorFilter(isChosen ? paper : ink);
+                    item.setBackground(background(isChosen ? palette.hero : palette.focusSurface,
+                            isChosen ? palette.hero : palette.focusBorder, 12));
+                    labels[itemIndex].setTextColor(isChosen ? paper : 0xFF111111);
+                    marks[itemIndex].setColorFilter(isChosen ? paper : 0xFF111111);
                     checks[itemIndex].setVisibility(isChosen ? View.VISIBLE : View.INVISIBLE);
                     item.setEnabled(false);
                 }
@@ -822,7 +844,7 @@ public class MainActivity extends ComponentActivity {
                 checks[optionIndex].setScaleX(.4f);
                 checks[optionIndex].setScaleY(.4f);
                 checks[optionIndex].animate().scaleX(1f).scaleY(1f).setDuration(220).start();
-                onboardingChoiceStatus.setText("Great choice. Let’s set up your sign-in.");
+                onboardingChoiceStatus.setText("Great choice. Let’s connect MyCamu.");
                 onboardingChoiceStatus.setVisibility(View.VISIBLE);
                 onboardingAdvance = () -> showOnboardingStep(3);
                 handler.postDelayed(onboardingAdvance, 1200);
@@ -895,7 +917,7 @@ public class MainActivity extends ComponentActivity {
         scroll.addView(content);
         layout.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-        TextView title = text("Review access", 29, INK, Typeface.BOLD);
+        TextView title = text("Review access.", 35, INK, Typeface.BOLD);
         title.setLetterSpacing(-.035f);
         content.addView(title);
         TextView intro = text("Your MyCamu sign-in worked. Choose whether Rollcall can read the student details below before it opens your dashboard.",
@@ -906,22 +928,22 @@ public class MainActivity extends ComponentActivity {
         LinearLayout account = new LinearLayout(this);
         account.setGravity(android.view.Gravity.CENTER_VERTICAL);
         account.setPadding(dp(14), dp(13), dp(14), dp(13));
-        account.setBackground(background(SURFACE, BORDER, 16));
+        account.setBackground(background(0xFFC8C8FF, 0xFF111111, 16));
         LinearLayout.LayoutParams accountParams = new LinearLayout.LayoutParams(-1, -2);
         accountParams.topMargin = dp(20);
         content.addView(account, accountParams);
-        TextView accountMark = text("M", 17, HERO_TEXT, Typeface.BOLD);
+        TextView accountMark = text("M", 17, 0xFFCCFF00, Typeface.BOLD);
         accountMark.setGravity(android.view.Gravity.CENTER);
-        accountMark.setBackground(background(HERO, 0, 13));
+        accountMark.setBackground(background(0xFF121212, 0, 13));
         account.addView(accountMark, new LinearLayout.LayoutParams(dp(42), dp(42)));
         LinearLayout accountCopy = new LinearLayout(this);
         accountCopy.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams accountCopyParams = new LinearLayout.LayoutParams(0, -2, 1f);
         accountCopyParams.leftMargin = dp(12);
         account.addView(accountCopy, accountCopyParams);
-        accountCopy.addView(text("MyCamu student account", 14, INK, Typeface.BOLD));
-        accountCopy.addView(text("Signed in on this device", 12, MUTED, Typeface.NORMAL), topMargin(-1, -2, 3));
-        TextView connected = text("CONNECTED", 10, GREEN, Typeface.BOLD);
+        accountCopy.addView(text("MyCamu student account", 14, 0xFF111111, Typeface.BOLD));
+        accountCopy.addView(text("Signed in on this device", 12, 0xFF333344, Typeface.NORMAL), topMargin(-1, -2, 3));
+        TextView connected = text("CONNECTED", 10, 0xFF176146, Typeface.BOLD);
         account.addView(connected);
 
         TextView scopeHeading = text("Rollcall will read", 16, INK, Typeface.BOLD);
@@ -935,11 +957,11 @@ public class MainActivity extends ComponentActivity {
         LinearLayout privacy = new LinearLayout(this);
         privacy.setOrientation(LinearLayout.VERTICAL);
         privacy.setPadding(dp(14), dp(13), dp(14), dp(13));
-        privacy.setBackground(background(SECONDARY, 0, 14));
+        privacy.setBackground(background(0xFFC8C8FF, 0, 14));
         content.addView(privacy, topMargin(-1, -2, 14));
-        privacy.addView(text("Your password stays with MyCamu", 13, INK, Typeface.BOLD));
+        privacy.addView(text("Your password stays with MyCamu", 13, 0xFF111111, Typeface.BOLD));
         TextView privacyText = text("Rollcall does not read or store your password. The data above is saved on this device and can be removed from About & Settings.",
-                12, MUTED, Typeface.NORMAL);
+                12, 0xFF333344, Typeface.NORMAL);
         privacyText.setLineSpacing(dp(2), 1f);
         privacy.addView(privacyText, topMargin(-1, -2, 4));
 
@@ -1086,8 +1108,7 @@ public class MainActivity extends ComponentActivity {
         hintParams.topMargin = dp(12);
         content.addView(hint, hintParams);
 
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         AlertDialog dialog = new AlertDialog.Builder(this, dialogTheme).setView(content).create();
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -1163,7 +1184,6 @@ public class MainActivity extends ComponentActivity {
         classRemindersEnabled = enabled;
         ClassReminderScheduler.setEnabled(this, enabled);
         updateReminderSettings();
-        if (enabled) animateReminderBell();
         render(LiveSnapshotStore.get());
     }
 
@@ -1183,7 +1203,6 @@ public class MainActivity extends ComponentActivity {
                 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
         ClassReminderScheduler.setEnabled(this, classRemindersEnabled);
         updateReminderSettings();
-        if (classRemindersEnabled) animateReminderBell();
         ReleaseUpdateNotifier.check(this);
         render(LiveSnapshotStore.get());
     }
@@ -1257,8 +1276,7 @@ public class MainActivity extends ComponentActivity {
                 recreate();
             });
         }
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         ScrollView paletteScroll = new ScrollView(this);
         paletteScroll.setFillViewport(true);
         paletteScroll.addView(content);
@@ -1292,7 +1310,7 @@ public class MainActivity extends ComponentActivity {
         page.setPadding(dp(20), dp(22), dp(20), dp(30));
         scroll.addView(page);
 
-        Button back = button("‹  Dashboard");
+        Button back = button("←  BACK TO DASHBOARD");
         back.setBackgroundTintList(ColorStateList.valueOf(SECONDARY));
         back.setTextColor(INK);
         back.setOnClickListener(v -> showDashboard());
@@ -1301,7 +1319,7 @@ public class MainActivity extends ComponentActivity {
         eyebrow.setLetterSpacing(.12f);
         eyebrow.setPadding(0, dp(24), 0, dp(8));
         page.addView(eyebrow);
-        TextView title = text("Settings.", 32, INK, Typeface.BOLD);
+        TextView title = text("Settings.", 35, INK, Typeface.BOLD);
         title.setTypeface(appTypeface(), Typeface.BOLD);
         title.setPadding(0, 0, 0, dp(3));
         page.addView(title);
@@ -1310,14 +1328,14 @@ public class MainActivity extends ComponentActivity {
         page.addView(subtitle);
 
         LinearLayout settings = cardContainer();
-        settings.addView(text("APPEARANCE · NOTIFICATIONS · TARGET", 10, HIGHLIGHT, Typeface.BOLD));
+        settings.addView(text("APP PREFERENCES / 01", 11, HIGHLIGHT, Typeface.BOLD));
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         modeRow.setPadding(0, dp(8), 0, 0);
         LinearLayout modeCopy = new LinearLayout(this);
         modeCopy.setOrientation(LinearLayout.VERTICAL);
         modeCopy.addView(text("Appearance", 15, INK, Typeface.BOLD));
-        TextView modeHint = text(darkTheme ? "Dark · Rollcall Signal" : "Light · Rollcall Signal", 12, MUTED, Typeface.NORMAL);
+        TextView modeHint = text(darkTheme ? "Dark · Torch Genesis" : "Light · Torch Genesis", 12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams modeHintParams = new LinearLayout.LayoutParams(-1, -2);
         modeHintParams.topMargin = dp(4);
         modeCopy.addView(modeHint, modeHintParams);
@@ -1327,7 +1345,7 @@ public class MainActivity extends ComponentActivity {
         appearanceSwitch.setSwitchMinWidth(dp(52));
         appearanceSwitch.setThumbTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, SURFACE}));
+                new int[]{0xFF121212, darkTheme ? 0xFFF5F5EE : 0xFFFFFFFF}));
         appearanceSwitch.setTrackTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
                 new int[]{HERO, BORDER}));
@@ -1371,25 +1389,17 @@ public class MainActivity extends ComponentActivity {
         LinearLayout.LayoutParams eventHintParams = new LinearLayout.LayoutParams(-1, -2);
         eventHintParams.topMargin = dp(4);
         reminderCopy.addView(text("Attendance, OD, schedule, and sync alerts follow Android notification settings.", 11, MUTED, Typeface.NORMAL), eventHintParams);
-        reminderRow.addView(reminderCopy, new LinearLayout.LayoutParams(0, -2, 1));
-        reminderBellIcon = new ImageView(this);
-        reminderBellIcon.setImageResource(R.drawable.ic_notification_bell);
-        reminderBellIcon.setColorFilter(classRemindersEnabled ? HERO : MUTED);
-        reminderBellIcon.setContentDescription("Class reminder notifications");
-        reminderRow.addView(reminderBellIcon, new LinearLayout.LayoutParams(dp(28), dp(28)));
-        reminderSwitch = new Switch(this);
-        reminderSwitch.setMinHeight(dp(48));
-        reminderSwitch.setSwitchMinWidth(dp(52));
-        reminderSwitch.setPadding(dp(8), 0, 0, 0);
-        reminderSwitch.setThumbTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, SURFACE}));
-        reminderSwitch.setTrackTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, BORDER}));
-        reminderSwitch.setContentDescription("Class reminders");
-        reminderRow.addView(reminderSwitch, new LinearLayout.LayoutParams(-2, dp(48)));
+        reminderRow.addView(reminderCopy, new LinearLayout.LayoutParams(-1, -2));
         settings.addView(reminderRow);
+        reminderBell = new BellToggleView(this, SECONDARY, HERO, INK, HERO_TEXT);
+        reminderBell.setChecked(classRemindersEnabled);
+        reminderBell.onToggle(() -> {
+            if (classRemindersEnabled) confirmDisableReminders();
+            else setClassRemindersEnabled(true);
+        });
+        LinearLayout.LayoutParams reminderBellParams = new LinearLayout.LayoutParams(-1, dp(52));
+        reminderBellParams.topMargin = dp(8);
+        settings.addView(reminderBell, reminderBellParams);
         notificationSettingsButton = button("Manage Android notifications");
         notificationSettingsButton.setOnClickListener(v -> {
             Intent intent = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
@@ -1430,11 +1440,12 @@ public class MainActivity extends ComponentActivity {
         page.addView(version, versionParams);
 
         LinearLayout project = cardContainer();
-        project.addView(text("THE PROJECT", 12, MUTED, Typeface.BOLD));
-        TextView description = text("Rollcall brings your academic activity into a clear, useful dashboard. It tracks progress toward your attendance target and keeps the latest snapshot on this device.", 15, INK, Typeface.NORMAL);
+        project.setBackground(background(0xFFC8C8FF, 0, 16));
+        project.addView(text("ABOUT / THE PROJECT", 11, 0xFF111111, Typeface.BOLD));
+        TextView description = text("GOOD DESIGN.\nBETTER ATTENDANCE.", 22, 0xFF111111, Typeface.BOLD);
         description.setPadding(0, dp(8), 0, 0);
         project.addView(description);
-        TextView privacy = text("Your connected academic account is used to read attendance data, which is stored locally. Rollcall is an independent project and is not affiliated with any institution or service provider.", 13, MUTED, Typeface.NORMAL);
+        TextView privacy = text("Rollcall connects your real attendance, timetable, marks, and goals. Your academic data stays yours; Rollcall is an independent project and is not affiliated with your institution or service provider.", 12, 0xFF333344, Typeface.NORMAL);
         privacy.setPadding(0, dp(10), 0, 0);
         project.addView(privacy);
         page.addView(project);
@@ -1491,7 +1502,7 @@ public class MainActivity extends ComponentActivity {
         LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
         descriptionParams.topMargin = dp(7);
         data.addView(dataDescription, descriptionParams);
-        Button clear = button("Disconnect and clear saved data");
+        Button clear = button("DELETE / DISCONNECT");
         clear.setTextColor(RED);
         clear.setBackgroundTintList(ColorStateList.valueOf(SECONDARY));
         clear.setOnClickListener(v -> confirmClearSavedData());
@@ -1502,92 +1513,83 @@ public class MainActivity extends ComponentActivity {
     }
 
     private int cloudDialogTheme() {
-        return darkTheme ? android.R.style.Theme_Material_Dialog_Alert : android.R.style.Theme_Material_Light_Dialog_Alert;
+        return darkTheme ? R.style.RollcallDialogDark : R.style.RollcallDialogLight;
     }
 
+    /** Rollcall-owned account actions use a tactile branded sheet; no provider pages are restyled. */
     private void showCloudAccountDialog() {
         FirebaseUser existing = FirebaseAuth.getInstance().getCurrentUser();
-        if (existing != null) {
-            boolean verified = existing.isEmailVerified();
-            Dialog dialog = new Dialog(this, cloudDialogTheme());
-            LinearLayout sheet = new LinearLayout(this);
-            sheet.setOrientation(LinearLayout.VERTICAL);
-            sheet.setPadding(dp(20), dp(12), dp(20), dp(16));
-            sheet.setBackground(background(SURFACE, BORDER, 20));
-            View handle = new View(this);
-            handle.setBackground(background(BORDER, 100, 0));
-            LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(38), dp(4));
-            handleParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-            handleParams.bottomMargin = dp(14);
-            sheet.addView(handle, handleParams);
-            sheet.addView(text("Rollcall web account", 20, INK, Typeface.BOLD));
-            TextView account = text(existing.getEmail() == null ? "Manage this device and your account." : existing.getEmail(),
-                    12, MUTED, Typeface.NORMAL);
-            sheet.addView(account, topMargin(-1, -2, 4));
-            TextView state = text(verified ? "VERIFIED ACCOUNT" : "EMAIL VERIFICATION NEEDED", 9,
-                    verified ? GREEN : AMBER, Typeface.BOLD);
-            state.setLetterSpacing(.08f);
-            sheet.addView(state, topMargin(-1, -2, 8));
-
-            String[] titles = verified
-                    ? new String[]{"Connect this phone", "Replace recovery codes", "Delete Rollcall cloud account", "Sign out", "Close"}
-                    : new String[]{"Resend verification", "Delete Rollcall account", "Sign out", "Close"};
-            String[] descriptions = verified
-                    ? new String[]{"Link this installation to your web account.", "Generate a new set of one-time codes.", "Remove the cloud account and its web snapshot.", "Sign out on this device.", "Return to Settings."}
-                    : new String[]{"Send a fresh verification email.", "Remove your Rollcall account.", "Sign out on this device.", "Return to Settings."};
-            String[] icons = verified ? new String[]{"⌁", "◇", "×", "↗", "←"} : new String[]{"✉", "×", "↗", "←"};
-            for (int i = 0; i < titles.length; i++) {
-                final int action = i;
-                LinearLayout item = new LinearLayout(this);
-                item.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                item.setPadding(dp(5), dp(7), dp(5), dp(7));
-                item.setMinimumHeight(dp(58));
-                TextView icon = text(icons[i], 20, (titles[i].startsWith("Delete")) ? RED : HIGHLIGHT, Typeface.BOLD);
-                icon.setGravity(android.view.Gravity.CENTER);
-                icon.setBackground(background(titles[i].startsWith("Delete") ? 0x332E1111 : SECONDARY, 10, 0));
-                item.addView(icon, new LinearLayout.LayoutParams(dp(40), dp(40)));
-                LinearLayout copy = new LinearLayout(this);
-                copy.setOrientation(LinearLayout.VERTICAL);
-                TextView label = text(titles[i], 14, titles[i].startsWith("Delete") ? RED : INK, Typeface.BOLD);
-                copy.addView(label);
-                copy.addView(text(descriptions[i], 11, MUTED, Typeface.NORMAL), topMargin(-1, -2, 2));
-                LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(0, -2, 1);
-                copyParams.leftMargin = dp(12);
-                item.addView(copy, copyParams);
-                if (!"Close".equals(titles[i])) item.addView(text("›", 20, MUTED, Typeface.NORMAL));
-                sheet.addView(item);
-                item.setFocusable(true);
-                item.setClickable(true);
-                item.setOnClickListener(v -> {
-                    dialog.dismiss();
-                    if (!verified) {
-                        if (action == 0) existing.sendEmailVerification().addOnCompleteListener(task ->
-                                Toast.makeText(this, task.isSuccessful() ? "Verification email sent." : "Could not send verification email.", Toast.LENGTH_LONG).show());
-                        else if (action == 1) confirmCloudAccountDelete();
-                        else if (action == 2) signOutCloudAccount();
-                    } else if (action == 0) registerCloudDevice(null);
-                    else if (action == 1) showRecoveryCodes();
-                    else if (action == 2) confirmCloudAccountDelete();
-                    else if (action == 3) signOutCloudAccount();
-                });
-            }
-            dialog.setContentView(sheet);
-            dialog.setCanceledOnTouchOutside(true);
-            dialog.show();
-            android.view.Window window = dialog.getWindow();
-            if (window != null) {
-                window.setBackgroundDrawableResource(android.R.color.transparent);
-                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-                android.view.WindowManager.LayoutParams params = window.getAttributes();
-                params.width = getResources().getDisplayMetrics().widthPixels - dp(24);
-                params.height = android.view.WindowManager.LayoutParams.WRAP_CONTENT;
-                params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
-                params.dimAmount = .58f;
-                window.setAttributes(params);
-            }
-            return;
+        if (existing == null) { showCloudCredentials(false); return; }
+        final boolean verified = existing.isEmailVerified();
+        String[] labels = verified
+                ? new String[]{"Connect this phone", "Delete Rollcall cloud account", "Sign out"}
+                : new String[]{"Resend verification", "Delete Rollcall account", "Sign out"};
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(22), dp(18), dp(22), dp(22));
+        sheet.setBackground(background(SURFACE, BORDER, 20));
+        View handle = new View(this);
+        handle.setBackground(background(MUTED, 0, 100));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(38), dp(4));
+        handleParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        sheet.addView(handle, handleParams);
+        sheet.addView(text("ROLLCALL / ACCOUNT", 11, darkTheme ? HERO : INK, Typeface.BOLD),
+                topMargin(-1, -2, 22));
+        sheet.addView(text("Your web account.", 22, INK, Typeface.BOLD),
+                topMargin(-1, -2, 6));
+        String accountAddress = existing.getEmail();
+        if (accountAddress != null && !accountAddress.isEmpty()) {
+            TextView account = text(accountAddress, 12, MUTED, Typeface.NORMAL);
+            account.setMaxLines(2);
+            sheet.addView(account, topMargin(-1, -2, 6));
         }
-        showCloudCredentials(false);
+        final AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet).create();
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            boolean destructive = labels[i].startsWith("Delete");
+            LinearLayout line = new LinearLayout(this);
+            line.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            line.setPadding(dp(14), 0, dp(14), 0);
+            line.setMinimumHeight(dp(56));
+            line.setBackground(background(destructive ? SECONDARY : SURFACE,
+                    destructive ? RED : BORDER, 12));
+            TextView name = text(labels[i], 14, destructive ? RED : INK, Typeface.BOLD);
+            line.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+            line.addView(text("↗", 17, destructive ? RED : MUTED, Typeface.BOLD));
+            LinearLayout.LayoutParams lineParams = topMargin(-1, -2, 8);
+            if (i == 0) lineParams.topMargin = dp(22);
+            sheet.addView(line, lineParams);
+            line.setClickable(true);
+            line.setFocusable(true);
+            line.setOnClickListener(view -> {
+                dialog.dismiss();
+                if (!verified) {
+                    if (index == 0) existing.sendEmailVerification().addOnCompleteListener(task ->
+                            Toast.makeText(this, task.isSuccessful() ? "Verification email sent."
+                                    : "Could not send verification email.", Toast.LENGTH_LONG).show());
+                    else if (index == 1) confirmCloudAccountDelete();
+                    else if (index == 2) signOutCloudAccount();
+                } else {
+                    if (index == 0) registerCloudDevice(null);
+                    else if (index == 1) confirmCloudAccountDelete();
+                    else if (index == 2) signOutCloudAccount();
+                }
+            });
+        }
+        TextView close = text("Close", 14, MUTED, Typeface.BOLD);
+        close.setGravity(android.view.Gravity.CENTER);
+        close.setMinHeight(dp(48));
+        close.setOnClickListener(v -> dialog.dismiss());
+        sheet.addView(close, topMargin(-1, -2, 12));
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setGravity(android.view.Gravity.BOTTOM);
+            dialog.getWindow().setBackgroundDrawable(background(SURFACE, BORDER, 20));
+            dialog.getWindow().setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (Build.VERSION.SDK_INT < 26 || android.animation.ValueAnimator.areAnimatorsEnabled())
+                dialog.getWindow().setWindowAnimations(R.style.RollcallSheetAnimation);
+        }
     }
 
     private void showCloudCredentials(boolean create) {
@@ -1595,10 +1597,29 @@ public class MainActivity extends ComponentActivity {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
         fields.setPadding(dp(24), dp(12), dp(24), dp(4));
-        EditText email = new EditText(this); email.setSingleLine(true); email.setInputType(33); email.setHint("Email address"); fields.addView(email);
-        EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Password · 8 characters minimum"); fields.addView(password);
+        TextView emailLabel = text("EMAIL ADDRESS", 11, MUTED, Typeface.BOLD);
+        fields.addView(emailLabel);
+        EditText email = new EditText(this);
+        styleCloudCredentialField(email, "you@example.com");
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS);
+        email.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
+        LinearLayout.LayoutParams emailParams = new LinearLayout.LayoutParams(-1, dp(52));
+        emailParams.topMargin = dp(5);
+        fields.addView(email, emailParams);
+        TextView passwordLabel = text("PASSWORD", 11, MUTED, Typeface.BOLD);
+        LinearLayout.LayoutParams passwordLabelParams = topMargin(-1, -2, 14);
+        fields.addView(passwordLabel, passwordLabelParams);
+        EditText password = new EditText(this);
+        styleCloudCredentialField(password, "8 characters minimum");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setAutofillHints(View.AUTOFILL_HINT_PASSWORD);
+        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        LinearLayout.LayoutParams passwordParams = new LinearLayout.LayoutParams(-1, dp(52));
+        passwordParams.topMargin = dp(5);
+        fields.addView(password, passwordParams);
         new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in to Rollcall")
-                .setMessage("This account brings your phone snapshot to the web. Use a separate password from MyCamu.")
+                .setMessage("Your verified email protects the web copy of your Rollcall data. Use a password you do not use for MyCamu.")
                 .setView(fields)
                 .setPositiveButton(create ? "Create account" : "Sign in", (d, w) -> {
                     if (create) cloudCreateAccount(email.getText().toString().trim(), password.getText().toString());
@@ -1606,6 +1627,18 @@ public class MainActivity extends ComponentActivity {
                 })
                 .setNeutralButton(create ? "Have an account?" : "No account?", (d, w) -> showCloudCredentials(!create))
                 .setNegativeButton("Not now", null).show();
+    }
+
+    private void styleCloudCredentialField(EditText field, String hint) {
+        field.setSingleLine(true);
+        field.setTextColor(INK);
+        field.setHintTextColor(MUTED);
+        field.setTextSize(15);
+        field.setTypeface(appTypeface);
+        field.setHint(hint);
+        field.setPadding(dp(14), 0, dp(14), 0);
+        field.setBackground(background(SURFACE, BORDER, 10));
+        field.setMinHeight(dp(52));
     }
 
     private void cloudCreateAccount(String email, String password) {
@@ -1617,7 +1650,7 @@ public class MainActivity extends ComponentActivity {
             user.sendEmailVerification().addOnCompleteListener(this, sent -> {
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", true).apply();
                 Toast.makeText(this, sent.isSuccessful() ? "Account created. Verify your email, then sign in here to connect this phone." : "Account created, but the verification email could not be sent. Use Resend verification.", Toast.LENGTH_LONG).show();
-                if (connectedOnce) showAbout(); else showOnboardingStep(3);
+                if (connectedOnce) showAbout();
             });
         });
     }
@@ -1630,61 +1663,104 @@ public class MainActivity extends ComponentActivity {
             if (!user.isEmailVerified()) {
                 user.sendEmailVerification();
                 Toast.makeText(this, "Verify your email before connecting the web dashboard.", Toast.LENGTH_LONG).show();
-                if (connectedOnce) showAbout(); else showOnboardingStep(3);
+                if (connectedOnce) showAbout();
             } else registerCloudDevice(null);
         });
     }
 
-    private void registerCloudDevice(String recoveryCode) {
+    private void registerCloudDevice(String emailCode) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || !user.isEmailVerified()) return;
         new Thread(() -> {
             try {
                 String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                 String fcm = Tasks.await(FirebaseMessaging.getInstance().getToken(), 20, TimeUnit.SECONDS);
-                JSONObject registered = CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, recoveryCode);
+                CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, emailCode);
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", false).putString("registered_device_id", CloudAccountClient.deviceId(this)).apply();
                 CloudAccountClient.enqueueSnapshotSync(this);
-                JSONArray recoveryCodes = registered.optJSONArray("recoveryCodes");
                 runOnUiThread(() -> {
                     Toast.makeText(this, "This phone is linked to your Rollcall web account.", Toast.LENGTH_LONG).show();
-                    if (connectedOnce) showAbout(); else showOnboardingStep(3);
-                    if (recoveryCodes != null) new AlertDialog.Builder(this, cloudDialogTheme())
-                            .setTitle("Save your recovery codes")
-                            .setMessage("Each code can be used once if you replace or lose this phone. Store them somewhere private. They are shown only now.\n\n" + android.text.TextUtils.join("\n", jsonArrayStrings(recoveryCodes)))
-                            .setPositiveButton("Done", null).show();
+                    showAbout();
                 });
             } catch (Exception error) {
-                String message = error.getMessage() == null ? "Could not connect this phone." : error.getMessage();
-                if (message.contains("recovery code")) runOnUiThread(this::promptCloudRecoveryCode);
-                else runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                if (error instanceof CloudAccountClient.ApiException
+                        && "email_confirmation_required".equals(((CloudAccountClient.ApiException) error).code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.sendDeviceReplacementCode(token);
+                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), null));
+                    } catch (Exception sendError) {
+                        String message = sendError.getMessage() == null ? "Could not send the confirmation email." : sendError.getMessage();
+                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                    }
+                } else if (error instanceof CloudAccountClient.ApiException
+                        && "email_code_invalid".equals(((CloudAccountClient.ApiException) error).code)) {
+                    runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code did not match. Check the email and try again."));
+                } else if (error instanceof CloudAccountClient.ApiException
+                        && "email_code_expired".equals(((CloudAccountClient.ApiException) error).code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.sendDeviceReplacementCode(token);
+                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code expired or reached its attempt limit. A fresh code has been emailed to you."));
+                    } catch (Exception sendError) {
+                        String message = sendError.getMessage() == null ? "Could not send a new confirmation code." : sendError.getMessage();
+                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                    }
+                } else {
+                    String message = error.getMessage() == null ? "Could not connect this phone." : error.getMessage();
+                    runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                }
             }
         }, "rollcall-cloud-device").start();
     }
 
-    private void promptCloudRecoveryCode() {
-        EditText code = new EditText(this); code.setSingleLine(true); code.setHint("One-time recovery code");
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Replace trusted phone")
-                .setMessage("Enter one unused backup code. This signs out web sessions on your old phone.")
-                .setView(code).setPositiveButton("Connect phone", (d, w) -> registerCloudDevice(code.getText().toString().trim()))
-                .setNegativeButton("Cancel", null).show();
-    }
-
-    private void showRecoveryCodes() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null) return;
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Replace recovery codes?")
-                .setMessage("This invalidates every previous recovery code. Save the new set somewhere private.")
-                .setPositiveButton("Replace codes", (d, w) -> new Thread(() -> {
-            try {
-                String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
-                JSONObject response = CloudAccountClient.generateRecoveryCodes(token);
-                JSONArray codes = response.optJSONArray("codes");
-                String value = codes == null ? "" : android.text.TextUtils.join("\n", jsonArrayStrings(codes));
-                runOnUiThread(() -> new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Save your recovery codes")
-                        .setMessage("Each code can be used once if you replace or lose this phone. Store them somewhere private. They are shown only now.\n\n" + value)
-                        .setPositiveButton("Done", null).show());
-            } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "Could not create recovery codes.", Toast.LENGTH_LONG).show()); }
-        }, "rollcall-recovery-codes").start()).setNegativeButton("Cancel", null).show();
+    private void promptDeviceReplacementCode(String emailAddress, String problem) {
+        EditText code = new EditText(this);
+        code.setSingleLine(true);
+        code.setTextColor(INK);
+        code.setHintTextColor(MUTED);
+        code.setHint("6-digit code");
+        code.setTextSize(18);
+        code.setTypeface(appBoldTypeface);
+        code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        code.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(6)});
+        code.setPadding(dp(14), 0, dp(14), 0);
+        code.setBackground(background(SURFACE, BORDER, 10));
+        code.setMinHeight(dp(52));
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(8), dp(24), 0);
+        TextView detail = text("We sent a one-time confirmation code to " + (emailAddress == null ? "your verified email" : emailAddress)
+                + ". It expires in 10 minutes. Enter it here to link this phone; your previous web sessions will then be signed out.", 13, MUTED, Typeface.NORMAL);
+        detail.setLineSpacing(dp(3), 1f);
+        content.addView(detail);
+        if (problem != null) {
+            TextView error = text(problem, 12, RED, Typeface.BOLD);
+            content.addView(error, topMargin(-1, -2, 8));
+        }
+        LinearLayout.LayoutParams codeParams = new LinearLayout.LayoutParams(-1, dp(54));
+        codeParams.topMargin = dp(14);
+        content.addView(code, codeParams);
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Check your email")
+                .setView(content)
+                .setPositiveButton("Link this phone", null)
+                .setNeutralButton("Open email", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                String value = code.getText().toString().trim();
+                if (!value.matches("[0-9]{6}")) { code.setError("Enter the six-digit code from the email."); return; }
+                dialog.dismiss();
+                registerCloudDevice(value);
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
+                try { startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_EMAIL)); }
+                catch (android.content.ActivityNotFoundException ignoredError) { }
+            });
+        });
+        dialog.show();
     }
 
     private void signOutCloudAccount() {
@@ -1697,7 +1773,7 @@ public class MainActivity extends ComponentActivity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null) return;
         EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Rollcall account password");
         new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Delete Rollcall cloud account")
-                .setMessage("This deletes your Rollcall web account, synced cloud snapshot and recovery codes. MyCamu and your phone’s local snapshot remain unchanged. This cannot be undone.")
+                .setMessage("This deletes your Rollcall web account, synced cloud snapshot, and trusted-phone approval. MyCamu and your phone’s local snapshot remain unchanged. This cannot be undone.")
                 .setView(password).setPositiveButton("Delete account", (d, w) -> {
                     if (user.getEmail() == null) return;
                     user.reauthenticate(EmailAuthProvider.getCredential(user.getEmail(), password.getText().toString())).addOnCompleteListener(this, reauth -> {
@@ -1717,10 +1793,6 @@ public class MainActivity extends ComponentActivity {
                 }).setNegativeButton("Cancel", null).show();
     }
 
-    private List<String> jsonArrayStrings(JSONArray values) {
-        List<String> result = new ArrayList<>(); for (int i = 0; i < values.length(); i++) result.add(values.optString(i)); return result;
-    }
-
     private void showPendingWebCode(String challengeId) {
         if (challengeId == null || challengeId.isEmpty()) return;
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null || !user.isEmailVerified()) { Toast.makeText(this, "Sign in to your Rollcall account to retrieve the web code.", Toast.LENGTH_LONG).show(); return; }
@@ -1729,10 +1801,29 @@ public class MainActivity extends ComponentActivity {
                 String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
                 JSONObject result = CloudAccountClient.fetchPendingCode(token, CloudAccountClient.deviceId(this), challengeId);
                 runOnUiThread(() -> {
-                    TextView code = text(result.optString("code"), 32, HERO, Typeface.BOLD); code.setTextIsSelectable(true); code.setGravity(android.view.Gravity.CENTER); code.setPadding(dp(16), dp(10), dp(16), dp(10));
-                    new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Web sign-in code")
-                            .setMessage("Select and copy this six-digit code into your browser. It expires in 5 minutes.")
-                            .setView(code).setPositiveButton("Done", null).show();
+                    String value = result.optString("code", "");
+                    if (!value.matches("[0-9]{6}")) {
+                        Toast.makeText(this, "The web sign-in code is unavailable. Request a new one in your browser.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    CodeSlotsView slots = new CodeSlotsView(this, SECONDARY, INK, HERO);
+                    AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                            .setTitle("Web sign-in code")
+                            .setMessage("Copy this six-digit code into your browser. It expires in 5 minutes.")
+                            .setView(slots)
+                            .setPositiveButton("Copy code", (d, which) -> {
+                                android.content.ClipData clip = android.content.ClipData.newPlainText("Rollcall web code", value);
+                                if (Build.VERSION.SDK_INT >= 33) {
+                                    android.os.PersistableBundle extras = new android.os.PersistableBundle();
+                                    extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
+                                    clip.getDescription().setExtras(extras);
+                                }
+                                ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(clip);
+                            })
+                            .setNegativeButton("Done", null).create();
+                    dialog.show();
+                    dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+                    slots.setCode(value);
                 });
             } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "The web sign-in code expired or this is not the trusted phone.", Toast.LENGTH_LONG).show()); }
         }, "rollcall-web-code").start();
@@ -1780,7 +1871,7 @@ public class MainActivity extends ComponentActivity {
                 complete[0] = true;
                 startedAt[0] = 0L;
                 label.setText("Confirmed");
-                label.setTextColor(Color.WHITE);
+                label.setTextColor(accent);
                 control.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
                 confirmed.run();
             } else handler.postDelayed(tick[0], 16L);
@@ -1811,8 +1902,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void confirmClearSavedData() {
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(20), dp(20), dp(16));
@@ -1935,10 +2025,8 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void updateReminderSettings() {
-        if (reminderSwitch == null || reminderPermissionHint == null || notificationSettingsButton == null) return;
-        reminderSwitch.setOnCheckedChangeListener(null);
-        reminderSwitch.setChecked(classRemindersEnabled);
-        reminderSwitch.setOnCheckedChangeListener(this::onReminderSwitchChanged);
+        if (reminderBell == null || reminderPermissionHint == null || notificationSettingsButton == null) return;
+        reminderBell.setChecked(classRemindersEnabled);
         boolean allowed = ClassReminderScheduler.canNotify(this);
         reminderPermissionHint.setText(allowed
                 ? classRemindersEnabled
@@ -1947,37 +2035,12 @@ public class MainActivity extends ComponentActivity {
                 : classRemindersEnabled
                     ? "Rollcall is set to remind you, but Android blocks notifications. Allow them below to receive reminders."
                     : "Reminders are off and Android blocks notifications. Turn them on and allow notifications to get class reminders.");
-        if (reminderBellIcon != null) {
-            reminderBellIcon.setColorFilter(classRemindersEnabled ? HERO : MUTED);
-            reminderBellIcon.setContentDescription(classRemindersEnabled
-                    ? "Class reminder notifications enabled" : "Class reminder notifications disabled");
-        }
         notificationSettingsButton.setVisibility(View.VISIBLE);
     }
 
-    private void animateReminderBell() {
-        if (reminderBellIcon == null) return;
-        reminderBellIcon.post(() -> {
-            reminderBellIcon.setPivotX(reminderBellIcon.getWidth() / 2f);
-            reminderBellIcon.setPivotY(dp(3));
-            android.animation.ObjectAnimator ring = android.animation.ObjectAnimator.ofFloat(
-                    reminderBellIcon, View.ROTATION, 0f, 16f, -13f, 8f, -4f, 0f);
-            ring.setDuration(680L);
-            ring.start();
-        });
-    }
-
-    private void onReminderSwitchChanged(android.widget.CompoundButton button, boolean checked) {
-        if (checked) {
-            if (!classRemindersEnabled) setClassRemindersEnabled(true);
-            return;
-        }
+    private void confirmDisableReminders() {
         if (!classRemindersEnabled) return;
-        button.setOnCheckedChangeListener(null);
-        button.setChecked(true);
-        button.setOnCheckedChangeListener(this::onReminderSwitchChanged);
-        int dialogTheme = darkTheme ? android.R.style.Theme_Material_Dialog_Alert
-                : android.R.style.Theme_Material_Light_Dialog_Alert;
+        int dialogTheme = cloudDialogTheme();
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(20), dp(20), dp(16));
@@ -2046,17 +2109,22 @@ public class MainActivity extends ComponentActivity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(CANVAS);
 
-        TextView title = text("Connect your account", 26, INK, Typeface.NORMAL);
-        title.setTypeface(appTypeface(), Typeface.BOLD);
-        title.setPadding(dp(16), dp(12), dp(16), dp(4));
+        TextView overline = text("ROLLCALL / SECURE CONNECTION", 10, HIGHLIGHT, Typeface.BOLD);
+        overline.setLetterSpacing(.1f);
+        overline.setPadding(dp(22), dp(14), dp(22), dp(4));
+        page.addView(overline);
+        TextView title = text("Connect your account.", 27, INK, Typeface.BOLD);
+        title.setLetterSpacing(-.05f);
+        title.setPadding(dp(22), dp(4), dp(22), dp(4));
         page.addView(title);
         webStatus = text(connectedOnce ? "Attendance refreshes every minute while Rollcall is open."
                 : "Sign in below. After sign-in, review what Rollcall can read before the first sync.", 13, MUTED, Typeface.NORMAL);
-        webStatus.setPadding(dp(16), dp(4), dp(16), dp(8));
+        webStatus.setPadding(dp(22), dp(4), dp(22), dp(12));
         page.addView(webStatus);
 
         LinearLayout actions = new LinearLayout(this);
-        webSyncButton = button(connectedOnce ? "Sync attendance" : "Check sign-in");
+        actions.setPadding(dp(22), 0, dp(22), dp(14));
+        webSyncButton = button(connectedOnce ? "SYNC ATTENDANCE  ↗" : "CHECK SIGN-IN  ↗");
         webSyncButton.setAllCaps(false);
         webSyncButton.setTextColor(BUTTON_TEXT);
         webSyncButton.setBackgroundTintList(ColorStateList.valueOf(BUTTON));
@@ -2116,18 +2184,18 @@ public class MainActivity extends ComponentActivity {
         page.setBackgroundColor(CANVAS);
         LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(16), dp(8), dp(16), dp(4));
+        header.setPadding(dp(20), dp(12), dp(20), dp(9));
         TextView back = text("‹", 32, INK, Typeface.NORMAL);
         back.setGravity(android.view.Gravity.CENTER);
         back.setContentDescription("Back to Marks and academics");
         back.setOnClickListener(v -> showDashboard());
         header.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        TextView title = text("KCT portal", 19, INK, Typeface.BOLD);
+        TextView title = text("KCT / ACADEMICS  ↗", 18, INK, Typeface.BOLD);
         title.setPadding(dp(8), 0, 0, 0);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         page.addView(header);
         kctPortalStatus = text("Sign in on the KCT portal to view your academic record.", 12, MUTED, Typeface.NORMAL);
-        kctPortalStatus.setPadding(dp(20), dp(2), dp(20), dp(8));
+        kctPortalStatus.setPadding(dp(22), dp(2), dp(22), dp(12));
         page.addView(kctPortalStatus);
         kctWebView = new WebView(this);
         kctWebView.setBackgroundColor(Color.WHITE);
@@ -2363,9 +2431,9 @@ public class MainActivity extends ComponentActivity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextSize(15);
-        button.setTypeface(appTypeface(), Typeface.BOLD);
+        button.setTypeface(boldAppTypeface());
         button.setTextColor(BUTTON_TEXT);
-        button.setBackgroundTintList(ColorStateList.valueOf(BUTTON));
+        button.setBackground(background(BUTTON, 0, 10));
         return button;
     }
 
@@ -2388,8 +2456,16 @@ public class MainActivity extends ComponentActivity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
-        view.setTypeface(appTypeface(), style);
+        view.setTypeface(style == Typeface.BOLD ? boldAppTypeface() : appTypeface());
         return view;
+    }
+
+    private Typeface boldAppTypeface() {
+        if (appBoldTypeface == null) {
+            try { appBoldTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
+            catch (RuntimeException ignored) { appBoldTypeface = Typeface.create(appTypeface(), Typeface.BOLD); }
+        }
+        return appBoldTypeface;
     }
 
     private Typeface appTypeface() {
@@ -2426,6 +2502,7 @@ public class MainActivity extends ComponentActivity {
         }
         DashboardView.State ui = new DashboardView.State();
         ui.dark = darkTheme;
+        ui.remindersEnabled = classRemindersEnabled;
         ui.name = studentName.isEmpty() ? "MyCamu student" : studentName;
         String[] nameParts = studentName.trim().split("\\s+");
         ui.initials = nameParts.length == 0 || nameParts[0].isEmpty() ? "R"
@@ -2526,14 +2603,10 @@ public class MainActivity extends ComponentActivity {
             if (row.countsKnown && row.total > 0) {
                 if (row.percentage() < attendanceTarget) {
                     int needed = row.periodsToRecover(attendanceTarget);
-                    item.canMissText = "0";
-                    item.mustAttendText = needed == Integer.MAX_VALUE ? "NO RECOVERY" : String.valueOf(needed);
                     item.targetCount = needed == Integer.MAX_VALUE ? "Target unreachable"
                             : "Attend " + needed + (needed == 1 ? " class" : " classes");
                 } else {
                     int safeAbsences = row.safeAbsences(attendanceTarget);
-                    item.canMissText = String.valueOf(safeAbsences);
-                    item.mustAttendText = "0";
                     item.targetCount = safeAbsences == 0 ? "Attend next class" : "Can miss " + safeAbsences;
                 }
             }
@@ -2963,7 +3036,7 @@ public class MainActivity extends ComponentActivity {
             boolean leavesUpdated = leaveResult != null && "ready".equals(leaveResult.optString("state"));
             if (leavesUpdated) LiveSnapshotStore.leaves(this, parseLeaves(leaveResult.optJSONArray("rows")));
             if (result.has("history")) LiveSnapshotStore.classMarks(this,
-                    parseClassMarks(result.optJSONArray("history"), result.optJSONArray("classAttendance")));
+                    parseClassMarks(result.optJSONArray("history"), result.optJSONArray("classAttendance"), LiveSnapshotStore.get().timetable));
             boolean firstConnection = !connectedOnce;
             connectedOnce = true;
             lastProgramAvailable = true;
@@ -3003,14 +3076,6 @@ public class MainActivity extends ComponentActivity {
             if (firstConnection || reconnectInProgress) {
                 reconnectInProgress = false;
                 showDashboard();
-            }
-            if (firstConnection && !getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getBoolean("setup_prompt_shown", false)) {
-                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("setup_prompt_shown", true).apply();
-                handler.postDelayed(() -> new AlertDialog.Builder(this, cloudDialogTheme())
-                        .setTitle("Use Rollcall on the web?")
-                        .setMessage("Create an optional Rollcall account to view this phone’s synced attendance, timetable, leave/OD and KCT marks in a read-only web dashboard. Your MyCamu password is never used.")
-                        .setPositiveButton("Set up", (dialog, which) -> showCloudAccountDialog())
-                        .setNegativeButton("Not now", null).show(), 500L);
             }
         } catch (JSONException | RuntimeException e) {
             finishSync("Could not read the attendance response. Tap Sync to try again.");
@@ -3087,7 +3152,8 @@ public class MainActivity extends ComponentActivity {
         return rows;
     }
 
-    private List<LiveSnapshotStore.ClassMark> parseClassMarks(JSONArray history, JSONArray recent) {
+    private List<LiveSnapshotStore.ClassMark> parseClassMarks(JSONArray history, JSONArray recent,
+                                                               List<LiveSnapshotStore.ClassSession> timetable) {
         Map<String, LiveSnapshotStore.ClassMark> marks = new java.util.LinkedHashMap<>();
         if (history != null) for (int i = 0; i < Math.min(history.length(), 2000); i++) {
             JSONObject row = history.optJSONObject(i);
@@ -3096,15 +3162,11 @@ public class MainActivity extends ComponentActivity {
             if (startsAt <= 0) continue;
             String id = row.optString("id", "");
             String code = row.optString("code", "");
-            for (LiveSnapshotStore.ClassSession session : LiveSnapshotStore.get().timetable) {
-                String a = code.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                String b = session.code.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                if (!a.isEmpty() && !b.isEmpty() && a.equals(b)
-                        && Math.abs(session.startsAt - startsAt) < 60_000L) {
-                    id = session.id;
-                    code = session.code;
-                    break;
-                }
+            LiveSnapshotStore.ClassSession session = ProviderClassMarkMatcher.match(
+                    code, startsAt, timetable);
+            if (session != null) {
+                id = session.id;
+                code = session.code;
             }
             if (id.isEmpty()) id = code + "_" + startsAt;
             marks.put(id, new LiveSnapshotStore.ClassMark(id, code, row.optString("name", code),

@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible RollCall problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include student records, passwords, account tokens, or private screenshots.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Android app
+        - Web dashboard
+        - Android–Web sync
+        - Build or release
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+      placeholder: 1.0.24 (25) or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use sample or redacted data only.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
