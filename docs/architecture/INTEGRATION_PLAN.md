@@ -6,7 +6,7 @@
 - PR #13 targets `main`, is open and non-draft, and GitHub currently reports it as conflicting. Its latest Android `verify` check passed on 2026-11-14.
 - PR #14 (`codex/rollcall-torch-ui`) merged to `main` on 2026-11-13 and brought the Compose migration into the default branch.
 - `main`'s `android-app-checks.yml` filters pull requests to the Compose branch. The Java branch has a separate verification workflow; this consolidation updates it to run Android and Web checks on the Java and consolidation branches.
-- The Java Torch app identity is unchanged (`com.iniexe.rollcall`), with versionCode 25 and versionName 1.0.24. The checked-in V1 APK is older; verify release APK identity and signing before publishing.
+- The Java Torch app identity is unchanged (`com.iniexe.rollcall`), with versionCode 26 and versionName 1.0.25. The checked-in V1 APK is older; verify release APK identity and signing before publishing.
 
 ## Safe integration approach
 

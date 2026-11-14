@@ -6,6 +6,12 @@
     <application android:theme="@style/RollcallTheme" android:label="Rollcall" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="rollcall-ab5d1.firebaseapp.com" android:pathPrefix="/__/auth/links" />
+            </intent-filter>
         </activity>
         <activity android:name=".UpdateActivity" android:exported="false" android:parentActivityName=".MainActivity" />
         <service android:name=".ReleaseUpdateMessagingService" android:exported="false">

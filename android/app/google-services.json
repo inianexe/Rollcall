@@ -12,7 +12,20 @@
           "package_name": "com.iniexe.rollcall"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "761627592440-62g0ocmgshgeah934bntur64drlccqo3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.iniexe.rollcall",
+            "certificate_hash": "4ed2531ac0c47b62d346c42c84ca923e2ab4b0e0"
+          }
+        },
+        {
+          "client_id": "761627592440-nop4ff174kntvva9ctecddpk4pmiu4cu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBajb8dJ7RaSA5I61rr_EaXrvAPit_rNDE"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "761627592440-nop4ff174kntvva9ctecddpk4pmiu4cu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

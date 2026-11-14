@@ -4,7 +4,7 @@
 
 - Selected starting ref: `origin/design/torch-genesis-exact-prototype` at `f20a982ea8f49c769abdc4d450d46b5930da8f4b`.
 - Chosen because it is the verified native Java Torch Genesis implementation and retains `android/TORCH_GENESIS_DESIGN.md`. The compared `design/torch-genesis-native-polish`, `design/torch-genesis-exact-app`, and `design/torch-genesis-exact-app-wide` refs modify the same core Java UI and remove that canonical design document; `redesign/torch-genesis-reference-exact` adds an HTML/WebView runtime and was excluded.
-- App identity is `com.iniexe.rollcall`; baseline is versionCode 25 / versionName 1.0.24. Preserve the identity, signing key, and monotonically increasing release version. The checked-in V1 APK is a historical artifact with a lower version and must not be published as the current build.
+- App identity is `com.iniexe.rollcall`; baseline is versionCode 26 / versionName 1.0.25. Preserve the identity, signing key, and monotonically increasing release version. The checked-in V1 APK is a historical artifact with a lower version and must not be published as the current build.
 - Source presence was checked in the selected baseline and against the original Java backup (`00b3f8eb07809d4686152f54e158c87fa28999e7`) and the current local hybrid workspace. The hybrid workspace contains extensive uncommitted changes and was not copied or modified.
 - Verification: JVM tests, debug APK, and debug instrumentation APK are built in CI. The JVM suite covers attendance, academics, palette contrast, widget metrics, notifier rules, and provider/timetable reconciliation. Instrumentation fixtures compile but are not executed by CI or this consolidation; use a separate QA install for physical-device execution.
 
