@@ -1,12 +1,12 @@
 # Android ↔ Web API contract
 
-Status: implemented in Android `1.0.24` / schema version `1` and the Cloudflare Pages Worker. This document records the existing wire contract; it does not imply that the production Worker has the latest code or migrations.
+Status: implemented in Android `1.0.25` / snapshot schema version `1` and the Cloudflare Pages Worker.
 
 ## Ownership
 
 - Android owns MyCamu/KCT portal sessions, provider parsing, attendance calculations, local snapshot persistence, and upload scheduling.
 - `CloudAccountClient` owns Android HTTP requests to the Rollcall account API. `CloudSnapshotPayload` serializes the persisted phone snapshot.
-- `web/functions/_api.js` owns Firebase token verification, trusted-device checks, one-time sign-in challenges, replacement-phone email codes, sessions, and D1 snapshots.
+- `web/functions/_api.js` owns Firebase token verification, per-install app registrations, one-time sign-in and phone-link codes, sessions, and D1 snapshots.
 - `web/cloud-auth.js` owns browser Firebase sign-in and calls the same-origin Worker API. `web/app.js` renders account snapshots read-only; local browser mode remains independent.
 - MyCamu/KCT provider endpoints and payloads are not part of this contract. Their details are embedded in Android portal code and can change independently.
 
@@ -22,10 +22,12 @@ Mutating `POST` and `PUT` requests require a same-origin `Origin` when the heade
 
 | Method and path | Caller / auth | Request fields | Success | Key failure statuses |
 |---|---|---|---|---|
-| `POST /device/register` | Android / Firebase bearer | `deviceId` (12–100 letters, digits, `_`, or `-`), `fcmToken` (up to 4096 chars), optional `emailCode` (six digits) | `{ "ok": true }` | `400` invalid device; `403` `email_confirmation_required`, `email_code_invalid`, or `email_code_expired` |
-| `POST /device/replacement-code` | Android / verified Firebase bearer | empty object | `{ "ok": true, "expiresIn": 600 }` | `400` no email; `409` no trusted device; `429` `email_rate_limited`; `503` `email_delivery_failed` |
-| `POST /auth/challenge` | Browser / verified Firebase bearer | empty object | `{ "ok": true, "challengeId": string, "expiresAt": epoch seconds }` | `409` no trusted app; `429` too many requests; `503` push service unavailable |
-| `POST /auth/pending` | Android / verified Firebase bearer | `deviceId`, `challengeId` | `{ "code": six digits, "expiresAt": epoch seconds }` | `403` untrusted device; `404` expired challenge |
+| `POST /device/trust` | Android / verified Firebase bearer | `deviceId`, `fcmToken` | `{ "ok": true }` | `400` invalid device details |
+| `POST /device/untrust` | Android / verified Firebase bearer | `deviceId` | `{ "ok": true }` | `400` invalid device details |
+| `POST /device/register` | Android / Firebase bearer | `deviceId`, `fcmToken`, optional `replacementCode` (six digits) | `{ "ok": true }` | `400` invalid device; `403` `replacement_code_required`, `replacement_code_invalid`, or `replacement_code_expired` |
+| `POST /device/replacement-code` | Android / verified Firebase bearer | `deviceId` | `{ "ok": true, "expiresIn": 600, "sentTo": count }` | `400` invalid device; `409` no trusted device/other signed-in app; `429` `replacement_code_rate_limited`; `503` `replacement_push_failed` |
+| `POST /auth/challenge` | Browser / verified Firebase bearer | empty object | `{ "ok": true, "challengeId": string, "expiresAt": epoch seconds }`; push sent to every registered app | `409` no signed-in app; `429` too many requests; `503` push service unavailable |
+| `POST /auth/pending` | Android / verified Firebase bearer | `deviceId`, `challengeId` | `{ "code": six digits, "expiresAt": epoch seconds }` | `403` app is not signed in to the UID; `404` expired challenge |
 | `POST /auth/verify` | Browser / same-origin | `challengeId`, `code` (six digits) | `{ "ok": true }` and sets `rc_session` | `403` origin mismatch; `401` expired, exhausted, invalid, or consumed code |
 | `GET /auth/session` | Browser / `rc_session` | — | `{ "signedIn": true, "updatedAt": epoch seconds }` | `401` `{ "signedIn": false }` |
 | `POST /auth/logout` | Browser / same-origin, cookie optional | empty object | `{ "ok": true }`, clears cookie | `200` even when already signed out |
@@ -66,14 +68,14 @@ Course entries contain `code`, `name`, `attended`, `total`, `percentage` (number
 
 ## One-time codes and limits
 
-- Browser sign-in: a challenge code expires after 300 seconds and allows five verification attempts. Up to five challenge sends per account are accepted per 15 minutes, including requests whose challenge was consumed; send timestamps are retained for one day. Delivery is through the trusted app’s FCM token; the code is encrypted in D1 and stored as an HMAC for verification.
-- Phone replacement: an email code expires after 600 seconds, up to five attempts, at most one send per minute, and five sends per account per 15 minutes. D1 stores only an HMAC of the code. Successful replacement invalidates existing web sessions.
+- Browser sign-in: a challenge code expires after 300 seconds and allows five verification attempts. Up to five challenge sends per account are accepted per 15 minutes, including requests whose challenge was consumed; send timestamps are retained for one day. Delivery is attempted separately to every registered app installation; the code is encrypted in D1 and stored as an HMAC for verification.
+- Phone linking: a code expires after 600 seconds, allows five attempts, permits one send per minute, and permits five sends per account per 15 minutes. Delivery is attempted to every other registered app installation; D1 stores only an HMAC of the code. Successful linking invalidates existing web sessions.
 - `device/register` request bodies are capped at 12,000 bytes; `auth/pending` and `auth/verify` bodies at 3,000 bytes. Other JSON requests use the 1,900,000-byte cap.
 - Firebase ID tokens are limited to 8192 characters and must match the configured project, issuer, signature, and expiry.
 
 ## D1 migrations and release safety
 
-Apply migrations in order only after reviewing them against a current D1 backup. Migration `0002_email_device_replacement.sql` drops the old `recovery_codes` table after introducing email replacement codes; applying it is destructive to any still-needed recovery-code rows. Migration `0003_expire_web_sessions.sql` sets existing sessions to expire 30 days after their original creation, so sessions older than 30 days will require sign-in after rollout. Migration `0004_limit_web_challenge_sends.sql` adds durable challenge-send counters. Do not run remote migrations as part of code verification. Production migration timing, backup/restore, email secrets, and deployed Worker version are operator-controlled.
+Apply migrations in order after reviewing them. Migration `0002_email_device_replacement.sql` adds short-lived code storage and retains legacy recovery-code rows. Migration `0003_expire_web_sessions.sql` sets existing sessions to expire 30 days after their original creation, so sessions older than 30 days require sign-in. Migration `0004_limit_web_challenge_sends.sql` adds durable challenge-send counters. Migration `0005_trusted_app_devices.sql` migrates the current trusted installation into the per-install registry and replaces the email-send rate ledger while copying its recent timestamps. Do not run remote migrations as part of code verification.
 
 ## Contract verification
 

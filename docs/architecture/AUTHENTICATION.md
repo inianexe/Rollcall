@@ -12,7 +12,7 @@ Status: implementation on `feature/firebase-auth-v2`; Firebase Authentication an
 ## Lifecycle
 
 1. A user may stay local or authenticate using a configured provider. The app stores the last authenticated UID for display only; it does not make that UID the sync owner.
-2. The user explicitly enables cloud sync. Android registers the trusted device and records `cloud_sync_uid`. Snapshot jobs require the signed-in UID and stored sync owner to match, and the worker checks again immediately before upload.
+2. A verified app sign-in registers that install's FCM token for account approvals, independently of cloud sync. The user must separately enable cloud sync; Android records `cloud_sync_uid`, and snapshot jobs require the signed-in UID and stored sync owner to match before upload.
 3. Browser sign-in obtains a Firebase ID token, requests a short-lived challenge, and waits for the code retrieved inside the trusted Android app. The Worker then creates a random, HttpOnly, Secure, SameSite=Strict session; D1 stores only a keyed hash.
 4. Sign-out removes browser session state or Android pending challenge state. It does not clear local academic data or delete the cloud snapshot.
 5. Account deletion requires recent Firebase reauthentication. Android then asks the Worker to delete UID-owned D1 data and deletes the Firebase identity. Local academic records remain on the phone.

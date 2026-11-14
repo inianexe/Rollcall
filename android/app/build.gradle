@@ -20,8 +20,8 @@ android {
         minSdk 23
         targetSdk 35
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
-        versionCode 25
-        versionName '1.0.24'
+        versionCode 26
+        versionName '1.0.25'
         buildConfigField 'String', 'ROLLCALL_API_BASE_URL', '"' + (project.findProperty('rollcallApiBaseUrl') ?: 'https://rollcall-campus-companion.pages.dev/api') + '"'
     }
 

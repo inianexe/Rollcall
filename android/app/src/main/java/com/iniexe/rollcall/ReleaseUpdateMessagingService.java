@@ -9,22 +9,32 @@ import android.os.Build;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
+import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.Map;
 
 public final class ReleaseUpdateMessagingService extends FirebaseMessagingService {
     private static final String CHANNEL = "app_updates";
     private static final String WEB_LOGIN_CHANNEL = "web_sign_in";
+    private static final String DEVICE_LINK_CHANNEL = "device_link";
     private static final int NOTIFICATION_ID = 0x524f4c4c;
 
     @Override public void onNewToken(String token) {
         UpdatePushNotifications.subscribeIfAllowed(this);
+        CloudAccountClient.registerCurrentApp(this, token);
         CloudAccountClient.registerCurrentDevice(this, token);
     }
 
     @Override public void onMessageReceived(RemoteMessage message) {
         Map<String, String> data = message.getData();
+        if ("device_replacement".equals(data.get("type"))) {
+            if (!belongsToSignedInUser(data)) return;
+            String code = data.get("replacementCode");
+            if (code != null && code.matches("[0-9]{6}")) showDeviceReplacementCode(code);
+            return;
+        }
         if ("web_login".equals(data.get("type"))) {
+            if (!belongsToSignedInUser(data)) return;
             String challengeId = data.get("challengeId");
             if (challengeId != null && challengeId.length() <= 100) {
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit()
@@ -44,6 +54,11 @@ public final class ReleaseUpdateMessagingService extends FirebaseMessagingServic
         ReleaseUpdateNotifier.checkNow(this, (release, error) -> {
             if (release != null) showUpdateNotification(release);
         });
+    }
+
+    private boolean belongsToSignedInUser(Map<String, String> data) {
+        com.google.firebase.auth.FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        return user != null && user.isEmailVerified() && user.getUid().equals(data.get("uid"));
     }
 
     private void showWebLoginRequest(String challengeId) {
@@ -70,6 +85,30 @@ public final class ReleaseUpdateMessagingService extends FirebaseMessagingServic
                 .setCategory(Notification.CATEGORY_MESSAGE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE);
         manager.notify(0x524f5700 | (challengeId.hashCode() & 0xff), builder.build());
+    }
+
+    private void showDeviceReplacementCode(String code) {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null || (Build.VERSION.SDK_INT >= 24 && !manager.areNotificationsEnabled())) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(DEVICE_LINK_CHANNEL, "Phone link codes",
+                    NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("One-time codes requested when linking another Rollcall phone");
+            manager.createNotificationChannel(channel);
+        }
+        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, DEVICE_LINK_CHANNEL) : new Notification.Builder(this);
+        Notification.Builder privateVersion = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, DEVICE_LINK_CHANNEL) : new Notification.Builder(this);
+        builder.setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+                .setContentTitle("Rollcall phone-link code")
+                .setContentText(code + " · expires in 10 min · enter on the new phone")
+                .setCategory(Notification.CATEGORY_MESSAGE)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion(privateVersion.setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+                        .setContentTitle("Rollcall phone-link code")
+                        .setContentText("Unlock to view this one-time code.").build());
+        manager.notify(0x524f4c50, builder.build());
     }
 
     private void showUpdateNotification(ReleaseUpdateNotifier.Release release) {

@@ -1823,6 +1823,7 @@ public class MainActivity extends Activity {
 
     private void rememberSignedInAccount(FirebaseUser user) {
         getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putString("last_auth_uid", user.getUid()).apply();
+        CloudAccountClient.registerCurrentApp(this);
     }
 
     private void confirmCloudSyncAndConnect() {
@@ -1887,14 +1888,14 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void registerCloudDevice(String emailCode) {
+    private void registerCloudDevice(String replacementCode) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || !user.isEmailVerified()) return;
         new Thread(() -> {
             try {
                 String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                 String fcm = Tasks.await(FirebaseMessaging.getInstance().getToken(), 20, TimeUnit.SECONDS);
-                CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, emailCode);
+                CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, replacementCode);
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit()
                         .putString("registered_device_id", CloudAccountClient.deviceId(this))
                         .putString("registered_uid", user.getUid())
@@ -1908,26 +1909,26 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception error) {
                 if (error instanceof CloudAccountClient.ApiException
-                        && "email_confirmation_required".equals(((CloudAccountClient.ApiException) error).code)) {
+                        && "replacement_code_required".equals(((CloudAccountClient.ApiException) error).code)) {
                     try {
                         String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
-                        CloudAccountClient.sendDeviceReplacementCode(token);
-                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), null));
+                        CloudAccountClient.sendDeviceReplacementCode(token, CloudAccountClient.deviceId(this));
+                        runOnUiThread(() -> promptDeviceReplacementCode(null));
                     } catch (Exception sendError) {
-                        String message = sendError.getMessage() == null ? "Could not send the confirmation email." : sendError.getMessage();
+                        String message = sendError.getMessage() == null ? "Could not send a code to your other Rollcall apps." : sendError.getMessage();
                         runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
                     }
                 } else if (error instanceof CloudAccountClient.ApiException
-                        && "email_code_invalid".equals(((CloudAccountClient.ApiException) error).code)) {
-                    runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code did not match. Check the email and try again."));
+                        && "replacement_code_invalid".equals(((CloudAccountClient.ApiException) error).code)) {
+                    runOnUiThread(() -> promptDeviceReplacementCode("That code did not match. Check the notification on your other Rollcall apps and try again."));
                 } else if (error instanceof CloudAccountClient.ApiException
-                        && "email_code_expired".equals(((CloudAccountClient.ApiException) error).code)) {
+                        && "replacement_code_expired".equals(((CloudAccountClient.ApiException) error).code)) {
                     try {
                         String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
-                        CloudAccountClient.sendDeviceReplacementCode(token);
-                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code expired or reached its attempt limit. A fresh code has been emailed to you."));
+                        CloudAccountClient.sendDeviceReplacementCode(token, CloudAccountClient.deviceId(this));
+                        runOnUiThread(() -> promptDeviceReplacementCode("That code expired or reached its attempt limit. A fresh code was sent to your other Rollcall apps."));
                     } catch (Exception sendError) {
-                        String message = sendError.getMessage() == null ? "Could not send a new confirmation code." : sendError.getMessage();
+                        String message = sendError.getMessage() == null ? "Could not send a new code to your other Rollcall apps." : sendError.getMessage();
                         runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
                     }
                 } else {
@@ -1938,7 +1939,7 @@ public class MainActivity extends Activity {
         }, "rollcall-cloud-device").start();
     }
 
-    private void promptDeviceReplacementCode(String emailAddress, String problem) {
+    private void promptDeviceReplacementCode(String problem) {
         EditText code = new EditText(this);
         code.setSingleLine(true);
         code.setTextColor(INK);
@@ -1954,8 +1955,7 @@ public class MainActivity extends Activity {
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(24), dp(8), dp(24), 0);
-        TextView detail = text("We sent a one-time confirmation code to " + (emailAddress == null ? "your verified email" : emailAddress)
-                + ". It expires in 10 minutes. Enter it here to link this phone; your previous web sessions will then be signed out.", 13, MUTED, Typeface.NORMAL);
+        TextView detail = text("A one-time code was sent to your other signed-in Rollcall apps. It expires in 10 minutes. Enter it here to link this phone.", 13, MUTED, Typeface.NORMAL);
         detail.setLineSpacing(dp(3), 1f);
         content.addView(detail);
         if (problem != null) {
@@ -1966,22 +1966,17 @@ public class MainActivity extends Activity {
         codeParams.topMargin = dp(14);
         content.addView(code, codeParams);
         AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
-                .setTitle("Check your email")
+                .setTitle("Confirm this phone")
                 .setView(content)
                 .setPositiveButton("Link this phone", null)
-                .setNeutralButton("Open email", null)
                 .setNegativeButton("Cancel", null)
                 .create();
         dialog.setOnShowListener(ignored -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
                 String value = code.getText().toString().trim();
-                if (!value.matches("[0-9]{6}")) { code.setError("Enter the six-digit code from the email."); return; }
+                if (!value.matches("[0-9]{6}")) { code.setError("Enter the six-digit code from a Rollcall app."); return; }
                 dialog.dismiss();
                 registerCloudDevice(value);
-            });
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
-                try { startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_EMAIL)); }
-                catch (android.content.ActivityNotFoundException ignoredError) { }
             });
         });
         dialog.show();
@@ -1990,6 +1985,7 @@ public class MainActivity extends Activity {
     private void signOutCloudAccount() {
         WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("rollcall-cloud-snapshot");
         getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("pending_web_challenge_id").apply();
+        CloudAccountClient.unregisterCurrentApp(this);
         FirebaseAuth.getInstance().signOut();
         Toast.makeText(this, "Signed out of Rollcall web account. Your cloud snapshot remains available when you sign in again.", Toast.LENGTH_LONG).show();
         showAbout();
@@ -3503,6 +3499,10 @@ public class MainActivity extends Activity {
         }
         FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
         SharedPreferences cloudAccountPrefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        if (cloudUser != null && cloudUser.isEmailVerified()
+                && (!cloudUser.getUid().equals(cloudAccountPrefs.getString("trusted_app_uid", ""))
+                || !CloudAccountClient.deviceId(this).equals(cloudAccountPrefs.getString("trusted_app_device_id", ""))))
+            CloudAccountClient.registerCurrentApp(this);
         if (cloudUser != null && CloudSyncPolicy.allowsUpload(cloudUser.getUid(), cloudAccountPrefs.getString("cloud_sync_uid", ""))
                 && !CloudAccountClient.deviceId(this).equals(cloudAccountPrefs.getString("registered_device_id", "")))
             cloudUser.reload().addOnCompleteListener(task -> { if (task.isSuccessful() && cloudUser.isEmailVerified()) registerCloudDevice(null); });

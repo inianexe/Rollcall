@@ -7,6 +7,7 @@ import {
 
 const config = window.ROLLCALL_FIREBASE_CONFIG || {};
 const configured = config.apiKey && !config.apiKey.startsWith('REPLACE_') && config.appId && !config.appId.startsWith('REPLACE_');
+const filePreview = window.location.protocol === 'file:';
 const dialog = document.querySelector('#web-account-dialog');
 const form = document.querySelector('#web-account-form');
 const feedback = document.querySelector('#web-account-feedback');
@@ -42,6 +43,9 @@ function authMessage(error) {
   if (code.includes('credential-already-in-use') || code.includes('email-already-in-use'))
     return 'That sign-in method belongs to another Rollcall account. No accounts were merged.';
   if (code.includes('network-request-failed')) return 'Connection lost. Check your internet and try again.';
+  if (code.includes('unauthorized-domain')) return 'This website address is not authorized for Rollcall sign-in. Open the official Rollcall site over HTTPS.';
+  if (code.includes('operation-not-allowed')) return 'This sign-in option is not enabled for the Rollcall account yet.';
+  if (code.includes('invalid-api-key')) return 'Rollcall web sign-in is misconfigured. Please try again later.';
   if (code.includes('too-many-requests')) return 'Too many attempts. Wait a little before trying again.';
   if (code.includes('user-disabled')) return 'This Rollcall account is disabled. Contact support for help.';
   if (code.includes('expired-action-code') || code.includes('invalid-action-code'))
@@ -84,7 +88,7 @@ async function requestCode(user) {
   clearInterval(resendTimer);
   resendTimer = setInterval(updateResend, 1000);
   updateResend();
-  message('Approve this sign-in with the code in your trusted Rollcall app. It expires in 5 minutes.');
+  message('A sign-in code was sent to your signed-in Rollcall apps. Enter the code from any one of them. It expires in 5 minutes.');
 }
 
 async function continueWithFirebaseUser(user) {
@@ -110,10 +114,11 @@ function prepareDialog() {
   form.elements.email.required = true;
   form.elements.email.readOnly = false;
   form.elements.password.required = false;
-  message(configured ? '' : 'Web sign-in needs Firebase web-app settings before it can be enabled.', !configured);
-  googleButton.disabled = !configured;
-  emailButton.disabled = !configured;
-  passwordToggle.disabled = !configured;
+  message(filePreview ? 'Sign-in is unavailable in a local file preview. Open Rollcall at https://rollcall-campus-companion.pages.dev.'
+    : configured ? '' : 'Web sign-in needs Firebase web-app settings before it can be enabled.', filePreview || !configured);
+  googleButton.disabled = !configured || filePreview;
+  emailButton.disabled = !configured || filePreview;
+  passwordToggle.disabled = !configured || filePreview;
   dialog.showModal();
   form.elements.email.focus();
 }
@@ -241,7 +246,7 @@ resend.addEventListener('click', async () => {
   try {
     await requestCode(auth.currentUser);
     form.elements.code.value = '';
-    message('A new approval request was sent to your trusted Rollcall app.');
+    message('A new sign-in code was sent to your signed-in Rollcall apps.');
   } catch (error) { message(error.message || 'Could not send a new approval request.', true); updateResend(); }
 });
 

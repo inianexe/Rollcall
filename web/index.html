@@ -91,7 +91,7 @@
     <canvas id="auth-shape-grid" aria-hidden="true"></canvas>
     <form id="web-account-form" method="dialog">
       <div class="dialog-head"><div><h2>Your Rollcall account</h2><p>Your academic world, connected.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
-      <p class="dialog-copy">Attendance stays on your phone unless you choose to sync it. Your web data still needs approval from your trusted Rollcall device.</p>
+      <p class="dialog-copy">Attendance stays on your phone unless you choose to sync it. Web sign-in codes are sent to your signed-in Rollcall apps.</p>
       <button type="button" class="button button-primary" id="web-google-signin">Continue with Google</button>
       <label>Email<input name="email" type="email" autocomplete="username" required></label>
       <button type="button" class="button button-quiet" id="web-email-link">Continue with email</button>
@@ -99,7 +99,7 @@
       <label id="web-password-row" hidden>Password<input name="password" type="password" autocomplete="current-password"></label>
       <button type="button" class="panel-link" id="web-reset-password" hidden>Forgot password?</button>
       <button type="button" class="panel-link" id="web-link-google" hidden>Connect Google to this account</button>
-      <label id="web-code-row" hidden>Six-digit app code<input name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6"></label>
+      <label id="web-code-row" hidden>Code from any signed-in Rollcall app<input name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6"></label>
       <button type="button" class="panel-link" id="web-resend-code" hidden>Resend code</button>
       <p id="web-account-feedback" class="notification-feedback" role="status" aria-live="polite"></p>
       <p class="web-signup-note">New here? Continue with email to create an account, or use your existing password.</p>

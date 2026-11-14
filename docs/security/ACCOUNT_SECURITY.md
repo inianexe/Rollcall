@@ -11,8 +11,8 @@ RollCall keeps Firebase identity, local academic data, and the optional cloud sn
 ## Cloud ownership and device trust
 
 - Sync starts only after explicit user consent and records the active Firebase UID as the local cloud owner. Enqueue and upload both verify that the active Firebase UID still matches that owner.
-- The Worker validates the Firebase ID token and scopes snapshots, trusted devices, challenges, and sessions by UID.
-- Web Firebase sign-in alone is insufficient to read snapshots. A code delivered through the trusted Android app must be confirmed before the Worker issues a browser session.
+- The Worker validates the Firebase ID token and scopes snapshots, app registrations, challenges, and sessions by UID.
+- Verified app sign-in registers an installation for approval pushes, without enabling snapshot upload. Web Firebase sign-in alone is insufficient to read snapshots; a code delivered to the user's signed-in Rollcall apps must be confirmed before the Worker issues a browser session.
 - Browser sessions use `Secure`, `HttpOnly`, `SameSite=Strict` cookies and a 30-day server-side expiry. Logout and trusted-device replacement revoke session rows.
 
 ## Sensitive operations and deletion
@@ -25,5 +25,5 @@ RollCall keeps Firebase identity, local academic data, and the optional cloud sn
 
 - Google sign-in needs the Firebase Android OAuth client configuration and the correct SHA fingerprints. The checked-in `google-services.json` currently has an empty `oauth_client` list, so Google sign-in cannot succeed in this build until the owner downloads an updated config.
 - Email-link sign-in and reauthentication need Firebase Email/Password plus Email Link enabled, the Firebase Hosting action-link domain, and Android App Links configuration. These settings have not been changed or verified in production.
-- There is no new multi-device model, automatic account merge, SMS recovery, or Cloudflare deployment in this change.
-- Local unit/API tests do not verify Firebase Console settings, Google Play Services behavior, Resend delivery, production D1, or physical-device link dispatch.
+- App approval pushes target all registered installations for the Firebase UID. An app unregisters on sign-out; older app versions do not understand phone-link push codes and should be upgraded before linking another phone.
+- Local unit/API tests do not verify Firebase Console settings, Google Play Services behavior, production D1, or physical-device push delivery.

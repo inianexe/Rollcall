@@ -18,7 +18,7 @@ The Android app uses Java and native Views with the Torch Genesis design system.
 
 Download the APK from [GitHub Releases](https://github.com/inianexe/Rollcall/releases). Android may ask you to allow installation from your browser or file manager because the app is distributed outside Google Play. Only install RollCall releases signed with the established RollCall release key.
 
-Current Java source baseline: **version 1.0.24 (versionCode 25)**. The public `v1.0.0` release and checked-in root APK are older and are not an upgrade build for this source. Do not publish the checked-in APK as a current release.
+Current Java source baseline: **version 1.0.25 (versionCode 26)**. The public `v1.0.0` release and checked-in root APK are older and are not an upgrade build for this source. Do not publish the checked-in APK as a current release.
 
 ## Development
 

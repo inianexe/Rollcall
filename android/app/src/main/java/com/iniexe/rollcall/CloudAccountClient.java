@@ -35,14 +35,46 @@ final class CloudAccountClient {
         return id;
     }
 
-    static JSONObject registerDevice(String idToken, String deviceId, String fcmToken, String emailCode) throws Exception {
+    static JSONObject registerDevice(String idToken, String deviceId, String fcmToken, String replacementCode) throws Exception {
         JSONObject body = new JSONObject().put("deviceId", deviceId).put("fcmToken", fcmToken);
-        if (emailCode != null && !emailCode.trim().isEmpty()) body.put("emailCode", emailCode.trim());
+        if (replacementCode != null && !replacementCode.trim().isEmpty()) body.put("replacementCode", replacementCode.trim());
         return request("/device/register", "POST", body, idToken);
     }
 
-    static void sendDeviceReplacementCode(String idToken) throws Exception {
-        request("/device/replacement-code", "POST", new JSONObject(), idToken);
+    static void sendDeviceReplacementCode(String idToken, String deviceId) throws Exception {
+        request("/device/replacement-code", "POST", new JSONObject().put("deviceId", deviceId), idToken);
+    }
+
+    static void registerCurrentApp(Context context) {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken()
+                .addOnSuccessListener(token -> registerCurrentApp(context, token));
+    }
+
+    static void registerCurrentApp(Context context, String fcmToken) {
+        com.google.firebase.auth.FirebaseUser user = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified() || fcmToken == null || fcmToken.isEmpty()) return;
+        Context app = context.getApplicationContext();
+        String id = deviceId(app);
+        user.getIdToken(false).addOnSuccessListener(token -> new Thread(() -> {
+            try {
+                request("/device/trust", "POST", new JSONObject().put("deviceId", id).put("fcmToken", fcmToken), token.getToken());
+                app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                        .putString("trusted_app_device_id", id).putString("trusted_app_uid", user.getUid()).apply();
+            } catch (Exception ignored) { }
+        }, "rollcall-app-trust").start());
+    }
+
+    static void unregisterCurrentApp(Context context) {
+        com.google.firebase.auth.FirebaseUser user = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
+        Context app = context.getApplicationContext();
+        String id = deviceId(app);
+        user.getIdToken(false).addOnSuccessListener(token -> new Thread(() -> {
+            try { request("/device/untrust", "POST", new JSONObject().put("deviceId", id), token.getToken()); }
+            catch (Exception ignored) { }
+            app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .remove("trusted_app_device_id").remove("trusted_app_uid").apply();
+        }, "rollcall-app-untrust").start());
     }
 
     static void registerCurrentDevice(Context context, String fcmToken) {

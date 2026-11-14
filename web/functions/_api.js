@@ -111,13 +111,23 @@ async function googleAccessToken(env) {
   return body.access_token;
 }
 
-async function sendCodePush(env, token, challengeId) {
+async function sendPushToDevices(env, tokens, data, ttl) {
   const accessToken = await googleAccessToken(env);
-  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`, {
-    method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-    body: JSON.stringify({ message: { token, data: { type: "web_login", challengeId }, android: { priority: "HIGH", ttl: "300s" } } })
-  });
-  if (!response.ok) throw new Error("The trusted Rollcall app could not be reached. Open it and try again.");
+  const results = await Promise.all(tokens.map(async token => {
+    try {
+      const response = await fetch(`https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`, {
+        method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ message: { token, data, android: { priority: "HIGH", ttl } } })
+      });
+      return response.ok;
+    } catch (_) { return false; }
+  }));
+  if (!results.some(Boolean)) throw new Error("No signed-in Rollcall app could receive the code.");
+  return results.filter(Boolean).length;
+}
+
+async function sendCodePush(env, tokens, uid, challengeId) {
+  return sendPushToDevices(env, tokens, { type: "web_login", uid, challengeId }, "300s");
 }
 
 async function encryptCode(code, env) {
@@ -135,30 +145,9 @@ async function decryptCode(row, env) {
   return new TextDecoder().decode(plain);
 }
 
-function makeEmailCode() {
+function makeOneTimeCode() {
   const value = new DataView(random(4).buffer).getUint32(0) % 1_000_000;
   return String(value).padStart(6, "0");
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
-}
-
-async function sendDeviceReplacementEmail(env, email, code) {
-  if (!env.RESEND_API_KEY || !env.ROLLCALL_EMAIL_FROM) throw new Error("Email delivery is not configured.");
-  const safeCode = escapeHtml(code);
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      from: env.ROLLCALL_EMAIL_FROM,
-      to: [email],
-      subject: "Confirm your new Rollcall phone",
-      text: `Hello,\n\nUse this one-time code to link a new phone to your Rollcall account:\n\n${code}\n\nIt expires in 10 minutes. Enter it only in the Rollcall app. Once the new phone is linked, web sessions on your previous phone will be signed out.\n\nIf you did not request this change, ignore this email. Your account and linked phone have not changed. Never share this code with anyone.\n\nRollcall`,
-      html: `<div style="margin:0;background:#f5f5ee;padding:32px 16px;font-family:Arial,sans-serif;color:#171717"><div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #deded3;border-radius:16px;overflow:hidden"><div style="padding:22px 28px;background:#ccff00;font-size:20px;font-weight:700;letter-spacing:1px">rollcall<span style="color:#ff4400">.</span></div><div style="padding:28px"><p style="margin:0 0 8px;color:#606456;font-size:12px;font-weight:700;letter-spacing:1.5px">ACCOUNT SECURITY</p><h1 style="margin:0 0 14px;font-size:24px;line-height:1.25">Confirm your new phone</h1><p style="margin:0 0 22px;font-size:15px;line-height:1.6">Use this one-time code to link a new phone to your Rollcall account.</p><div style="padding:18px;background:#f5f5ee;border:1px solid #deded3;border-radius:12px;text-align:center;font-size:32px;font-weight:700;letter-spacing:8px">${safeCode}</div><p style="margin:18px 0 0;font-size:14px;line-height:1.6"><b>This code expires in 10 minutes.</b> Enter it only in the Rollcall app. Once the new phone is linked, web sessions on your previous phone will be signed out.</p><div style="height:1px;margin:24px 0;background:#e8e8e0"></div><p style="margin:0;color:#606456;font-size:13px;line-height:1.6">If you did not request this change, ignore this email. Your account and linked phone have not changed. Never share this code with anyone.</p></div></div><p style="max-width:520px;margin:16px auto 0;color:#77796e;font-size:12px;line-height:1.5">This automated security message was sent because a phone replacement was requested for your Rollcall account.</p></div>`
-    })
-  });
-  if (!response.ok) throw new Error("Email delivery failed.");
 }
 
 async function createWebSession(env, uid) {
@@ -184,22 +173,38 @@ async function route(request, env) {
   if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "allow": "GET, POST, PUT, OPTIONS" } });
   if ((method === "POST" || method === "PUT") && !sameOrigin(request)) return json({ error: "Invalid request origin." }, 403);
 
+  if (path === "/api/device/trust" && method === "POST") {
+    const user = await authFromHeader(request, env), body = await readBody(request, 12000);
+    if (!/^[\w-]{12,100}$/.test(String(body.deviceId || "")) || !String(body.fcmToken || "") || String(body.fcmToken).length > 4096)
+      return json({ error: "Invalid device details." }, 400);
+    await env.DB.prepare("INSERT INTO app_devices(device_id,uid,fcm_token,updated_at) VALUES(?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET uid=excluded.uid,fcm_token=excluded.fcm_token,updated_at=excluded.updated_at")
+      .bind(body.deviceId, user.uid, body.fcmToken, now()).run();
+    return json({ ok: true });
+  }
+
+  if (path === "/api/device/untrust" && method === "POST") {
+    const user = await authFromHeader(request, env), body = await readBody(request, 3000);
+    if (!/^[\w-]{12,100}$/.test(String(body.deviceId || ""))) return json({ error: "Invalid device details." }, 400);
+    await env.DB.prepare("DELETE FROM app_devices WHERE uid=? AND device_id=?").bind(user.uid, body.deviceId).run();
+    return json({ ok: true });
+  }
+
   if (path === "/api/device/register" && method === "POST") {
     const user = await authFromHeader(request, env), body = await readBody(request, 12000);
     if (!/^[\w-]{12,100}$/.test(String(body.deviceId || "")) || String(body.fcmToken || "").length > 4096) return json({ error: "Invalid device details." }, 400);
     const existing = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
     if (existing && existing.device_id !== body.deviceId) {
-      if (!body.emailCode) return json({ error: "Email confirmation is required to link a replacement phone.", code: "email_confirmation_required" }, 403);
-      if (!/^\d{6}$/.test(String(body.emailCode))) return json({ error: "That email code was not accepted. Request a new code and try again.", code: "email_code_invalid" }, 403);
+      if (!body.replacementCode) return json({ error: "A code from another signed-in Rollcall app is required to link this phone.", code: "replacement_code_required" }, 403);
+      if (!/^\d{6}$/.test(String(body.replacementCode))) return json({ error: "That app code was not accepted. Request a new code and try again.", code: "replacement_code_invalid" }, 403);
       const codeRow = await env.DB.prepare("SELECT code_hash FROM device_replacement_codes WHERE uid=? AND expires_at>? AND attempts<5 AND used_at IS NULL").bind(user.uid, now()).first();
-      if (!codeRow) return json({ error: "That confirmation code expired or reached its attempt limit. Request a fresh email code.", code: "email_code_expired" }, 403);
-      if (!constantEqual(await hmac(body.emailCode, env.SESSION_HASH_KEY), codeRow.code_hash)) {
+      if (!codeRow) return json({ error: "That app code expired or reached its attempt limit. Request a fresh code.", code: "replacement_code_expired" }, 403);
+      if (!constantEqual(await hmac(body.replacementCode, env.SESSION_HASH_KEY), codeRow.code_hash)) {
         const attempt = await env.DB.prepare("UPDATE device_replacement_codes SET attempts=attempts+1 WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(user.uid, now()).run();
-        if (!attempt.meta.changes) return json({ error: "That confirmation code expired or reached its attempt limit. Request a fresh email code.", code: "email_code_expired" }, 403);
-        return json({ error: "That email code was not accepted. Request a new code and try again.", code: "email_code_invalid" }, 403);
+        if (!attempt.meta.changes) return json({ error: "That app code expired or reached its attempt limit. Request a fresh code.", code: "replacement_code_expired" }, 403);
+        return json({ error: "That app code was not accepted. Request a new code and try again.", code: "replacement_code_invalid" }, 403);
       }
       const claimed = await env.DB.prepare("UPDATE device_replacement_codes SET used_at=? WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(now(), user.uid, now()).run();
-      if (claimed.meta.changes !== 1) return json({ error: "That email code has expired or was already used. Request a new code.", code: "email_code_invalid" }, 403);
+      if (claimed.meta.changes !== 1) return json({ error: "That app code has expired or was already used. Request a new code.", code: "replacement_code_invalid" }, 403);
       await env.DB.prepare("DELETE FROM web_sessions WHERE uid=?").bind(user.uid).run();
     }
     await env.DB.prepare("INSERT INTO trusted_devices(uid,device_id,fcm_token,updated_at) VALUES(?,?,?,?) ON CONFLICT(uid) DO UPDATE SET device_id=excluded.device_id,fcm_token=excluded.fcm_token,updated_at=excluded.updated_at")
@@ -208,31 +213,40 @@ async function route(request, env) {
   }
 
   if (path === "/api/device/replacement-code" && method === "POST") {
-    const user = await authFromHeader(request, env);
-    if (!user.email) return json({ error: "Add and verify an email address on your Rollcall account before replacing a phone." }, 400);
-    const device = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
+    const user = await authFromHeader(request, env), body = await readBody(request, 3000);
+    if (!/^[\w-]{12,100}$/.test(String(body.deviceId || ""))) return json({ error: "Sign in to Rollcall on this phone first." }, 400);
+    const device = await env.DB.prepare("SELECT device_id,fcm_token FROM trusted_devices WHERE uid=?").bind(user.uid).first();
     if (!device) return json({ error: "Connect your first phone before requesting a replacement code." }, 409);
-    await env.DB.prepare("DELETE FROM device_replacement_email_sends WHERE created_at<?").bind(now() - 86400).run();
-    const recent = await env.DB.prepare("SELECT created_at FROM device_replacement_email_sends WHERE uid=? ORDER BY created_at DESC LIMIT 1").bind(user.uid).first();
-    if (recent && recent.created_at > now() - 60) return json({ error: "A code was just sent. Please wait a minute before requesting another.", code: "email_rate_limited" }, 429);
-    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM device_replacement_email_sends WHERE uid=? AND created_at>?").bind(user.uid, now() - 900).first();
-    if (count.n >= 5) return json({ error: "Too many email-code requests. Try again in 15 minutes.", code: "email_rate_limited" }, 429);
-    await env.DB.prepare("INSERT INTO device_replacement_email_sends(uid,created_at) VALUES(?,?)").bind(user.uid, now()).run();
-    const code = makeEmailCode(), issuedAt = now();
+    const appDevices = await env.DB.prepare("SELECT device_id,fcm_token FROM app_devices WHERE uid=? AND device_id<>?").bind(user.uid, body.deviceId).all();
+    const recipients = [...new Set((appDevices.results || []).map(row => row.fcm_token).filter(Boolean))];
+    if (!recipients.length && device.device_id !== body.deviceId && device.fcm_token) recipients.push(device.fcm_token);
+    if (!recipients.length) return json({ error: "Open Rollcall on another signed-in phone to receive the link code." }, 409);
+    await env.DB.prepare("DELETE FROM device_replacement_sends WHERE created_at<?").bind(now() - 86400).run();
+    const recent = await env.DB.prepare("SELECT created_at FROM device_replacement_sends WHERE uid=? ORDER BY created_at DESC LIMIT 1").bind(user.uid).first();
+    if (recent && recent.created_at > now() - 60) return json({ error: "A code was just sent. Please wait a minute before requesting another.", code: "replacement_code_rate_limited" }, 429);
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM device_replacement_sends WHERE uid=? AND created_at>?").bind(user.uid, now() - 900).first();
+    if (count.n >= 5) return json({ error: "Too many code requests. Try again in 15 minutes.", code: "replacement_code_rate_limited" }, 429);
+    await env.DB.prepare("INSERT INTO device_replacement_sends(uid,created_at) VALUES(?,?)").bind(user.uid, now()).run();
+    const code = makeOneTimeCode(), issuedAt = now();
     await env.DB.prepare("INSERT INTO device_replacement_codes(uid,code_hash,created_at,expires_at,attempts,used_at) VALUES(?,?,?,?,0,NULL) ON CONFLICT(uid) DO UPDATE SET code_hash=excluded.code_hash,created_at=excluded.created_at,expires_at=excluded.expires_at,attempts=0,used_at=NULL")
       .bind(user.uid, await hmac(code, env.SESSION_HASH_KEY), issuedAt, issuedAt + 600).run();
-    try { await sendDeviceReplacementEmail(env, user.email, code); }
-    catch (_) {
+    const delivered = await sendPushToDevices(env, recipients, { type: "device_replacement", uid: user.uid, replacementCode: code }, "600s").catch(() => 0);
+    if (!delivered) {
       await env.DB.prepare("DELETE FROM device_replacement_codes WHERE uid=? AND created_at=?").bind(user.uid, issuedAt).run();
-      return json({ error: "We could not send the confirmation email. Check your connection and try again.", code: "email_delivery_failed" }, 503);
+      return json({ error: "Could not reach any other signed-in Rollcall app. Open one and try again.", code: "replacement_push_failed" }, 503);
     }
-    return json({ ok: true, expiresIn: 600 });
+    return json({ ok: true, expiresIn: 600, sentTo: delivered });
   }
 
   if (path === "/api/auth/challenge" && method === "POST") {
     const user = await authFromHeader(request, env);
-    const device = await env.DB.prepare("SELECT fcm_token FROM trusted_devices WHERE uid=?").bind(user.uid).first();
-    if (!device) return json({ error: "No trusted Rollcall app is linked to this account." }, 409);
+    const devices = await env.DB.prepare("SELECT fcm_token FROM app_devices WHERE uid=?").bind(user.uid).all();
+    const appTokens = [...new Set((devices.results || []).map(row => row.fcm_token).filter(Boolean))];
+    if (!appTokens.length) {
+      const device = await env.DB.prepare("SELECT fcm_token FROM trusted_devices WHERE uid=?").bind(user.uid).first();
+      if (device?.fcm_token) appTokens.push(device.fcm_token);
+    }
+    if (!appTokens.length) return json({ error: "Sign in to Rollcall on your phone to receive web sign-in codes." }, 409);
     await env.DB.prepare("DELETE FROM web_challenges WHERE uid=? AND (expires_at<=? OR consumed_at IS NOT NULL)").bind(user.uid, now()).run();
     await env.DB.prepare("DELETE FROM web_challenge_sends WHERE created_at<?").bind(now() - 86400).run();
     const send = await env.DB.prepare("INSERT INTO web_challenge_sends(uid,created_at) SELECT ?,? WHERE (SELECT COUNT(*) FROM web_challenge_sends WHERE uid=? AND created_at>?) < 5")
@@ -244,15 +258,18 @@ async function route(request, env) {
     const encrypted = await encryptCode(code, env), expires = now() + 300;
     await env.DB.prepare("INSERT INTO web_challenges(id,uid,code_hash,code_iv,code_cipher,expires_at,created_at) VALUES(?,?,?,?,?,?,?)")
       .bind(challengeId, user.uid, await hmac(code, env.SESSION_HASH_KEY), encrypted.iv, encrypted.cipher, expires, now()).run();
-    try { await sendCodePush(env, device.fcm_token, challengeId); }
+    try { await sendCodePush(env, appTokens, user.uid, challengeId); }
     catch (error) { await env.DB.prepare("DELETE FROM web_challenges WHERE id=?").bind(challengeId).run(); throw error; }
     return json({ ok: true, challengeId, expiresAt: expires });
   }
 
   if (path === "/api/auth/pending" && method === "POST") {
     const user = await authFromHeader(request, env), body = await readBody(request, 3000);
-    const device = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
-    if (!device || device.device_id !== body.deviceId) return json({ error: "This app is not the trusted Rollcall device." }, 403);
+    const device = await env.DB.prepare("SELECT device_id FROM app_devices WHERE uid=? AND device_id=?").bind(user.uid, body.deviceId).first();
+    if (!device) {
+      const legacyDevice = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
+      if (!legacyDevice || legacyDevice.device_id !== body.deviceId) return json({ error: "This app is not signed in to the Rollcall account." }, 403);
+    }
     const row = await env.DB.prepare("SELECT * FROM web_challenges WHERE id=? AND uid=? AND consumed_at IS NULL AND expires_at>?").bind(body.challengeId, user.uid, now()).first();
     if (!row) return json({ error: "This sign-in request expired. Request a new code on the web." }, 404);
     return json({ code: await decryptCode(row, env), expiresAt: row.expires_at });
@@ -308,7 +325,7 @@ async function route(request, env) {
 
   if (path === "/api/account/delete" && method === "POST") {
     const user = await authFromHeader(request, env, true, true);
-    await env.DB.batch(["trusted_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_email_sends"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
+    await env.DB.batch(["trusted_devices", "app_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_sends"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
     return json({ ok: true });
   }
 
@@ -319,7 +336,7 @@ export async function handleApi(request, env) {
   try { return await route(request, env); }
   catch (error) {
     const message = error?.message || "Request failed.";
-    const status = /sign in|verify your email/i.test(message) ? 401 : /too large/i.test(message) ? 413 : /not configured|push service|email delivery/i.test(message) ? 503 : 400;
+    const status = /sign in|verify your email/i.test(message) ? 401 : /too large/i.test(message) ? 413 : /not configured|push service|email delivery|could receive/i.test(message) ? 503 : 400;
     return json({ error: message }, status);
   }
 }
