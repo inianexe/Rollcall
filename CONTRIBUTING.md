@@ -11,4 +11,17 @@ cd android
 
 Add or update a focused JVM test for changed calculation or parsing behavior. Live MyCamu/KCT access, Firebase, notifications, alarms, widgets, and APK installation need device or service verification and must not be described as tested when only a local build ran.
 
+For Web or Android↔Web changes, update `docs/architecture/API_CONTRACT.md` and run:
+
+```sh
+cd web
+npm test
+node --check app.js
+node --check cloud-auth.js
+node --check _worker.js
+node --check functions/_api.js
+```
+
+Do not apply Cloudflare remote migrations or deploy from a feature branch. Review migration effects and preserve existing D1 data before an owner schedules a production rollout.
+
 Keep credentials and signing material outside Git. Do not change package identity, signing configuration, version codes, or release publishing behavior without an explicit task.
