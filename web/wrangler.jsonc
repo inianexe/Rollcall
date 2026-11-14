@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rollcall-campus-companion",
+  "pages_build_output_dir": ".",
+  "compatibility_date": "2026-11-12",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rollcall-campus-companion",
+      "database_id": "9a23775f-01f2-4d3e-b12d-4cc185344b0a",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

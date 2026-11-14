@@ -1,0 +1,12 @@
+{
+  "name": "Rollcall",
+  "short_name": "Rollcall",
+  "description": "Student attendance companion",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f6f0",
+  "theme_color": "#f7f6f0",
+  "icons": [
+    { "src": "assets/rollcall-brush.png", "sizes": "526x526", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

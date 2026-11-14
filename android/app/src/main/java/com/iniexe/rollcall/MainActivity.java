@@ -677,24 +677,18 @@ public class MainActivity extends Activity {
                     new int[]{R.drawable.ic_onboarding_target, R.drawable.ic_nav_courses, R.drawable.ic_nav_week});
         } else {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            TextView headline = text("Sign in to\nRollcall.", 35, ink, Typeface.BOLD);
+            TextView headline = text("Your week.\nAll in one place.", 35, ink, Typeface.BOLD);
+            headline.setTypeface(appTypeface, Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(2), topMargin(-1, dp(112), 12));
-            TextView accountIntro = text("Keep your attendance and marks available on the web. Your Rollcall account uses its own password, separate from MyCamu.", 14, muted, Typeface.NORMAL);
+            TextView accountIntro = text("Connect MyCamu to build your attendance dashboard. Your Rollcall web account is optional and lives in Settings.", 14, muted, Typeface.NORMAL);
             accountIntro.setLineSpacing(dp(4), 1f);
             content.addView(accountIntro, topMargin(-1, -2, 12));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
-            content.addView(onboardingButton("Sign in to Rollcall  →", palette.button, palette.buttonText,
-                    v -> showCloudCredentials(false)), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView createAccount = text("No account yet? Create one", 14, ink, Typeface.BOLD);
-            createAccount.setGravity(android.view.Gravity.CENTER);
-            createAccount.setMinHeight(dp(48));
-            createAccount.setOnClickListener(v -> showCloudCredentials(true));
-            content.addView(createAccount, topMargin(-1, -2, 8));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            content.addView(onboardingButton("Continue to MyCamu  →", palette.surface, ink,
+            content.addView(onboardingButton("Connect MyCamu  →", palette.button, palette.buttonText,
                     v -> startMyCamuConnection()), new LinearLayout.LayoutParams(-1, dp(56)));
-            TextView note = text("MyCamu provides your classes. Sign in there to build your dashboard.",
+            TextView note = text("MyCamu provides your classes. Rollcall never asks for your MyCamu password.",
                     12, muted, Typeface.NORMAL);
             note.setGravity(android.view.Gravity.CENTER);
             note.setLineSpacing(dp(3), 1f);
@@ -850,7 +844,7 @@ public class MainActivity extends Activity {
                 checks[optionIndex].setScaleX(.4f);
                 checks[optionIndex].setScaleY(.4f);
                 checks[optionIndex].animate().scaleX(1f).scaleY(1f).setDuration(220).start();
-                onboardingChoiceStatus.setText("Great choice. Let’s set up your sign-in.");
+                onboardingChoiceStatus.setText("Great choice. Let’s connect MyCamu.");
                 onboardingChoiceStatus.setVisibility(View.VISIBLE);
                 onboardingAdvance = () -> showOnboardingStep(3);
                 handler.postDelayed(onboardingAdvance, 1200);
@@ -1528,7 +1522,7 @@ public class MainActivity extends Activity {
         if (existing == null) { showCloudCredentials(false); return; }
         final boolean verified = existing.isEmailVerified();
         String[] labels = verified
-                ? new String[]{"Connect this phone", "Replace recovery codes", "Delete Rollcall cloud account", "Sign out"}
+                ? new String[]{"Connect this phone", "Delete Rollcall cloud account", "Sign out"}
                 : new String[]{"Resend verification", "Delete Rollcall account", "Sign out"};
         LinearLayout sheet = new LinearLayout(this);
         sheet.setOrientation(LinearLayout.VERTICAL);
@@ -1577,9 +1571,8 @@ public class MainActivity extends Activity {
                     else if (index == 2) signOutCloudAccount();
                 } else {
                     if (index == 0) registerCloudDevice(null);
-                    else if (index == 1) showRecoveryCodes();
-                    else if (index == 2) confirmCloudAccountDelete();
-                    else if (index == 3) signOutCloudAccount();
+                    else if (index == 1) confirmCloudAccountDelete();
+                    else if (index == 2) signOutCloudAccount();
                 }
             });
         }
@@ -1604,10 +1597,29 @@ public class MainActivity extends Activity {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
         fields.setPadding(dp(24), dp(12), dp(24), dp(4));
-        EditText email = new EditText(this); email.setSingleLine(true); email.setInputType(33); email.setHint("Email address"); fields.addView(email);
-        EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Password · 8 characters minimum"); fields.addView(password);
+        TextView emailLabel = text("EMAIL ADDRESS", 11, MUTED, Typeface.BOLD);
+        fields.addView(emailLabel);
+        EditText email = new EditText(this);
+        styleCloudCredentialField(email, "you@example.com");
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS);
+        email.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
+        LinearLayout.LayoutParams emailParams = new LinearLayout.LayoutParams(-1, dp(52));
+        emailParams.topMargin = dp(5);
+        fields.addView(email, emailParams);
+        TextView passwordLabel = text("PASSWORD", 11, MUTED, Typeface.BOLD);
+        LinearLayout.LayoutParams passwordLabelParams = topMargin(-1, -2, 14);
+        fields.addView(passwordLabel, passwordLabelParams);
+        EditText password = new EditText(this);
+        styleCloudCredentialField(password, "8 characters minimum");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setAutofillHints(View.AUTOFILL_HINT_PASSWORD);
+        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        LinearLayout.LayoutParams passwordParams = new LinearLayout.LayoutParams(-1, dp(52));
+        passwordParams.topMargin = dp(5);
+        fields.addView(password, passwordParams);
         new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in to Rollcall")
-                .setMessage("This account brings your phone snapshot to the web. Use a separate password from MyCamu.")
+                .setMessage("Your verified email protects the web copy of your Rollcall data. Use a password you do not use for MyCamu.")
                 .setView(fields)
                 .setPositiveButton(create ? "Create account" : "Sign in", (d, w) -> {
                     if (create) cloudCreateAccount(email.getText().toString().trim(), password.getText().toString());
@@ -1615,6 +1627,18 @@ public class MainActivity extends Activity {
                 })
                 .setNeutralButton(create ? "Have an account?" : "No account?", (d, w) -> showCloudCredentials(!create))
                 .setNegativeButton("Not now", null).show();
+    }
+
+    private void styleCloudCredentialField(EditText field, String hint) {
+        field.setSingleLine(true);
+        field.setTextColor(INK);
+        field.setHintTextColor(MUTED);
+        field.setTextSize(15);
+        field.setTypeface(appTypeface);
+        field.setHint(hint);
+        field.setPadding(dp(14), 0, dp(14), 0);
+        field.setBackground(background(SURFACE, BORDER, 10));
+        field.setMinHeight(dp(52));
     }
 
     private void cloudCreateAccount(String email, String password) {
@@ -1626,7 +1650,7 @@ public class MainActivity extends Activity {
             user.sendEmailVerification().addOnCompleteListener(this, sent -> {
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", true).apply();
                 Toast.makeText(this, sent.isSuccessful() ? "Account created. Verify your email, then sign in here to connect this phone." : "Account created, but the verification email could not be sent. Use Resend verification.", Toast.LENGTH_LONG).show();
-                if (connectedOnce) showAbout(); else showOnboardingStep(3);
+                if (connectedOnce) showAbout();
             });
         });
     }
@@ -1639,61 +1663,94 @@ public class MainActivity extends Activity {
             if (!user.isEmailVerified()) {
                 user.sendEmailVerification();
                 Toast.makeText(this, "Verify your email before connecting the web dashboard.", Toast.LENGTH_LONG).show();
-                if (connectedOnce) showAbout(); else showOnboardingStep(3);
+                if (connectedOnce) showAbout();
             } else registerCloudDevice(null);
         });
     }
 
-    private void registerCloudDevice(String recoveryCode) {
+    private void registerCloudDevice(String emailCode) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || !user.isEmailVerified()) return;
         new Thread(() -> {
             try {
                 String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                 String fcm = Tasks.await(FirebaseMessaging.getInstance().getToken(), 20, TimeUnit.SECONDS);
-                JSONObject registered = CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, recoveryCode);
+                CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, emailCode);
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", false).putString("registered_device_id", CloudAccountClient.deviceId(this)).apply();
                 CloudAccountClient.enqueueSnapshotSync(this);
-                JSONArray recoveryCodes = registered.optJSONArray("recoveryCodes");
                 runOnUiThread(() -> {
                     Toast.makeText(this, "This phone is linked to your Rollcall web account.", Toast.LENGTH_LONG).show();
-                    if (connectedOnce) showAbout(); else showOnboardingStep(3);
-                    if (recoveryCodes != null) new AlertDialog.Builder(this, cloudDialogTheme())
-                            .setTitle("Save your recovery codes")
-                            .setMessage("Each code can be used once if you replace or lose this phone. Store them somewhere private. They are shown only now.\n\n" + android.text.TextUtils.join("\n", jsonArrayStrings(recoveryCodes)))
-                            .setPositiveButton("Done", null).show();
+                    showAbout();
                 });
             } catch (Exception error) {
-                String message = error.getMessage() == null ? "Could not connect this phone." : error.getMessage();
-                if (message.contains("recovery code")) runOnUiThread(this::promptCloudRecoveryCode);
-                else runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                if (error instanceof CloudAccountClient.ApiException
+                        && "email_confirmation_required".equals(((CloudAccountClient.ApiException) error).code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.sendDeviceReplacementCode(token);
+                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), null));
+                    } catch (Exception sendError) {
+                        String message = sendError.getMessage() == null ? "Could not send the confirmation email." : sendError.getMessage();
+                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                    }
+                } else if (error instanceof CloudAccountClient.ApiException
+                        && "email_code_invalid".equals(((CloudAccountClient.ApiException) error).code)) {
+                    runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code did not match. Check the email and try again."));
+                } else {
+                    String message = error.getMessage() == null ? "Could not connect this phone." : error.getMessage();
+                    runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                }
             }
         }, "rollcall-cloud-device").start();
     }
 
-    private void promptCloudRecoveryCode() {
-        EditText code = new EditText(this); code.setSingleLine(true); code.setHint("One-time recovery code");
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Replace trusted phone")
-                .setMessage("Enter one unused backup code. This signs out web sessions on your old phone.")
-                .setView(code).setPositiveButton("Connect phone", (d, w) -> registerCloudDevice(code.getText().toString().trim()))
-                .setNegativeButton("Cancel", null).show();
-    }
-
-    private void showRecoveryCodes() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null) return;
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Replace recovery codes?")
-                .setMessage("This invalidates every previous recovery code. Save the new set somewhere private.")
-                .setPositiveButton("Replace codes", (d, w) -> new Thread(() -> {
-            try {
-                String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
-                JSONObject response = CloudAccountClient.generateRecoveryCodes(token);
-                JSONArray codes = response.optJSONArray("codes");
-                String value = codes == null ? "" : android.text.TextUtils.join("\n", jsonArrayStrings(codes));
-                runOnUiThread(() -> new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Save your recovery codes")
-                        .setMessage("Each code can be used once if you replace or lose this phone. Store them somewhere private. They are shown only now.\n\n" + value)
-                        .setPositiveButton("Done", null).show());
-            } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "Could not create recovery codes.", Toast.LENGTH_LONG).show()); }
-        }, "rollcall-recovery-codes").start()).setNegativeButton("Cancel", null).show();
+    private void promptDeviceReplacementCode(String emailAddress, String problem) {
+        EditText code = new EditText(this);
+        code.setSingleLine(true);
+        code.setTextColor(INK);
+        code.setHintTextColor(MUTED);
+        code.setHint("6-digit code");
+        code.setTextSize(18);
+        code.setTypeface(appBoldTypeface);
+        code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        code.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(6)});
+        code.setPadding(dp(14), 0, dp(14), 0);
+        code.setBackground(background(SURFACE, BORDER, 10));
+        code.setMinHeight(dp(52));
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(8), dp(24), 0);
+        TextView detail = text("We sent a one-time confirmation code to " + (emailAddress == null ? "your verified email" : emailAddress)
+                + ". It expires in 10 minutes. Enter it here to link this phone; your previous web sessions will then be signed out.", 13, MUTED, Typeface.NORMAL);
+        detail.setLineSpacing(dp(3), 1f);
+        content.addView(detail);
+        if (problem != null) {
+            TextView error = text(problem, 12, RED, Typeface.BOLD);
+            content.addView(error, topMargin(-1, -2, 8));
+        }
+        LinearLayout.LayoutParams codeParams = new LinearLayout.LayoutParams(-1, dp(54));
+        codeParams.topMargin = dp(14);
+        content.addView(code, codeParams);
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Check your email")
+                .setView(content)
+                .setPositiveButton("Link this phone", null)
+                .setNeutralButton("Open email", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                String value = code.getText().toString().trim();
+                if (!value.matches("[0-9]{6}")) { code.setError("Enter the six-digit code from the email."); return; }
+                dialog.dismiss();
+                registerCloudDevice(value);
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
+                try { startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_EMAIL)); }
+                catch (android.content.ActivityNotFoundException ignoredError) { }
+            });
+        });
+        dialog.show();
     }
 
     private void signOutCloudAccount() {
@@ -1706,7 +1763,7 @@ public class MainActivity extends Activity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null) return;
         EditText password = new EditText(this); password.setSingleLine(true); password.setInputType(129); password.setHint("Rollcall account password");
         new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Delete Rollcall cloud account")
-                .setMessage("This deletes your Rollcall web account, synced cloud snapshot and recovery codes. MyCamu and your phone’s local snapshot remain unchanged. This cannot be undone.")
+                .setMessage("This deletes your Rollcall web account, synced cloud snapshot, and trusted-phone approval. MyCamu and your phone’s local snapshot remain unchanged. This cannot be undone.")
                 .setView(password).setPositiveButton("Delete account", (d, w) -> {
                     if (user.getEmail() == null) return;
                     user.reauthenticate(EmailAuthProvider.getCredential(user.getEmail(), password.getText().toString())).addOnCompleteListener(this, reauth -> {
@@ -1724,10 +1781,6 @@ public class MainActivity extends Activity {
                         }, "rollcall-delete-account").start();
                     });
                 }).setNegativeButton("Cancel", null).show();
-    }
-
-    private List<String> jsonArrayStrings(JSONArray values) {
-        List<String> result = new ArrayList<>(); for (int i = 0; i < values.length(); i++) result.add(values.optString(i)); return result;
     }
 
     private void showPendingWebCode(String challengeId) {
@@ -3013,14 +3066,6 @@ public class MainActivity extends Activity {
             if (firstConnection || reconnectInProgress) {
                 reconnectInProgress = false;
                 showDashboard();
-            }
-            if (firstConnection && !getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getBoolean("setup_prompt_shown", false)) {
-                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("setup_prompt_shown", true).apply();
-                handler.postDelayed(() -> new AlertDialog.Builder(this, cloudDialogTheme())
-                        .setTitle("Use Rollcall on the web?")
-                        .setMessage("Create an optional Rollcall account to view this phone’s synced attendance, timetable, leave/OD and KCT marks in a read-only web dashboard. Your MyCamu password is never used.")
-                        .setPositiveButton("Set up", (dialog, which) -> showCloudAccountDialog())
-                        .setNegativeButton("Not now", null).show(), 500L);
             }
         } catch (JSONException | RuntimeException e) {
             finishSync("Could not read the attendance response. Tap Sync to try again.");

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f0">
+  <meta name="description" content="Rollcall attendance companion">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/rollcall-brush.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Rollcall</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#home" aria-label="Rollcall home">
+        <span class="brand-mark" aria-hidden="true"></span><span>rollcall</span>
+      </a>
+      <nav class="primary-nav">
+        <p class="nav-caption">YOUR SPACE</p>
+        <button class="nav-item active" data-screen="home"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+        <button class="nav-item" data-screen="courses"><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5zM8 8h8M8 12h8M8 16h5"/></svg>Courses</button>
+        <button class="nav-item" data-screen="week"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h3"/></svg>Week</button>
+        <button class="nav-item" data-screen="whatif"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16M8 3v4M15 10v4M10 17v4"/></svg>What if?</button>
+        <button class="nav-item" data-screen="od"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2zM8 8h8M8 12h8M8 16h4"/></svg>Leave &amp; OD</button>
+        <button class="nav-item" data-screen="marks"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></svg>Marks</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="nav-item" data-screen="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.2 1-1.3 2.2-1.5-.5a8 8 0 0 1-1.5.9l-.3 1.6h-2.6l-.3-1.6a8 8 0 0 1-1.5-.9l-1.5.5-1.3-2.2 1.2-1a8 8 0 0 1 0-1.8l-1.2-1 1.3-2.2 1.5.5a8 8 0 0 1 1.5-.9l.3-1.6h2.6l.3 1.6a8 8 0 0 1 1.5.9l1.5-.5 1.3 2.2-1.2 1a8 8 0 0 1-.1 1.7z"/></svg>Settings</button>
+        <div class="sidebar-note"><span class="connection-dot"></span><span id="connection-label">Local data</span><small id="save-label">Saved in this browser</small></div>
+        <div class="profile-line"><span class="avatar" id="avatar">R</span><span><b id="profile-name">My Rollcall</b><small>Attendance companion</small></span></div>
+      </div>
+    </aside>
+    <div class="main-column">
+      <header class="topbar">
+        <div class="crumb"><span>Rollcall</span><span class="crumb-sep">/</span><b id="crumb-current">Home</b></div>
+        <div class="top-actions">
+          <button class="icon-button settings-shortcut" data-screen="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.2 1-1.3 2.2-1.5-.5a8 8 0 0 1-1.5.9l-.3 1.6h-2.6l-.3-1.6a8 8 0 0 1-1.5-.9l-1.5.5-1.3-2.2 1.2-1a8 8 0 0 1 0-1.8l-1.2-1 1.3-2.2 1.5.5a8 8 0 0 1 1.5-.9l.3-1.6h2.6l.3 1.6a8 8 0 0 1 1.5.9l1.5-.5 1.3 2.2-1.2 1a8 8 0 0 1-.1 1.7z"/></svg></button>
+          <button class="button button-quiet" id="web-account-button" type="button">Sign in</button>
+          <button class="button button-primary top-add" id="add-course-top" aria-label="Add course">Add course <span aria-hidden="true">+</span></button>
+        </div>
+      </header>
+      <main id="main" tabindex="-1"></main>
+      <footer class="footer"><span>Rollcall · Make every class count.</span><span id="data-footnote">Your data stays in this browser.</span></footer>
+    </div>
+  </div>
+  <nav class="mobile-nav" aria-label="Main navigation">
+    <button class="nav-item active" data-screen="home"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+    <button class="nav-item" data-screen="courses"><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5zM8 8h8M8 12h8M8 16h5"/></svg><span>Courses</span></button>
+    <button class="nav-item" data-screen="week"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h3"/></svg><span>Week</span></button>
+    <button class="nav-item" data-screen="whatif"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16M8 3v4M15 10v4M10 17v4"/></svg><span>What if?</span></button>
+    <button class="nav-item" data-screen="od"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2zM8 8h8M8 12h8M8 16h4"/></svg><span>Leave &amp; OD</span></button>
+    <button class="nav-item" data-screen="marks"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></svg><span>Marks</span></button>
+  </nav>
+  <dialog id="course-dialog" class="dialog">
+    <form id="course-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="course-dialog-title">Add a course</h2><p>Use the latest counts from your attendance record.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
+      <label>Course name<input name="name" required maxlength="80" placeholder="e.g. Operating Systems"></label>
+      <label>Course code<input name="code" maxlength="32" placeholder="e.g. CS204"></label>
+      <div class="form-pair"><label>Classes attended<input name="attended" type="number" min="0" max="100000" required value="0"></label><label>Total classes<input name="total" type="number" min="0" max="100000" required value="0"></label></div>
+      <div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Cancel</button><button type="submit" class="button button-primary">Save course</button></div>
+    </form>
+  </dialog>
+  <dialog id="od-dialog" class="dialog">
+    <form id="od-form" method="dialog">
+      <div class="dialog-head"><div><h2>Add an OD record</h2><p>Record the approved period count and covered dates.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
+      <label>Request type<select name="type"><option>On Duty</option><option>Leave</option></select></label>
+      <label>Status<select name="status"><option>Approved</option><option>Pending</option><option>Rejected</option></select></label>
+      <div class="form-pair"><label>From<input name="start" type="date" required></label><label>Through<input name="end" type="date" required></label></div>
+      <label>Scheduled hours covered<input name="hours" type="number" min="0" max="120" value="1"><small>Enter 0 for a full-day record whose timetable hours are not known yet.</small></label>
+      <label class="check-label"><input name="currentSemester" type="checkbox" checked> Current semester</label>
+      <div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Cancel</button><button type="submit" class="button button-primary">Save record</button></div>
+    </form>
+  </dialog>
+  <dialog id="class-dialog" class="dialog">
+    <form id="class-form" method="dialog">
+      <div class="dialog-head"><div><h2>Add a class</h2><p>Add a timetable item to this browser.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
+      <label>Class or course name<input name="name" required maxlength="100" placeholder="e.g. Operating Systems"></label>
+      <label>Course code<input name="code" maxlength="40" placeholder="Optional"></label>
+      <div class="form-pair"><label>Date<input name="date" type="date" required></label><label>Location<input name="location" maxlength="80" placeholder="Optional"></label></div>
+      <div class="form-pair"><label>Starts<input name="time" type="time"></label><label>Ends<input name="endTime" type="time"></label></div>
+      <div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Cancel</button><button type="submit" class="button button-primary">Save class</button></div>
+    </form>
+  </dialog>
+  <dialog id="connect-dialog" class="dialog">
+    <div class="dialog-head"><div><h2>MyCamu sign-in</h2><p>Sign in on the official MyCamu site.</p></div><button class="icon-button close-dialog" aria-label="Close">×</button></div>
+    <p class="dialog-copy">Rollcall does not collect your password. MyCamu sign-in opens separately; returning here will not sync data until Camu offers an official integration.</p>
+    <div class="dialog-actions"><button class="button button-quiet close-dialog">Cancel</button><button id="open-mycamu" class="button button-primary">Open MyCamu ↗</button></div>
+  </dialog>
+  <dialog id="web-account-dialog" class="dialog">
+    <canvas id="auth-shape-grid" aria-hidden="true"></canvas>
+    <form id="web-account-form" method="dialog">
+      <div class="dialog-head"><div><h2>Sign in to Rollcall</h2><p>Your week, wherever you open it.</p></div><button class="icon-button close-dialog" value="cancel" aria-label="Close">×</button></div>
+      <p class="dialog-copy">Use your Rollcall email and password. We’ll send a code to your linked phone before showing your attendance and marks here.</p>
+      <label>Email<input name="email" type="email" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <label id="web-code-row" hidden>Six-digit app code<input name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6"></label>
+      <button type="button" class="panel-link" id="web-resend-code" hidden>Resend code</button>
+      <p id="web-account-feedback" class="notification-feedback" role="status" aria-live="polite"></p>
+      <p class="web-signup-note"><b>No account yet?</b> Create one in the Rollcall Android app, then return here to sign in.</p>
+      <div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Continue locally</button><button type="submit" class="button button-primary" id="web-account-submit">Sign in</button></div>
+    </form>
+  </dialog>
+  <script src="shape-grid.js" defer></script>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="cloud-auth.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
