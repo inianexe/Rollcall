@@ -29,7 +29,7 @@ async function hmac(value, secret) {
 function fakeDatabase() {
   const state = {
     sends: [], challengeSends: [], code: null, challenge: null, session: null,
-    deviceId: "old-device-id-1234", sessionsDeleted: 0, deletedTables: [],
+    deviceId: "old-device-id-1234", sessionsDeleted: 0, deletedTables: [], snapshot: null,
     accountRows: Object.fromEntries(["trusted_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_email_sends"].map(table => [table, 1]))
   };
   return {
@@ -44,6 +44,7 @@ function fakeDatabase() {
             return state.session && state.session.expires_at > args[1] ? { uid: state.session.uid } : null;
           if (sql.includes("SELECT device_id FROM trusted_devices")) return { device_id: state.deviceId };
           if (sql.includes("SELECT fcm_token FROM trusted_devices")) return state.deviceId ? { fcm_token: "test-fcm-token" } : null;
+          if (sql.includes("SELECT snapshot_json,updated_at FROM snapshots")) return state.snapshot ? { snapshot_json: state.snapshot, updated_at: 1 } : null;
           if (sql.includes("FROM web_challenges WHERE id=? AND consumed_at IS NULL"))
             return state.challenge && !state.challenge.consumed_at && state.challenge.attempts < 5
               && state.challenge.expires_at > args[1] ? state.challenge : null;
@@ -84,12 +85,45 @@ function fakeDatabase() {
             if (table === "web_challenge_sends") state.challengeSends = [];
           }
           if (sql.startsWith("INSERT INTO trusted_devices")) state.deviceId = args[1];
+          if (sql.startsWith("INSERT INTO snapshots")) state.snapshot = args[1];
           return { meta: { changes: 1 } };
         }
       };
     }
   };
 }
+
+test("snapshot stores validated internal marks and accepts older clients without them", async t => {
+  const pair = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  Object.assign(jwk, { kid: "test-key", alg: "RS256", use: "sig" });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    assert.match(String(url), /securetoken@system\.gserviceaccount\.com/);
+    return Response.json({ keys: [jwk] });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const database = fakeDatabase(), token = await authToken(pair.privateKey);
+  const env = { FIREBASE_PROJECT_ID: "rollcall-test", DB: database };
+  const snapshot = { schemaVersion: 1, target: 75, courses: [], timetable: [], classMarks: [], leaves: [], academicRecords: [], exams: [],
+    internalMarks: [{ assessmentId: "cia-1", semester: "Semester 5", courseCode: "CS301", course: "Networks", assessment: "CIA 1", score: 18, maximum: 20, status: "published" },
+      { course: "Networks", assessment: "CIA 2", status: "withheld", score: 5, maximum: 20 }] };
+  const put = data => handleApi(new Request("https://rollcall.test/api/snapshot", {
+    method: "PUT", headers: { authorization: `Bearer ${token}`, origin: "https://rollcall.test", "content-type": "application/json" },
+    body: JSON.stringify({ deviceId: "old-device-id-1234", snapshot: data })
+  }), env);
+  let response = await put(snapshot);
+  assert.equal(response.status, 200);
+  let stored = JSON.parse(database.state.snapshot);
+  assert.equal(stored.internalMarks[0].score, 18);
+  assert.equal(stored.internalMarks[1].score, null);
+  assert.equal(stored.internalMarks[1].status, "withheld");
+  assert.equal((await put({ ...snapshot, internalMarks: [{ course: "Networks", assessment: "CIA 1", score: 21, maximum: 20, status: "published" }] })).status, 400);
+  response = await put({ ...snapshot, internalMarks: undefined });
+  assert.equal(response.status, 200);
+  stored = JSON.parse(database.state.snapshot);
+  assert.deepEqual(stored.internalMarks, []);
+});
 
 test("replacement confirmation emails the verified account and stores only a short-lived hash", async t => {
   const pair = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);

@@ -33,7 +33,6 @@ import android.widget.NumberPicker;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -72,6 +71,7 @@ public class MainActivity extends Activity {
     private static final String CONNECTED_KEY = "mycamu_connected";
     private static final String MYCAMU_CONSENT_KEY = "mycamu_data_access_consent";
     private static final String DARK_KEY = "dark_theme";
+    private static final String APPEARANCE_MODE_KEY = "appearance_mode";
     private static final String LIGHT_PALETTE_KEY = "light_palette";
     private static final String DARK_PALETTE_KEY = "dark_palette";
     private static final String COLOR_THEME_KEY = "color_theme";
@@ -166,6 +166,7 @@ public class MainActivity extends Activity {
     private boolean lastProgramAvailable;
     private boolean showBelowOnly;
     private boolean darkTheme;
+    private String appearanceMode = "dark";
     private int colorThemeIndex;
     private AppPalette palette;
     private boolean connectedOnce;
@@ -326,10 +327,14 @@ public class MainActivity extends Activity {
             preferences.edit().putBoolean(DARK_KEY, true).putBoolean("torch_html_palette_applied", true).apply();
         }
         attendanceTarget = preferences.getInt("attendance_target", 75);
-        darkTheme = preferences.getBoolean(DARK_KEY, true);
+        appearanceMode = preferences.getString(APPEARANCE_MODE_KEY,
+                preferences.getBoolean(DARK_KEY, true) ? "dark" : "light");
+        if (!appearanceMode.equals("system") && !appearanceMode.equals("light") && !appearanceMode.equals("dark"))
+            appearanceMode = preferences.getBoolean(DARK_KEY, true) ? "dark" : "light";
+        darkTheme = appearanceMode.equals("system") ? isSystemDark() : appearanceMode.equals("dark");
         colorThemeIndex = preferences.contains(COLOR_THEME_KEY) ? preferences.getInt(COLOR_THEME_KEY, 0)
                 : preferences.getInt(darkTheme ? DARK_PALETTE_KEY : LIGHT_PALETTE_KEY, 0);
-        if (colorThemeIndex != 5 && colorThemeIndex != 6) {
+        if (AppPalette.normalizeIndex(colorThemeIndex) != colorThemeIndex) {
             colorThemeIndex = 0;
             preferences.edit().putInt(COLOR_THEME_KEY, 0).apply();
         }
@@ -481,6 +486,11 @@ public class MainActivity extends Activity {
                     | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
             decor.setSystemUiVisibility(systemUi | layoutFlags);
         }
+    }
+
+    private boolean isSystemDark() {
+        return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
 
     private DashboardView buildDashboardView() {
@@ -1210,7 +1220,9 @@ public class MainActivity extends Activity {
     private void toggleTheme() {
         if (!connectedOnce) return;
         darkTheme = !darkTheme;
-        getPreferences(MODE_PRIVATE).edit().putBoolean(DARK_KEY, darkTheme).apply();
+        appearanceMode = darkTheme ? "dark" : "light";
+        getPreferences(MODE_PRIVATE).edit().putBoolean(DARK_KEY, darkTheme)
+                .putString(APPEARANCE_MODE_KEY, appearanceMode).apply();
         recreate();
     }
 
@@ -1232,13 +1244,7 @@ public class MainActivity extends Activity {
         hintParams.topMargin = dp(4);
         content.addView(hint, hintParams);
 
-        for (int i : new int[]{0, 5, 6}) {
-            if (i == 6) {
-                TextView specialTitle = text("Special Themes", 13, MUTED, Typeface.BOLD);
-                LinearLayout.LayoutParams specialParams = new LinearLayout.LayoutParams(-1, -2);
-                specialParams.topMargin = dp(18);
-                content.addView(specialTitle, specialParams);
-            }
+        for (int i = 0; i < 5; i++) {
             final int index = i;
             AppPalette option = AppPalette.get(darkTheme, i);
             LinearLayout optionRow = new LinearLayout(this);
@@ -1252,8 +1258,7 @@ public class MainActivity extends Activity {
             LinearLayout labels = new LinearLayout(this);
             labels.setOrientation(LinearLayout.VERTICAL);
             labels.addView(text(option.name, 14, INK, Typeface.BOLD));
-            labels.addView(text(i >= 6 ? "Special theme · " + (darkTheme ? "Dark" : "Light")
-                    : (darkTheme ? "Dark palette" : "Light palette"), 11, MUTED, Typeface.NORMAL));
+            labels.addView(text(darkTheme ? "Dark palette" : "Light palette", 11, MUTED, Typeface.NORMAL));
             optionRow.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
 
             LinearLayout swatches = new LinearLayout(this);
@@ -1335,30 +1340,36 @@ public class MainActivity extends Activity {
         LinearLayout modeCopy = new LinearLayout(this);
         modeCopy.setOrientation(LinearLayout.VERTICAL);
         modeCopy.addView(text("Appearance", 15, INK, Typeface.BOLD));
-        TextView modeHint = text(darkTheme ? "Dark · Torch Genesis" : "Light · Torch Genesis", 12, MUTED, Typeface.NORMAL);
+        TextView modeHint = text(appearanceMode.substring(0, 1).toUpperCase(Locale.ROOT) + appearanceMode.substring(1)
+                + " · " + palette.name, 12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams modeHintParams = new LinearLayout.LayoutParams(-1, -2);
         modeHintParams.topMargin = dp(4);
         modeCopy.addView(modeHint, modeHintParams);
         modeRow.addView(modeCopy, new LinearLayout.LayoutParams(0, -2, 1));
-        Switch appearanceSwitch = new Switch(this);
-        appearanceSwitch.setMinHeight(dp(48));
-        appearanceSwitch.setSwitchMinWidth(dp(52));
-        appearanceSwitch.setThumbTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{0xFF121212, darkTheme ? 0xFFF5F5EE : 0xFFFFFFFF}));
-        appearanceSwitch.setTrackTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{HERO, BORDER}));
-        appearanceSwitch.setChecked(darkTheme);
-        appearanceSwitch.setContentDescription("Dark appearance");
-        appearanceSwitch.setOnCheckedChangeListener((button, checked) -> {
-            if (checked == darkTheme) return;
-            darkTheme = checked;
-            getPreferences(MODE_PRIVATE).edit().putBoolean(DARK_KEY, darkTheme).apply();
-            recreate();
-        });
-        modeRow.addView(appearanceSwitch, new LinearLayout.LayoutParams(-2, dp(48)));
         settings.addView(modeRow);
+        LinearLayout appearanceModes = new LinearLayout(this);
+        appearanceModes.setGravity(android.view.Gravity.CENTER);
+        appearanceModes.setBackground(background(SECONDARY, 0, 12));
+        String[] modes = {"Light", "Dark", "System"};
+        for (String mode : modes) {
+            TextView choice = text(mode, 12, mode.equalsIgnoreCase(appearanceMode) ? HERO_TEXT : INK, Typeface.BOLD);
+            choice.setGravity(android.view.Gravity.CENTER);
+            choice.setMinHeight(dp(44));
+            choice.setBackground(background(mode.equalsIgnoreCase(appearanceMode) ? HERO : Color.TRANSPARENT, 0, 10));
+            choice.setContentDescription(mode + " appearance" + (mode.equalsIgnoreCase(appearanceMode) ? ", selected" : ""));
+            choice.setOnClickListener(v -> {
+                if (mode.equalsIgnoreCase(appearanceMode)) return;
+                appearanceMode = mode.toLowerCase(Locale.ROOT);
+                darkTheme = appearanceMode.equals("system") ? isSystemDark() : appearanceMode.equals("dark");
+                getPreferences(MODE_PRIVATE).edit().putString(APPEARANCE_MODE_KEY, appearanceMode)
+                        .putBoolean(DARK_KEY, darkTheme).apply();
+                recreate();
+            });
+            appearanceModes.addView(choice, new LinearLayout.LayoutParams(0, dp(44), 1));
+        }
+        LinearLayout.LayoutParams appearanceModeParams = new LinearLayout.LayoutParams(-1, -2);
+        appearanceModeParams.topMargin = dp(8);
+        settings.addView(appearanceModes, appearanceModeParams);
         LinearLayout targetRow = new LinearLayout(this);
         targetRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         targetRow.setPadding(0, dp(12), 0, dp(4));
@@ -2781,6 +2792,11 @@ public class MainActivity extends Activity {
             }
         } catch (JSONException ignored) {
             ui.academicStatus = "Saved academic data could not be read. Open KCT to refresh it.";
+        }
+        try {
+            ui.internalMarks.addAll(InternalMark.fromJson(new JSONArray(prefs.getString("kct_internal_marks", "[]"))));
+        } catch (JSONException ignored) {
+            ui.academicStatus = "Saved internal assessment data could not be read. Open KCT to refresh it.";
         }
     }
 

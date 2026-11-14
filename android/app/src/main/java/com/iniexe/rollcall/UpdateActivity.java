@@ -101,7 +101,7 @@ public final class UpdateActivity extends Activity {
         int statusInset = getResources().getDimensionPixelSize(getResources().getIdentifier("status_bar_height", "dimen", "android"));
         int navigationInset = getResources().getDimensionPixelSize(getResources().getIdentifier("navigation_bar_height", "dimen", "android"));
         root.setPadding(0, statusInset, 0, navigationInset + dp(24));
-        backLabel = text("←  ROLLCALL / UPDATES", 12, palette.canvas == 0xFF121212 ? palette.button : palette.highlight, Typeface.BOLD);
+        backLabel = text("←  ROLLCALL / UPDATES", 12, palette.dark ? palette.highlight : palette.green, Typeface.BOLD);
         backLabel.setGravity(Gravity.CENTER_VERTICAL);
         backLabel.setPadding(dp(22), 0, dp(22), 0);
         backLabel.setOnClickListener(v -> finish());

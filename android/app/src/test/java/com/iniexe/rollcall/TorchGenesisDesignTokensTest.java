@@ -3,25 +3,19 @@ package com.iniexe.rollcall;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
-/** A regression guard for the exact dark brand tokens in the uploaded HTML. */
+/** Protects the selected Signal default and safe migration from old theme IDs. */
 public class TorchGenesisDesignTokensTest {
-    @Test public void matchesCanonicalPrototype() {
+    @Test public void signalRemainsTheDefaultBrandPalette() {
         AppPalette palette = AppPalette.get(true, 0);
-        assertEquals("Torch Genesis", palette.name);
-        assertEquals(0xFF121212, palette.canvas);
-        assertEquals(0xFFF5F5EE, palette.ink);
+        assertEquals("Signal", palette.name);
+        assertEquals(0xFF151719, palette.canvas);
         assertEquals(0xFFCCFF00, palette.hero);
         assertEquals(0xFFCCFF00, palette.button);
-        assertEquals(0xFF111111, palette.heroText);
-        assertEquals(0xFFFF4400, palette.highlight);
-        assertEquals(0xFFC8C8FF, palette.focusSurface);
-        assertEquals(0xFF222222, palette.surface);
-        assertEquals(0xFF2C2C2C, palette.soft);
-        assertEquals(0xFF525252, palette.border);
-        assertEquals(0xFFA8AAA1, palette.muted);
+        assertEquals(0xFFFF663D, palette.highlight);
+        assertEquals(0xFF222628, palette.surface);
     }
 
-    @Test public void allHistoricalThemeNumbersNowReturnSameBrand() {
+    @Test public void historicalThemeNumbersFallBackToSignal() {
         AppPalette expected = AppPalette.get(true, 0);
         for (int index : new int[]{5, 6, 999}) {
             AppPalette palette = AppPalette.get(true, index);

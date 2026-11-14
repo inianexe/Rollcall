@@ -90,6 +90,7 @@ final class DashboardView extends FrameLayout {
         List<LeaveItem> leaves = new ArrayList<>();
         List<ClassMarkItem> classMarks = new ArrayList<>();
         List<AcademicCourse> academicCourses = new ArrayList<>();
+        List<InternalMark> internalMarks = new ArrayList<>();
         long academicUpdatedAt;
         boolean academicConnected;
         String academicStatus = "";
@@ -299,8 +300,8 @@ final class DashboardView extends FrameLayout {
         surface = palette.surface; border = palette.border; soft = palette.soft;
         green = palette.green; red = palette.red; amber = palette.amber;
         hero = palette.hero; heroText = palette.heroText; heroMuted = palette.heroMuted;
-        lime = palette.canvas == 0xFF121212 ? palette.button : 0xFF365000;
-        linkInk = palette.canvas == 0xFF121212 ? palette.button : palette.highlight;
+        lime = palette.dark ? palette.highlight : palette.green;
+        linkInk = palette.dark ? palette.highlight : palette.green;
         track = palette.track;
         focusSurface = palette.focusSurface;
         labBadgeBackground = palette.button; labBadgeForeground = palette.buttonText;
@@ -553,7 +554,7 @@ final class DashboardView extends FrameLayout {
         identityRow.setGravity(Gravity.CENTER_VERTICAL);
         identityRow.setClipChildren(false);
         LinearLayout identity = column();
-        welcomeView = text("Good afternoon,", 11, 0xFF343A26, Typeface.NORMAL);
+        welcomeView = text("Good afternoon,", 11, heroText, Typeface.NORMAL);
         identity.addView(welcomeView);
         headlineView = new ShuffleTextView(getContext());
         headlineView.setText("YOU GOT THIS.");
@@ -600,13 +601,12 @@ final class DashboardView extends FrameLayout {
         live.addView(broadcastStatusView, topLp(-1, -2, 10));
         broadcastCaptionView = text("Academic snapshot", 9, muted, Typeface.NORMAL);
         live.addView(broadcastCaptionView, topLp(-1, -2, 5));
-        live.addView(new LetterGlitchView(getContext(), muted, palette.highlight), topLp(-1, dp(36), 6));
         broadcasts.addView(live, new LinearLayout.LayoutParams(0, dp(154), 1f));
         LinearLayout whatsNext = column();
         whatsNext.setPadding(dp(15), dp(13), dp(10), dp(10));
-        whatsNext.setBackground(shape(0xFFC8C8FF, 15, 0xFF111111));
-        whatsNext.addView(label("WHAT'S NEXT?  ✱", 9, 0xFF111111, Typeface.BOLD));
-        broadcastNextView = text("Don't miss\nyour next\nmove.", 15, 0xFF111111, Typeface.BOLD);
+        whatsNext.setBackground(shape(palette.focusSurface, 15, palette.focusBorder));
+        whatsNext.addView(label("WHAT'S NEXT?  ✱", 9, palette.ink, Typeface.BOLD));
+        broadcastNextView = text("Don't miss\nyour next\nmove.", 15, palette.ink, Typeface.BOLD);
         broadcastNextView.setLetterSpacing(-.05f);
         whatsNext.addView(broadcastNextView, topLp(-1, -2, 7));
         whatsNext.setOnClickListener(v -> showPage(2));
@@ -710,7 +710,7 @@ final class DashboardView extends FrameLayout {
         examBadges.setGravity(Gravity.CENTER_VERTICAL);
         overviewExamType = text("", 10, ink, Typeface.BOLD);
         overviewExamType.setPadding(dp(9), dp(5), dp(9), dp(5));
-        overviewExamType.setBackground(shape(palette.canvas == 0xFF121212 ? 0xFF34352B : soft, 7, 0));
+        overviewExamType.setBackground(shape(soft, 7, 0));
         examBadges.addView(overviewExamType, lp(-2, -2));
         overviewExamSession = text("", 10, ink, Typeface.BOLD);
         overviewExamSession.setPadding(dp(9), dp(5), dp(9), dp(5));
@@ -807,7 +807,7 @@ final class DashboardView extends FrameLayout {
         ticket.setClipChildren(false);
         ticket.setClipToPadding(false);
         View backing = new View(getContext());
-        backing.setBackground(shape(0xFFC8C8FF, 7, 0xFF121212));
+        backing.setBackground(shape(palette.focusSurface, 7, palette.focusBorder));
         backing.setRotation(9f);
         FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(82), dp(102), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         backParams.rightMargin = dp(2);
@@ -815,13 +815,13 @@ final class DashboardView extends FrameLayout {
         LinearLayout face = column();
         face.setGravity(Gravity.CENTER_HORIZONTAL);
         face.setPadding(dp(8), dp(9), dp(8), dp(8));
-        face.setBackground(shape(0xFFF1EEDA, 7, 0xFF121212));
+        face.setBackground(shape(palette.surface, 7, palette.focusBorder));
         face.setRotation(-4f);
-        homeTicketLabelView = text("TODAY", 8, 0xFF121212, Typeface.BOLD);
-        homeWeekNumberView = text("—", 38, 0xFF121212, Typeface.BOLD);
+        homeTicketLabelView = text("TODAY", 8, palette.ink, Typeface.BOLD);
+        homeWeekNumberView = text("—", 38, palette.ink, Typeface.BOLD);
         homeWeekNumberView.setIncludeFontPadding(false);
-        TextView ticketRule = text("────────", 8, 0xFF121212, Typeface.NORMAL);
-        homeWeekMonthView = text("—", 8, 0xFF121212, Typeface.BOLD);
+        TextView ticketRule = text("────────", 8, palette.muted, Typeface.NORMAL);
+        homeWeekMonthView = text("—", 8, palette.ink, Typeface.BOLD);
         face.addView(homeTicketLabelView);
         face.addView(homeWeekNumberView, topLp(-1, -2, 4));
         face.addView(ticketRule, topLp(-1, -2, 1));
@@ -835,7 +835,7 @@ final class DashboardView extends FrameLayout {
             GradientDrawable metal = new GradientDrawable();
             metal.setColor(Color.TRANSPARENT);
             metal.setCornerRadius(dp(11));
-            metal.setStroke(dp(4), 0xFF707775);
+            metal.setStroke(dp(4), palette.border);
             ring.setBackground(metal);
             ring.setRotation(-5f);
             FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(
@@ -894,11 +894,12 @@ final class DashboardView extends FrameLayout {
     private void updateAcademics(State next) {
         if (academicsContent == null) return;
         academicsContent.removeAllViews();
+        addInternalMarks(next);
         if (next.academicCourses == null || next.academicCourses.isEmpty()) {
             LinearLayout empty = column();
             empty.setPadding(dp(16), dp(16), dp(16), dp(16));
             empty.setBackground(industrialSurface(surface, 18, border));
-            empty.addView(text("Your results will appear here", 18, ink, Typeface.BOLD));
+            empty.addView(text("Semester results", 18, ink, Typeface.BOLD));
             String guidance = next.academicConnected
                     ? "KCT is connected. No completed results have been returned yet; Rollcall will keep the information on this device."
                     : "Sign in to KCT once. Rollcall will collect your semester results and next exam automatically on this device.";
@@ -906,6 +907,7 @@ final class DashboardView extends FrameLayout {
                     13, muted, Typeface.NORMAL);
             detail.setLineSpacing(dp(2), 1f);
             empty.addView(detail, topLp(-1, -2, 8));
+            empty.addView(text("Semester grades and GPA stay separate from internal assessment marks.", 12, muted, Typeface.NORMAL), topLp(-1, -2, 8));
             TextView open = text("Sign in to KCT  →", 14, palette.buttonText, Typeface.BOLD);
             open.setGravity(Gravity.CENTER);
             open.setMinHeight(dp(50));
@@ -913,7 +915,7 @@ final class DashboardView extends FrameLayout {
             open.setOnClickListener(v -> actions.onAcademicsPortal());
             setTactileFeedback(open);
             empty.addView(open, topLp(-1, -2, 14));
-            academicsContent.addView(empty, lp(-1, -2));
+            academicsContent.addView(empty, topLp(-1, -2, 12));
             return;
         }
 
@@ -942,7 +944,7 @@ final class DashboardView extends FrameLayout {
 
         LinearLayout summary = column();
         summary.setPadding(dp(18), dp(16), dp(18), dp(16));
-        summary.setBackground(new EditorialCalloutDrawable(hero, 0xFF111111, "★", 26));
+        summary.setBackground(new EditorialCalloutDrawable(hero, palette.focusBorder, "★", 26));
         summary.addView(label("CGPA", 10, palette.heroMuted, Typeface.BOLD));
         TextView value = text(Double.isNaN(cgpa) ? "—" : String.format(Locale.getDefault(), "%.2f", cgpa) + " / 10",
                 42, palette.heroText, Typeface.BOLD);
@@ -1080,6 +1082,44 @@ final class DashboardView extends FrameLayout {
                 text(next.academicStatus, 12, muted, Typeface.NORMAL), 4);
     }
 
+    private void addInternalMarks(State next) {
+        addTop(academicsContent, text("Internal assessments", 20, ink, Typeface.BOLD), 12);
+        LinearLayout card = column();
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(industrialSurface(surface, 18, border));
+        List<InternalMark> rows = next.internalMarks == null ? Collections.emptyList() : next.internalMarks;
+        if (rows.isEmpty()) {
+            card.addView(text("No internal marks synced", 15, ink, Typeface.BOLD));
+            TextView detail = text("KCT lists internal marks in its student portal, but Rollcall has no verified student-facing data feed for them yet. Semester results remain available below.",
+                    12, muted, Typeface.NORMAL);
+            detail.setLineSpacing(dp(2), 1f);
+            card.addView(detail, topLp(-1, -2, 6));
+            TextView open = text("Open KCT portal  →", 13, palette.highlight, Typeface.BOLD);
+            open.setGravity(Gravity.CENTER_VERTICAL);
+            open.setMinHeight(dp(44));
+            open.setOnClickListener(v -> actions.onAcademicsPortal());
+            setTactileFeedback(open);
+            card.addView(open, topLp(-1, -2, 4));
+        } else {
+            for (InternalMark mark : rows) {
+                LinearLayout row = row();
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout copy = column();
+                copy.addView(text(mark.course, 13, ink, Typeface.BOLD));
+                String subtitle = (mark.semester.isEmpty() ? "" : mark.semester + " · ") + mark.assessment
+                        + (mark.date.isEmpty() ? "" : " · " + mark.date);
+                copy.addView(text(subtitle, 11, muted, Typeface.NORMAL), topLp(-1, -2, 2));
+                row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+                String value = mark.scoreAvailable
+                        ? String.format(Locale.getDefault(), "%.1f / %.1f", mark.score, mark.maximum)
+                        : mark.status.substring(0, 1).toUpperCase(Locale.ROOT) + mark.status.substring(1);
+                row.addView(text(value, 13, mark.scoreAvailable ? palette.highlight : muted, Typeface.BOLD));
+                card.addView(row, topLp(-1, -2, 6));
+            }
+        }
+        academicsContent.addView(card, lp(-1, -2));
+    }
+
     private void buildTimetablePage() {
         LinearLayout body = newPage(2);
         addTop(body, heading("03 / TIME & ATTENDANCE", "Your week", "Every class. Every record. In one place."), 18);
@@ -1121,19 +1161,20 @@ final class DashboardView extends FrameLayout {
         scheduleEmptyPanel = column();
         scheduleEmptyPanel.setPadding(dp(18), dp(17), dp(18), dp(14));
         scheduleEmptyPanel.setMinimumHeight(dp(205));
-        scheduleEmptyPanel.setBackground(shape(0xFFC8C8FF, 16, 0xFF121212));
-        scheduleEmptyPanel.addView(label("THE WEEK / LIVE SCHEDULE", 9, 0xFF343A26, Typeface.BOLD));
-        scheduleEmptyTitle = text("NO CLASSES\nON YOUR\nSCHEDULE.", 22, 0xFF121212, Typeface.BOLD);
+        scheduleEmptyPanel.setBackground(shape(palette.focusSurface, 16, palette.focusBorder));
+        scheduleEmptyPanel.addView(label("THE WEEK / LIVE SCHEDULE", 9, palette.ink, Typeface.BOLD));
+        scheduleEmptyTitle = text("NO CLASSES\nON YOUR\nSCHEDULE.", 22, palette.ink, Typeface.BOLD);
         scheduleEmptyTitle.setLineSpacing(0f, .92f);
         scheduleEmptyPanel.addView(scheduleEmptyTitle, topLp(-1, -2, 12));
-        scheduleEmptyDetail = text("Your connected timetable will appear here when classes are scheduled.", 11, 0xFF343A26, Typeface.NORMAL);
+        scheduleEmptyDetail = text("Your connected timetable will appear here when classes are scheduled.", 11, palette.ink, Typeface.NORMAL);
         scheduleEmptyDetail.setMaxLines(2);
         scheduleEmptyDetail.setLineSpacing(dp(2), 1f);
         scheduleEmptyPanel.addView(scheduleEmptyDetail, topLp(-1, -2, 8));
-        scheduleEmptyView = text("Refresh timetable  →", 11, 0xFF121212, Typeface.BOLD);
+        scheduleEmptyView = text("Refresh timetable  →", 11, palette.buttonText, Typeface.BOLD);
         scheduleEmptyView.setGravity(Gravity.CENTER);
         scheduleEmptyView.setMinHeight(dp(44));
-        scheduleEmptyView.setBackground(shape(0xFFCCFF00, 9, 0));
+        scheduleEmptyView.setBackground(shape(palette.button, 9, 0));
+        scheduleEmptyView.setTextColor(palette.buttonText);
         scheduleEmptyPanel.addView(scheduleEmptyView, topLp(-1, -2, 10));
         scheduleEmptyView.setFocusable(true);
         scheduleEmptyView.setClickable(true);
@@ -1155,10 +1196,12 @@ final class DashboardView extends FrameLayout {
         historyHeading.addView(text("Attendance history", 16, ink, Typeface.BOLD),
                 new LinearLayout.LayoutParams(0, -2, 1));
         historyContent.addView(historyHeading);
-        FolderFloatView folder = new FolderFloatView(getContext(), 0xFFC8C8FF, ink, soft, uiBoldTypeface,
-                () -> { showAllOd = false; openOdDetails(); },
-                () -> { showAllOd = true; openOdDetails(); });
-        historyContent.addView(folder, topLp(-1, -2, 8));
+        TextView leaveAndOd = text("Leave & OD records  →", 13, palette.highlight, Typeface.BOLD);
+        leaveAndOd.setGravity(Gravity.CENTER_VERTICAL);
+        leaveAndOd.setMinHeight(dp(48));
+        leaveAndOd.setOnClickListener(v -> { showAllOd = false; openOdDetails(); });
+        setTactileFeedback(leaveAndOd);
+        historyContent.addView(leaveAndOd, topLp(-1, -2, 4));
         historyRows = column();
         historyContent.addView(historyRows, topLp(-1, -2, 6));
         historyEmptyView = text("Go to Home and tap refresh to load attendance history.", 12, muted, Typeface.NORMAL);
@@ -1960,7 +2003,7 @@ final class DashboardView extends FrameLayout {
         if (cyberpunk) scroll.setBackground(new ScanlineDrawable());
         else scroll.setBackgroundColor(canvas);
         LinearLayout body = column();
-        body.setPadding(dp(20), 0, dp(20), dp(24));
+        body.setPadding(dp(20), 0, dp(20), dp(32));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         pageScrolls[index] = scroll;
         pageBodies[index] = body;
@@ -2069,7 +2112,7 @@ final class DashboardView extends FrameLayout {
         TextView avatar = text("R", 12, ink, Typeface.BOLD);
         avatar.setGravity(Gravity.CENTER);
         avatar.setBackground(new android.graphics.drawable.InsetDrawable(
-                shape(palette.canvas == 0xFF121212 ? 0xFF3A3C2F : soft, 100, 0), dp(4)));
+                shape(soft, 100, 0), dp(4)));
         avatar.setContentDescription("About Rollcall and student profile");
         avatar.setFocusable(true);
         avatar.setOnClickListener(v -> actions.onAbout());
@@ -2178,23 +2221,23 @@ final class DashboardView extends FrameLayout {
         card.addView(coursePicker, topLp(-1, dp(56), 12));
         LinearLayout result = column();
         result.setPadding(dp(20), dp(20), dp(20), dp(20));
-        result.setBackground(new EditorialCalloutDrawable(0xFFC8C8FF, 0xFFFF4400, "↗", 38));
-        result.addView(label("YOUR ATTENDANCE / PROJECTED", 10, 0xFF111111, Typeface.BOLD));
+        result.setBackground(new EditorialCalloutDrawable(palette.focusSurface, palette.highlight, "", 0));
+        result.addView(label("YOUR ATTENDANCE / PROJECTED", 10, palette.ink, Typeface.BOLD));
         LinearLayout comparison = row();
         comparison.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout current = column();
-        current.addView(text("CURRENT", 10, 0xFF111111, Typeface.BOLD));
-        plannerCurrentPercentView = text("—", 35, 0xFF111111, Typeface.BOLD);
+        current.addView(text("CURRENT", 10, palette.ink, Typeface.BOLD));
+        plannerCurrentPercentView = text("—", 35, palette.ink, Typeface.BOLD);
         plannerCurrentPercentView.setIncludeFontPadding(false);
         current.addView(plannerCurrentPercentView, topLp(-1, -2, 7));
         comparison.addView(current, new LinearLayout.LayoutParams(0, -2, 1));
-        comparison.addView(text("→", 25, 0xFF111111, Typeface.BOLD), lp(-2, -2));
+        comparison.addView(text("→", 25, palette.ink, Typeface.BOLD), lp(-2, -2));
         LinearLayout projection = column();
         projection.setGravity(Gravity.RIGHT);
-        TextView after = text("AFTER PLAN", 10, 0xFF111111, Typeface.BOLD);
+        TextView after = text("AFTER PLAN", 10, palette.ink, Typeface.BOLD);
         after.setGravity(Gravity.RIGHT);
         projection.addView(after);
-        projectionView = text("—", 35, 0xFF111111, Typeface.BOLD);
+        projectionView = text("—", 35, palette.ink, Typeface.BOLD);
         projectionView.setGravity(Gravity.RIGHT);
         projectionView.setIncludeFontPadding(false);
         projection.addView(projectionView, topLp(-1, -2, 7));
@@ -2757,7 +2800,7 @@ final class DashboardView extends FrameLayout {
         attendanceRail.setVisibility(hasCurrentCounts ? VISIBLE : GONE);
         if (next == null) {
             decisionCourse.setText(state.timetableLoaded && state.timetable.isEmpty()
-                    ? "No classes scheduled!" : state.timetableLoaded ? "No upcoming class" : "Timetable not synced");
+                    ? "No classes this week" : state.timetableLoaded ? "No upcoming class" : "Timetable not synced");
             decisionLabel.setText(state.timetableLoaded && state.timetable.isEmpty()
                     ? "MyCamu has no classes scheduled for this week."
                     : state.timetableLoaded ? "Your synced timetable has no future class yet."
@@ -2857,7 +2900,7 @@ final class DashboardView extends FrameLayout {
             plannerFeedback.setText("Sync your class counts to explore your options.");
             projectionView.setText("—");
             plannerCurrentPercentView.setText("—");
-            projectionView.setTextColor(0xFF111111);
+            projectionView.setTextColor(palette.ink);
             projectionStatusView.setText("Counts unavailable");
             projectionStatusView.setTextColor(0xFF333333);
             return;
@@ -2901,7 +2944,7 @@ final class DashboardView extends FrameLayout {
                 : "After this plan, attend " + forecast.periodsToRecover(state.target)
                     + " consecutive classes to reach " + state.target + "%.");
         projectionView.setText(String.format(Locale.getDefault(), "%.1f%%", projected));
-        projectionView.setTextColor(0xFF111111);
+        projectionView.setTextColor(palette.ink);
         projectionStatusView.setText(String.format(Locale.getDefault(), "%+.1f POINTS · %s",
                 projected - baseline.percentage(), projected >= state.target ? "ON TRACK" : "BELOW TARGET"));
         projectionStatusView.setTextColor(0xFF333333);
@@ -3192,7 +3235,7 @@ final class DashboardView extends FrameLayout {
         private float position;
 
         NavBackgroundDrawable() {
-            fill.setColor(palette.canvas == 0xFF121212 ? 0xFF292929 : surface);
+            fill.setColor(surface);
             outline.setColor(border);
             outline.setStyle(Paint.Style.STROKE);
             outline.setStrokeWidth(dp(1));
@@ -3258,11 +3301,12 @@ final class DashboardView extends FrameLayout {
             courseName.setEllipsize(android.text.TextUtils.TruncateAt.END);
             header.addView(courseName, new LinearLayout.LayoutParams(0, -2, 1));
             boolean atRisk = group.priority() < state.target;
-            TextView percentage = text(group.lecture.percentLabel, 13,
-                    0xFF111111, Typeface.BOLD);
+            int badgeBackground = atRisk ? red : green;
+            int badgeForeground = palette.dark ? ink : 0xFFFFFFFF;
+            TextView percentage = text(group.lecture.percentLabel, 13, badgeForeground, Typeface.BOLD);
             percentage.setGravity(Gravity.CENTER);
             percentage.setPadding(dp(10), dp(8), dp(10), dp(8));
-            percentage.setBackground(shape(atRisk ? 0xFFFF8C73 : 0xFFCCFF00, 9, 0));
+            percentage.setBackground(shape(badgeBackground, 9, 0));
             LinearLayout.LayoutParams percentageParams = lp(-2, -2);
             percentageParams.leftMargin = dp(10);
             header.addView(percentage, percentageParams);
@@ -3363,9 +3407,9 @@ final class DashboardView extends FrameLayout {
             LinearLayout tile = column();
             tile.setGravity(Gravity.CENTER);
             tile.setPadding(dp(8), dp(13), dp(8), dp(13));
-            int background = positive ? hero : warning
-                    ? (palette.canvas == 0xFF121212 ? 0xFFFF4400 : 0xFFFF8C73) : surface;
-            int foreground = positive || warning ? 0xFF111111 : ink;
+            int background = positive ? green : warning ? amber : surface;
+            int foreground = positive ? (palette.dark ? ink : 0xFFFFFFFF)
+                    : warning ? (palette.dark ? ink : 0xFF241806) : ink;
             tile.setBackground(shape(background, 10, positive || warning ? 0 : border));
             TextView labelText = text(title, 10, foreground, Typeface.BOLD);
             labelText.setGravity(Gravity.CENTER);

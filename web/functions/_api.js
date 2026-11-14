@@ -170,9 +170,32 @@ function normalizeSnapshot(input) {
   for (const key of ["courses", "timetable", "classMarks", "leaves", "academicRecords", "exams"]) {
     if (!Array.isArray(input[key]) || input[key].length > 5000) throw new Error(`Invalid ${key} data.`);
   }
+  const internalMarks = input.internalMarks ?? [];
+  if (!Array.isArray(internalMarks) || internalMarks.length > 2000) throw new Error("Invalid internalMarks data.");
+  const normalizedInternalMarks = internalMarks.map(row => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error("Invalid internal mark.");
+    const course = String(row.course || row.name || "").trim(), assessment = String(row.assessment || row.exam || "").trim();
+    if (!course || course.length > 100 || !assessment || assessment.length > 100) throw new Error("Invalid internal mark.");
+    let status = String(row.status || (row.score != null || row.marks != null ? "published" : "unpublished")).toLowerCase();
+    if (!["published", "unpublished", "withheld", "missing"].includes(status)) throw new Error("Invalid internal mark status.");
+    let score = null, maximum = null;
+    if (status === "published") {
+      score = Number(row.score ?? row.marks); maximum = Number(row.maximum ?? row.maxMarks);
+      if (!Number.isFinite(score) || !Number.isFinite(maximum) || maximum <= 0 || maximum > 10000 || score < 0 || score > maximum)
+        throw new Error("Invalid published internal mark value.");
+    }
+    const bounded = (value, max) => String(value || "").slice(0, max);
+    const lastSyncedAt = Number(row.lastSyncedAt);
+    return {
+      id: bounded(row.assessmentId || row.id, 120), semester: bounded(row.semester, 80),
+      courseCode: bounded(row.courseCode || row.code, 40), course, assessment, score, maximum, status,
+      date: bounded(row.date, 40), publishedAt: bounded(row.publishedAt, 40),
+      source: bounded(row.source || "KCT", 80), lastSyncedAt: Number.isFinite(lastSyncedAt) ? Math.max(0, lastSyncedAt) : 0
+    };
+  });
   const target = Number(input.target);
   if (!Number.isFinite(target) || target < 1 || target > 100) throw new Error("Invalid attendance target.");
-  return { ...input, target, updatedAt: now() };
+  return { ...input, internalMarks: normalizedInternalMarks, target, updatedAt: now() };
 }
 
 async function route(request, env) {
