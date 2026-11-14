@@ -121,3 +121,17 @@ test("replacement confirmation emails the verified account and stores only a sho
   }), env);
   assert.equal(limited.status, 429);
 });
+
+test("rejects oversized streamed requests without a content-length header", async () => {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(1_900_001)); },
+    cancel() { cancelled = true; }
+  });
+  const response = await handleApi(new Request("https://rollcall.test/api/auth/verify", {
+    method: "POST", body, duplex: "half"
+  }), {});
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "Request is too large." });
+  assert.equal(cancelled, true);
+});

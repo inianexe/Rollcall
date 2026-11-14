@@ -19,8 +19,23 @@ const secretKey = async (value, usages) => crypto.subtle.importKey("raw", value,
 async function readBody(request, limit = 1_900_000) {
   const length = Number(request.headers.get("content-length") || 0);
   if (length > limit) throw new Error("Request is too large.");
-  const text = await request.text();
-  if (text.length > limit) throw new Error("Request is too large.");
+  if (!request.body) return {};
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0, text = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) throw new Error("Request is too large.");
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } catch (error) {
+    await reader.cancel().catch(() => {});
+    throw error;
+  }
   return text ? JSON.parse(text) : {};
 }
 
