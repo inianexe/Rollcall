@@ -27,3 +27,16 @@ Preserve application identity, release signing behavior, data formats, provider 
 ## Change workflow
 
 Read affected callers and tests before editing. Keep refactors small, run the JVM tests and debug build after meaningful changes, and state device-only or live-service checks that remain unverified. Never commit credentials, keystores, generated APKs, or machine-local SDK configuration.
+
+## RollCall migration workflow
+
+1. Read this file and only the architecture notes relevant to the requested screen or integration.
+2. Characterize current tested behavior before changing it.
+3. Load only skills relevant to the task and reuse existing components, fixtures, and test infrastructure.
+4. Keep the native Java UI architecture unless a scoped project decision explicitly selects an existing Compose migration branch.
+5. Work in small slices; run targeted tests during implementation and the required regression suite before completion.
+6. Preserve attendance calculations, provider sessions, account boundaries, persistence, notifications, and update verification.
+7. Do not install over the user's production app or alter production data/settings as routine verification.
+8. Use the user's physical phone for device checks when authorized; do not use an emulator for RollCall device verification.
+9. Avoid unnecessary dependency or framework changes.
+10. Report verified results, remaining device/live-service checks, and known risks. Keep commits reviewable and do not merge or deploy without authorization.

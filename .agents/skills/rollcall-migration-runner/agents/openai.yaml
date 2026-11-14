@@ -1,0 +1,4 @@
+interface:
+  display_name: "RollCall Migration Runner"
+  short_description: "Run safe, tested RollCall UI migrations"
+  default_prompt: "Use $rollcall-migration-runner to inspect and safely migrate a RollCall screen."
