@@ -126,20 +126,6 @@ public class ReactBitsNativeTest {
         }
     }
 
-    @Test public void profileEffectScreens() {
-        try (ActivityScenario<DashboardTestActivity> scenario = ActivityScenario.launch(DashboardTestActivity.class)) {
-            scenario.onActivity(activity -> activity.dashboard.update(fixture()));
-            for (int repeat = 0; repeat < 12; repeat++) {
-                tab(scenario, "Courses");
-                tab(scenario, "Home");
-                tab(scenario, "Week");
-                tab(scenario, "Home");
-                SystemClock.sleep(500);
-            }
-            SystemClock.sleep(3000);
-        }
-    }
-
     private static DashboardView.State fixture() {
         DashboardView.State state = new DashboardView.State();
         state.name = "Alex";

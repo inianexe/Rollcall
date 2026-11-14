@@ -3151,15 +3151,11 @@ public class MainActivity extends Activity {
             if (startsAt <= 0) continue;
             String id = row.optString("id", "");
             String code = row.optString("code", "");
-            for (LiveSnapshotStore.ClassSession session : LiveSnapshotStore.get().timetable) {
-                String a = code.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                String b = session.code.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                if (!a.isEmpty() && !b.isEmpty() && a.equals(b)
-                        && Math.abs(session.startsAt - startsAt) < 60_000L) {
-                    id = session.id;
-                    code = session.code;
-                    break;
-                }
+            LiveSnapshotStore.ClassSession session = ProviderClassMarkMatcher.match(
+                    code, startsAt, LiveSnapshotStore.get().timetable);
+            if (session != null) {
+                id = session.id;
+                code = session.code;
             }
             if (id.isEmpty()) id = code + "_" + startsAt;
             marks.put(id, new LiveSnapshotStore.ClassMark(id, code, row.optString("name", code),
