@@ -16,7 +16,7 @@ jobs:
       contents: write
     steps:
       - name: Check out release files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Prepare Android tools
         uses: android-actions/setup-android@v4
