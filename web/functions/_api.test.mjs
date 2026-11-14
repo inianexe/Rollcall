@@ -27,7 +27,10 @@ async function hmac(value, secret) {
 }
 
 function fakeDatabase() {
-  const state = { sends: [], code: null, deviceId: "old-device-id-1234", sessionsDeleted: 0 };
+  const state = {
+    sends: [], challengeSends: [], code: null, challenge: null, session: null,
+    deviceId: "old-device-id-1234", sessionsDeleted: 0
+  };
   return {
     state,
     prepare(sql) {
@@ -35,7 +38,13 @@ function fakeDatabase() {
       return {
         bind(...values) { args = values; return this; },
         async first() {
+          if (sql.includes("SELECT uid FROM web_sessions"))
+            return state.session && state.session.expires_at > args[1] ? { uid: state.session.uid } : null;
           if (sql.includes("SELECT device_id FROM trusted_devices")) return { device_id: state.deviceId };
+          if (sql.includes("SELECT fcm_token FROM trusted_devices")) return state.deviceId ? { fcm_token: "test-fcm-token" } : null;
+          if (sql.includes("FROM web_challenges WHERE id=? AND consumed_at IS NULL"))
+            return state.challenge && !state.challenge.consumed_at && state.challenge.attempts < 5
+              && state.challenge.expires_at > args[1] ? state.challenge : null;
           if (sql.includes("SELECT code_hash FROM device_replacement_codes"))
             return state.code && !state.code.used_at && state.code.attempts < 5 && state.code.expires_at > args[1] ? state.code : null;
           if (sql.includes("SELECT created_at FROM device_replacement_email_sends")) return state.sends.at(-1) || null;
@@ -45,10 +54,18 @@ function fakeDatabase() {
         async run() {
           if (sql.startsWith("DELETE FROM device_replacement_email_sends")) state.sends = state.sends.filter(row => row.created_at >= args[0]);
           if (sql.startsWith("INSERT INTO device_replacement_email_sends")) state.sends.push({ uid: args[0], created_at: args[1] });
+          if (sql.startsWith("DELETE FROM web_challenge_sends")) state.challengeSends = state.challengeSends.filter(row => row.created_at >= args[0]);
+          if (sql.startsWith("INSERT INTO web_challenge_sends")) {
+            const allowed = state.challengeSends.filter(row => row.uid === args[2] && row.created_at > args[3]).length < 5;
+            if (allowed) state.challengeSends.push({ uid: args[0], created_at: args[1] });
+            return { meta: { changes: allowed ? 1 : 0 } };
+          }
+          if (sql.startsWith("UPDATE web_challenges SET consumed_at") && state.challenge) state.challenge.consumed_at = args[0];
+          if (sql.startsWith("INSERT INTO web_sessions")) state.session = { session_hash: args[0], uid: args[1], created_at: args[2], expires_at: args[3] };
           if (sql.startsWith("INSERT INTO device_replacement_codes")) state.code = { uid: args[0], code_hash: args[1], created_at: args[2], expires_at: args[3], attempts: 0, used_at: null };
           if (sql.startsWith("UPDATE device_replacement_codes SET used_at")) state.code.used_at = args[0];
           if (sql.startsWith("UPDATE device_replacement_codes SET attempts")) state.code.attempts++;
-          if (sql.startsWith("DELETE FROM web_sessions")) state.sessionsDeleted++;
+          if (sql.startsWith("DELETE FROM web_sessions")) { state.sessionsDeleted++; state.session = null; }
           if (sql.startsWith("INSERT INTO trusted_devices")) state.deviceId = args[1];
           return { meta: { changes: 1 } };
         }
@@ -134,4 +151,53 @@ test("rejects oversized streamed requests without a content-length header", asyn
   assert.equal(response.status, 413);
   assert.deepEqual(await response.json(), { error: "Request is too large." });
   assert.equal(cancelled, true);
+});
+
+test("browser sessions expire after 30 days and expired cookies are rejected", async () => {
+  const database = fakeDatabase();
+  const secret = "test-session-secret-with-enough-entropy";
+  const now = Math.floor(Date.now() / 1000);
+  database.state.challenge = {
+    id: "challenge-1", uid: "student-1", code_hash: await hmac("123456", secret),
+    expires_at: now + 300, attempts: 0, consumed_at: null
+  };
+  const env = { SESSION_HASH_KEY: secret, DB: database };
+  const verified = await handleApi(new Request("https://rollcall.test/api/auth/verify", {
+    method: "POST", headers: { origin: "https://rollcall.test", "content-type": "application/json" },
+    body: JSON.stringify({ challengeId: "challenge-1", code: "123456" })
+  }), env);
+  assert.equal(verified.status, 200);
+  assert.match(verified.headers.get("set-cookie"), /Max-Age=2592000/);
+  assert.equal(database.state.session.expires_at - database.state.session.created_at, 30 * 24 * 60 * 60);
+
+  const cookie = verified.headers.get("set-cookie").split(";")[0];
+  const active = await handleApi(new Request("https://rollcall.test/api/auth/session", { headers: { cookie } }), env);
+  assert.deepEqual(await active.json(), { signedIn: true, updatedAt: 0 });
+
+  database.state.session.expires_at = Math.floor(Date.now() / 1000) - 1;
+  const expired = await handleApi(new Request("https://rollcall.test/api/auth/session", { headers: { cookie } }), env);
+  assert.deepEqual(await expired.json(), { signedIn: false });
+});
+
+test("rate limits sign-in challenge sends across consumed challenges", async t => {
+  const pair = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  Object.assign(jwk, { kid: "test-key", alg: "RS256", use: "sig" });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    assert.match(String(url), /securetoken@system\.gserviceaccount\.com/);
+    return Response.json({ keys: [jwk] });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const database = fakeDatabase();
+  const now = Math.floor(Date.now() / 1000);
+  database.state.challengeSends = Array.from({ length: 5 }, (_, i) => ({ uid: "student-1", created_at: now - i }));
+  const token = await authToken(pair.privateKey);
+  const response = await handleApi(new Request("https://rollcall.test/api/auth/challenge", {
+    method: "POST", headers: { authorization: `Bearer ${token}`, origin: "https://rollcall.test" }
+  }), { FIREBASE_PROJECT_ID: "rollcall-test", DB: database });
+  assert.equal(response.status, 429);
+  assert.match((await response.json()).error, /Too many code requests/);
+  assert.equal(database.state.challengeSends.length, 5);
 });

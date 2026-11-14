@@ -14,7 +14,7 @@ Status: implemented in Android `1.0.24` / schema version `1` and the Cloudflare 
 
 The API base URL is compiled into Android as `BuildConfig.ROLLCALL_API_BASE_URL`, defaulting to `https://rollcall-campus-companion.pages.dev/api`. All requests and responses use JSON except an empty `OPTIONS` response. Responses set `Cache-Control: no-store`.
 
-Phone requests and browser challenge creation send a Firebase ID token in `Authorization: Bearer <id-token>`. Protected account operations require a verified email. Browser data requests use the Worker-issued `rc_session` cookie (`Secure; HttpOnly; SameSite=Strict; Path=/`) and same-origin checks. Session tokens are random, only their SHA-256 keyed hashes are stored in D1, and logout/device replacement/account deletion removes the applicable session rows. **Current limitation:** the D1 session row and cookie do not have an absolute expiry; session lifetime policy needs a product decision and a migration before it changes.
+Phone requests and browser challenge creation send a Firebase ID token in `Authorization: Bearer <id-token>`. Protected account operations require a verified email. Browser data requests use the Worker-issued `rc_session` cookie (`Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`) and same-origin checks. Session tokens are random, only their SHA-256 keyed hashes are stored in D1, and both cookie and server row expire after 30 days. Logout/device replacement/account deletion removes the applicable session rows.
 
 Mutating `POST` and `PUT` requests require a same-origin `Origin` when the header is present. API errors use JSON `{ "error": "...", "code": "..." }`; `code` is present for selected client-handled cases.
 
@@ -66,14 +66,14 @@ Course entries contain `code`, `name`, `attended`, `total`, `percentage` (number
 
 ## One-time codes and limits
 
-- Browser sign-in: a challenge code expires after 300 seconds and allows five verification attempts. The Worker currently deletes consumed/expired challenge rows before counting new requests, so its five-per-15-minute check only limits outstanding rows and is not a durable send-rate limit. Delivery is through the trusted app’s FCM token; the code is encrypted in D1 and stored as an HMAC for verification.
+- Browser sign-in: a challenge code expires after 300 seconds and allows five verification attempts. Up to five challenge sends per account are accepted per 15 minutes, including requests whose challenge was consumed; send timestamps are retained for one day. Delivery is through the trusted app’s FCM token; the code is encrypted in D1 and stored as an HMAC for verification.
 - Phone replacement: an email code expires after 600 seconds, up to five attempts, at most one send per minute, and five sends per account per 15 minutes. D1 stores only an HMAC of the code. Successful replacement invalidates existing web sessions.
 - `device/register` request bodies are capped at 12,000 bytes; `auth/pending` and `auth/verify` bodies at 3,000 bytes. Other JSON requests use the 1,900,000-byte cap.
 - Firebase ID tokens are limited to 8192 characters and must match the configured project, issuer, signature, and expiry.
 
 ## D1 migrations and release safety
 
-Apply migrations in order only after reviewing them against a current D1 backup. Migration `0002_email_device_replacement.sql` drops the old `recovery_codes` table after introducing email replacement codes; applying it is destructive to any still-needed recovery-code rows. Do not run remote migrations as part of code verification. Production migration timing, backup/restore, email secrets, and deployed Worker version are operator-controlled.
+Apply migrations in order only after reviewing them against a current D1 backup. Migration `0002_email_device_replacement.sql` drops the old `recovery_codes` table after introducing email replacement codes; applying it is destructive to any still-needed recovery-code rows. Migration `0003_expire_web_sessions.sql` sets existing sessions to expire 30 days after their original creation, so sessions older than 30 days will require sign-in after rollout. Migration `0004_limit_web_challenge_sends.sql` adds durable challenge-send counters. Do not run remote migrations as part of code verification. Production migration timing, backup/restore, email secrets, and deployed Worker version are operator-controlled.
 
 ## Contract verification
 
