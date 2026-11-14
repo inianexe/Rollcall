@@ -137,6 +137,10 @@ body.dark{--canvas:#121212;--surface:#292929;--ink:#f4f5ef;--muted:#c2c6b7;--lin
 #web-account-dialog input{background:#f6f7ed;border:1.5px solid #121212;border-radius:8px;color:#121212;min-height:46px}
 #web-account-dialog #web-resend-code{justify-self:start;color:#121212}
 #web-account-dialog #web-resend-code:disabled{opacity:.6;cursor:default}
+.web-approval{display:grid;justify-items:center;gap:8px;padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--surface-soft);text-align:center}
+.web-approval p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.45}
+.web-approval strong{font:700 2.5rem/1 ui-monospace,monospace;letter-spacing:.24em;color:var(--ink)}
+.web-approval #web-approval-status{font-size:.82rem}
 .web-signup-note{font-size:12px;color:#303848;margin:0}
 .web-signup-note b{color:#121212}
 .stack-section{background:var(--soft)}

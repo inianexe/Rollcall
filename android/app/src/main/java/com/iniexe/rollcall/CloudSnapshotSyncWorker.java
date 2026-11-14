@@ -34,9 +34,12 @@ public final class CloudSnapshotSyncWorker extends Worker {
             CloudAccountClient.putSnapshot(token, deviceId, payload);
             getApplicationContext().getSharedPreferences("rollcall_cloud_account", Context.MODE_PRIVATE).edit()
                     .putLong("cloud_last_sync_at", System.currentTimeMillis())
-                    .putString("cloud_last_sync_uid", user.getUid()).apply();
+                    .putString("cloud_last_sync_uid", user.getUid()).putString("cloud_last_sync_error", "").apply();
             return Result.success();
         } catch (Exception error) {
+            String message = error.getMessage() == null ? "Cloud upload failed. Check your connection and retry." : error.getMessage();
+            getApplicationContext().getSharedPreferences("rollcall_cloud_account", Context.MODE_PRIVATE).edit()
+                    .putString("cloud_last_sync_uid", user.getUid()).putString("cloud_last_sync_error", message).apply();
             return getRunAttemptCount() < 8 ? Result.retry() : Result.failure();
         }
     }

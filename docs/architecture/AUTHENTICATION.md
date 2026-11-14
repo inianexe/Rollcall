@@ -1,33 +1,39 @@
 # RollCall authentication
 
-Status: implementation on `feature/firebase-auth-v2`; Firebase Authentication and Google OAuth branding were configured on 2026-11-14. Cloudflare production was not deployed or migrated.
+Status: Java Android and web implementation on `feature/firebase-auth-v2`. Authentication changes and D1 migrations in this branch are not deployed or applied remotely.
 
-## Identity and account modes
+## Identity and data modes
 
-- Firebase Authentication is the RollCall identity provider. Android uses Java, native Views, Firebase Auth, and Android Credential Manager for Google ID tokens. The browser uses the Firebase JavaScript SDK.
-- Sign-in methods are Google, Firebase email-link, and the existing email/password provider. Email/password remains available for existing accounts and password reset. Provider linking uses Firebase's link APIs and retains the current Firebase UID; credential conflicts stop without automatic account merges.
-- Local attendance remains usable without a RollCall account. Cloud sync is opt-in and bound to the current Firebase UID. MyCamu/KCT credentials and portal sessions remain device-local and independent.
-- Web dashboard access still requires verified Firebase identity plus approval from the registered Android device. Google or email-link authentication does not bypass that second step.
+- Firebase Authentication is the RollCall identity provider. Android uses native Java Views, Firebase Auth, and Credential Manager for Google; email-link and existing password accounts remain supported. The browser uses Firebase JavaScript Auth.
+- The phone remains useful without a RollCall account. MyCamu/KCT identity and portal credentials are separate. Cloud sync requires explicit opt-in and remains tied to the signed-in Firebase UID.
+- Turning sync off disables uploads on the Worker and retains the cloud snapshot. “Delete cloud copy” disables uploads and removes the snapshot in the same D1 batch after recent reauthentication. A stale in-flight upload cannot recreate a deleted snapshot; only explicit re-enrollment enables sync again. Local academic records are preserved.
 
-## Lifecycle
+## Web sign-in flow
 
-1. A user may stay local or authenticate using a configured provider. The app stores the last authenticated UID for display only; it does not make that UID the sync owner.
-2. A verified app sign-in registers that install's FCM token for account approvals, independently of cloud sync. The user must separately enable cloud sync; Android records `cloud_sync_uid`, and snapshot jobs require the signed-in UID and stored sync owner to match before upload.
-3. Browser sign-in obtains a Firebase ID token, requests a short-lived challenge, and waits for the code retrieved inside the trusted Android app. The Worker then creates a random, HttpOnly, Secure, SameSite=Strict session; D1 stores only a keyed hash.
-4. Sign-out removes browser session state or Android pending challenge state. It does not clear local academic data or delete the cloud snapshot.
-5. Account deletion requires recent Firebase reauthentication. Android then asks the Worker to delete UID-owned D1 data and deletes the Firebase identity. Local academic records remain on the phone.
+**Before:** Firebase sign-in, receive a six-digit code on a signed-in app, find it, then enter it in the browser.
 
-## Link handling
+**After:** Firebase sign-in, view a two-digit match on the browser, approve or deny the matching request in RollCall on an enrolled phone, then the browser polls the same one-time challenge and receives its session automatically. The six-digit entry remains an explicit fallback. Requests expire after five minutes; sends and code attempts are rate-limited; challenge decisions and session creation are single-use.
 
-Google and email-link credentials are linked to the signed-in Firebase user. The client verifies that the UID remains the same. If a credential is already attached to a different Firebase UID, the operation fails with a recovery message; RollCall never guesses that matching email addresses authorize a merge.
+The phone signs a server-bound action string using its Android Keystore RSA key. Merely signing into Firebase, possessing an FCM token, or claiming an installation ID does not grant approval. The old `/auth/pending` code-retrieval endpoint is removed.
 
-Android email links use Firebase Hosting's email action link and the `/__/auth/links` App Link. The email address stays in app-private preferences, not in the continuation URL. If a link opens on another device, the user must enter the same email. Email-link reauthentication is also used before deleting email-linked accounts.
+## Enrollment and migration
 
-## Boundaries and recovery
+1. Apply D1 migrations `0001` through `0009` in order in a reviewed staging environment. `0006` copies the current trusted phone into `approval_devices` with no key; this preserves delivery while requiring that phone to approve its own first key enrollment. `0007` adds opaque session-management IDs and browser activity fields, backfilling existing sessions. `0008` preserves current sync for existing trusted devices while adding the server-side pause/delete gate. `0009` clears obsolete recovery-code hashes that have no current consumer.
+2. Ship the Android version containing `ApprovalKeyStore` and the nonce/signature handling. Users open Account → Set up phone sign-in approvals; legacy phones confirm the FCM request on that same phone.
+3. Verify one-phone enrollment, a second-device transfer, browser approve/deny, manual-code fallback, expiry, replay, and session revoke in staging with synthetic accounts.
+4. Only then deploy the Worker and migration together. Do not apply remote migrations as part of local verification.
 
-- Firebase validates identities; the Cloudflare Worker validates Firebase ID-token signature, project audience, issuer, expiry and verified email at the API boundary.
-- D1 rows are scoped by Firebase UID. Web sessions are separately stored and revoked by logout, device replacement, and account deletion.
-- Email/password reset remains available. Google, email-link, and authorized web-domain configuration is enabled in Firebase; authentication submissions and link delivery still require controlled live verification.
-- The email-link mode currently shares the existing Firebase Auth user and D1 schema; it introduces no new identity table or database migration.
+Rollback should revert the Worker before changing table shape. Keep the additive tables/columns until the rollback window closes; do not drop old code or rows during rollout.
 
-See [Firebase setup](../development/FIREBASE_SETUP.md), [account security](../security/ACCOUNT_SECURITY.md), and the [API contract](API_CONTRACT.md) for operational details.
+## Verification evidence
+
+- `cd web && npm test`: 14 Worker tests pass, including untrusted-code retrieval denial, signed phone approval, one-use enrollment nonce, foreign installation-ID rejection, recent-auth snapshot deletion, session listing/revocation, server-side sync pause, and challenge expiry/attempt limits.
+- All nine D1 migrations execute in order against a temporary SQLite database; the new session-management and sync-gate columns are present.
+- `cd android && ANDROID_HOME=/home/inian/Android/Sdk ./gradlew testDebugUnitTest assembleRelease`: passed. The physical phone currently runs the production API build; this feature branch has not been installed or exercised on-device because its Worker and migrations are intentionally undeployed.
+- Firebase live sign-in, real FCM, browser approval on a real account, and physical Keystore behavior still require staging configuration and controlled verification.
+
+## Recovery boundary
+
+There is no safe self-service path when a user loses every enrolled approval phone. This branch deliberately does not let a new Firebase-authenticated app approve itself. A separate recovery mechanism needs an independent verification channel, a delay, and a way for an existing device to cancel the request; until that is designed and verified, recovery is incomplete.
+
+See [account security](../security/ACCOUNT_SECURITY.md), [Firebase setup](../development/FIREBASE_SETUP.md), and the [API contract](API_CONTRACT.md).

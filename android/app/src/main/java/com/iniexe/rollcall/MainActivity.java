@@ -1548,6 +1548,19 @@ public class MainActivity extends Activity {
         methods.setLineSpacing(dp(2), 1f);
         sheet.addView(methods, topMargin(-1, -2, 12));
         SharedPreferences cloudPrefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        sheet.addView(text("PHONE APPROVAL", 10, darkTheme ? HERO : INK, Typeface.BOLD), topMargin(-1, -2, 14));
+        boolean approvalReady = existing.getUid().equals(cloudPrefs.getString("approval_uid", ""))
+                && CloudAccountClient.deviceId(this).equals(cloudPrefs.getString("approval_device_id", ""));
+        sheet.addView(text(approvalReady ? "This phone can approve web sign-ins." : "Set up a secure phone key to approve web sign-ins.",
+                12, approvalReady ? SECONDARY : MUTED, Typeface.NORMAL), topMargin(-1, -2, 4));
+        String registrationError = existing.getUid().equals(cloudPrefs.getString("app_registration_uid", ""))
+                ? cloudPrefs.getString("app_registration_error", "") : "";
+        boolean appConnected = existing.getUid().equals(cloudPrefs.getString("trusted_app_uid", ""))
+                && CloudAccountClient.deviceId(this).equals(cloudPrefs.getString("trusted_app_device_id", ""));
+        sheet.addView(text("APP NOTIFICATIONS", 10, darkTheme ? HERO : INK, Typeface.BOLD), topMargin(-1, -2, 12));
+        sheet.addView(text(registrationError.isEmpty() ? (appConnected ? "This app can receive account notifications." : "App connection has not been confirmed yet.")
+                        : "Could not connect this app: " + registrationError,
+                12, registrationError.isEmpty() ? MUTED : RED, Typeface.NORMAL), topMargin(-1, -2, 4));
         boolean syncEnabled = existing.getUid().equals(cloudPrefs.getString("cloud_sync_uid", ""));
         boolean deviceLinked = existing.getUid().equals(cloudPrefs.getString("registered_uid", ""))
                 && CloudAccountClient.deviceId(this).equals(cloudPrefs.getString("registered_device_id", ""));
@@ -1562,6 +1575,17 @@ public class MainActivity extends Activity {
                 accountState == RollCallAuthState.Status.SIGNED_IN_UNVERIFIED ? AMBER : MUTED,
                 Typeface.NORMAL), topMargin(-1, -2, 8));
 
+        LinearLayout sessionList = new LinearLayout(this);
+        sessionList.setOrientation(LinearLayout.VERTICAL);
+        TextView sessionSummary = text("Loading active browser sessions…", 12, MUTED, Typeface.NORMAL);
+        if (existing.isEmailVerified()) {
+            sheet.addView(text("WEB SESSIONS", 10, darkTheme ? HERO : INK, Typeface.BOLD), topMargin(-1, -2, 14));
+            sheet.addView(sessionSummary, topMargin(-1, -2, 5));
+            sheet.addView(sessionList, topMargin(-1, -2, 2));
+            addCloudAccountAction(sheet, null, "Sign out all browsers", false,
+                    () -> beginSensitiveAccountActionReauthentication(existing, "revoke_all_sessions"));
+        }
+
         AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet).create();
         if (!existing.isEmailVerified()) {
             addCloudAccountAction(sheet, dialog, "Resend verification", false, () -> existing.sendEmailVerification()
@@ -1570,9 +1594,27 @@ public class MainActivity extends Activity {
         } else {
             if (!googleProviderLinked) addCloudAccountAction(sheet, dialog, "Connect Google account", false, () -> startGoogleSignIn(true));
             if (!emailProviderLinked) addCloudAccountAction(sheet, dialog, "Connect email sign-in", false, this::promptEmailLinkToAccount);
+            if (!approvalReady) addCloudAccountAction(sheet, dialog, "Set up phone sign-in approvals", false, () -> setupApprovalDevice(null));
+            sheet.addView(text("CLOUD SYNC", 10, darkTheme ? HERO : INK, Typeface.BOLD), topMargin(-1, -2, 14));
+            long lastSyncAt = existing.getUid().equals(cloudPrefs.getString("cloud_last_sync_uid", ""))
+                    ? cloudPrefs.getLong("cloud_last_sync_at", 0L) : 0L;
+            String syncError = existing.getUid().equals(cloudPrefs.getString("cloud_last_sync_uid", ""))
+                    ? cloudPrefs.getString("cloud_last_sync_error", "") : "";
+            sheet.addView(text(syncEnabled
+                            ? "Last successful upload: " + (lastSyncAt > 0 ? relativeAge(lastSyncAt) : "Not yet uploaded from this phone")
+                            : "Uploads are paused. Any existing cloud snapshot remains stored.",
+                    12, MUTED, Typeface.NORMAL), topMargin(-1, -2, 4));
+            if (!syncError.isEmpty()) sheet.addView(text("Last upload issue: " + syncError, 12, RED, Typeface.NORMAL), topMargin(-1, -2, 4));
+            if (!appConnected || !registrationError.isEmpty()) addCloudAccountAction(sheet, dialog, "Retry app connection", false,
+                    () -> CloudAccountClient.registerCurrentApp(this));
             addCloudAccountAction(sheet, dialog, syncEnabled ? "Reconnect this phone" : "Connect this phone and enable sync", false,
                     () -> confirmCloudSyncAndConnect());
+            if (syncEnabled) addCloudAccountAction(sheet, dialog, "Retry cloud upload", false, () -> {
+                CloudAccountClient.enqueueSnapshotSync(this);
+                Toast.makeText(this, "Cloud upload queued.", Toast.LENGTH_SHORT).show();
+            });
             if (syncEnabled) addCloudAccountAction(sheet, dialog, "Turn off cloud sync", false, this::disableCloudSync);
+            addCloudAccountAction(sheet, dialog, "Delete cloud copy", true, this::confirmDeleteCloudSnapshot);
         }
         addCloudAccountAction(sheet, dialog, "Delete Rollcall account", true, this::confirmCloudAccountDelete);
         addCloudAccountAction(sheet, dialog, "Sign out", false, this::signOutCloudAccount);
@@ -1582,6 +1624,7 @@ public class MainActivity extends Activity {
         close.setOnClickListener(v -> dialog.dismiss());
         sheet.addView(close, topMargin(-1, -2, 8));
         dialog.show();
+        if (existing.isEmailVerified()) loadBrowserSessions(existing, sessionSummary, sessionList, dialog);
         if (dialog.getWindow() != null) {
             dialog.getWindow().setGravity(android.view.Gravity.BOTTOM);
             dialog.getWindow().setBackgroundDrawable(background(SURFACE, BORDER, 20));
@@ -1603,7 +1646,58 @@ public class MainActivity extends Activity {
         parent.addView(row, topMargin(-1, -2, 8));
         row.setClickable(true);
         row.setFocusable(true);
-        row.setOnClickListener(view -> { dialog.dismiss(); action.run(); });
+        row.setOnClickListener(view -> { if (dialog != null) dialog.dismiss(); action.run(); });
+    }
+
+    private void loadBrowserSessions(FirebaseUser user, TextView summary, LinearLayout list, AlertDialog dialog) {
+        new Thread(() -> {
+            org.json.JSONArray sessions = null;
+            Exception failure = null;
+            try {
+                String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
+                sessions = CloudAccountClient.webSessions(token).optJSONArray("sessions");
+            } catch (Exception error) { failure = error; }
+            org.json.JSONArray result = sessions;
+            Exception error = failure;
+            runOnUiThread(() -> {
+                if (isFinishing() || !dialog.isShowing()) return;
+                list.removeAllViews();
+                if (error != null || result == null) {
+                    summary.setText("Could not load browser sessions. Check your connection and reopen this page to retry.");
+                    summary.setTextColor(RED);
+                    return;
+                }
+                summary.setText(result.length() == 1 ? "1 active browser session" : result.length() + " active browser sessions");
+                for (int i = 0; i < result.length(); i++) {
+                    org.json.JSONObject session = result.optJSONObject(i);
+                    if (session == null) continue;
+                    String sessionId = session.optString("session_id", "");
+                    if (!sessionId.matches("[A-Za-z0-9_-]{20,100}")) continue;
+                    LinearLayout row = new LinearLayout(this);
+                    row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                    row.setPadding(dp(12), dp(8), dp(8), dp(8));
+                    row.setBackground(background(SECONDARY, BORDER, 10));
+                    LinearLayout details = new LinearLayout(this);
+                    details.setOrientation(LinearLayout.VERTICAL);
+                    TextView browser = text(session.optString("user_agent", "Browser session"), 11, INK, Typeface.BOLD);
+                    browser.setMaxLines(2);
+                    TextView lastActive = text("Last active " + relativeAge(session.optLong("last_used_at", 0) * 1000L), 11, MUTED, Typeface.NORMAL);
+                    details.addView(browser);
+                    details.addView(lastActive, topMargin(-1, -2, 3));
+                    row.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
+                    TextView revoke = text("Revoke", 12, RED, Typeface.BOLD);
+                    revoke.setPadding(dp(8), dp(10), dp(8), dp(10));
+                    row.addView(revoke);
+                    revoke.setClickable(true);
+                    revoke.setFocusable(true);
+                    revoke.setOnClickListener(view -> {
+                        dialog.dismiss();
+                        beginSensitiveAccountActionReauthentication(user, "revoke_session:" + sessionId);
+                    });
+                    list.addView(row, topMargin(-1, -2, 5));
+                }
+            });
+        }, "rollcall-web-sessions").start();
     }
 
     private void showCloudCredentials() {
@@ -1723,17 +1817,21 @@ public class MainActivity extends Activity {
 
     private void completeRollCallEmailLink(RollCallAuthRepository repository, String email, String link,
                                            boolean linking, boolean reauth, String expectedUid) {
+        SharedPreferences prefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
         try {
             if (reauth) {
                 repository.reauthenticateWithEmailLink(email.trim(), link, expectedUid).addOnCompleteListener(this, task -> {
                     if (!task.isSuccessful()) {
+                        prefs.edit().remove("pending_account_action").apply();
                         Exception error = task.getException() instanceof Exception ? (Exception) task.getException()
                                 : new IllegalStateException("Account verification failed.");
                         Toast.makeText(this, RollCallAuthRepository.userMessage(error), Toast.LENGTH_LONG).show();
                         return;
                     }
+                    String action = prefs.getString("pending_account_action", "delete_account");
                     clearEmailLinkState();
-                    deleteReauthenticatedCloudAccount();
+                    prefs.edit().remove("pending_account_action").apply();
+                    performReauthenticatedAccountAction(action);
                 });
                 return;
             }
@@ -1776,10 +1874,30 @@ public class MainActivity extends Activity {
     }
 
     private void disableCloudSync() {
-        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("cloud_sync_uid").apply();
-        WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("rollcall-cloud-snapshot");
-        Toast.makeText(this, "Cloud sync is off. The web copy remains in your account; local attendance is unchanged.", Toast.LENGTH_LONG).show();
-        if (connectedOnce) showAbout();
+        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Pause cloud sync?")
+                .setMessage("Rollcall will stop future uploads. Your existing cloud copy stays in your account, and local attendance remains on this phone.")
+                .setPositiveButton("Pause sync", (d, w) -> pauseCloudSyncAfterConfirmation()).setNegativeButton("Keep syncing", null).show();
+    }
+
+    private void pauseCloudSyncAfterConfirmation() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
+        new Thread(() -> {
+            try {
+                String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
+                CloudAccountClient.pauseCloudSync(token);
+                WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("rollcall-cloud-snapshot");
+                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("cloud_sync_uid").apply();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Cloud sync paused. Your cloud copy is still stored.", Toast.LENGTH_LONG).show();
+                    if (connectedOnce) showAbout();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this, error.getMessage() == null
+                        ? "Could not pause cloud sync on the server. Check your connection and retry."
+                        : error.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-pause-cloud-sync").start();
     }
 
     private void startGoogleSignIn(boolean linkToCurrentAccount) {
@@ -1842,6 +1960,90 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Not now", null).show();
     }
 
+    private void setupApprovalDevice(String replacementCode) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) return;
+        new Thread(() -> {
+            try {
+                String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                CloudAccountClient.enrollApprovalDevice(this, token, replacementCode);
+                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit()
+                        .putString("approval_uid", user.getUid()).putString("approval_device_id", CloudAccountClient.deviceId(this)).apply();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "This phone is ready to approve Rollcall sign-ins.", Toast.LENGTH_LONG).show();
+                    showCloudAccountDialog();
+                });
+            } catch (Exception error) {
+                CloudAccountClient.ApiException apiError = error instanceof CloudAccountClient.ApiException
+                        ? (CloudAccountClient.ApiException) error : null;
+                if (apiError != null && "approval_key_enrollment_required".equals(apiError.code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.beginLegacyApprovalEnrollment(token, CloudAccountClient.deviceId(this));
+                        runOnUiThread(() -> Toast.makeText(this, "A secure setup request was sent to this phone. Tap its Rollcall notification to finish.", Toast.LENGTH_LONG).show());
+                    } catch (Exception requestError) {
+                        runOnUiThread(() -> Toast.makeText(this, "Could not start secure phone setup. Check notifications and retry.", Toast.LENGTH_LONG).show());
+                    }
+                } else if (apiError != null && "replacement_code_required".equals(apiError.code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.sendDeviceReplacementCode(token, CloudAccountClient.deviceId(this));
+                        runOnUiThread(() -> promptApprovalReplacementCode(null));
+                    } catch (Exception requestError) {
+                        runOnUiThread(() -> Toast.makeText(this, "Could not reach an enrolled Rollcall phone. Open it and try again.", Toast.LENGTH_LONG).show());
+                    }
+                } else if (apiError != null && "replacement_code_invalid".equals(apiError.code)) {
+                    runOnUiThread(() -> promptApprovalReplacementCode("That code was not accepted. Check the notification on your enrolled phone."));
+                } else if (apiError != null && "replacement_code_expired".equals(apiError.code)) {
+                    try {
+                        String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.sendDeviceReplacementCode(token, CloudAccountClient.deviceId(this));
+                        runOnUiThread(() -> promptApprovalReplacementCode("That code expired. A new one was sent to your enrolled phone."));
+                    } catch (Exception requestError) {
+                        runOnUiThread(() -> Toast.makeText(this, "Could not send a fresh approval code.", Toast.LENGTH_LONG).show());
+                    }
+                } else if (apiError != null && "recent_auth_required".equals(apiError.code)) {
+                    runOnUiThread(() -> beginSensitiveAccountActionReauthentication(user, "enroll_approval"));
+                } else {
+                    String message = error.getMessage() == null ? "Could not secure this phone." : error.getMessage();
+                    runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                }
+            }
+        }, "rollcall-approval-enroll").start();
+    }
+
+    private void promptApprovalReplacementCode(String problem) {
+        EditText code = new EditText(this);
+        code.setSingleLine(true);
+        code.setTextColor(INK);
+        code.setHintTextColor(MUTED);
+        code.setHint("6-digit code");
+        code.setTextSize(18);
+        code.setTypeface(appBoldTypeface);
+        code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        code.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(6)});
+        code.setPadding(dp(14), 0, dp(14), 0);
+        code.setBackground(background(SURFACE, BORDER, 10));
+        code.setMinHeight(dp(52));
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(8), dp(24), 0);
+        content.addView(text("Enter the one-time code sent to your enrolled Rollcall phone. It expires in 10 minutes.", 13, MUTED, Typeface.NORMAL));
+        if (problem != null) content.addView(text(problem, 12, RED, Typeface.BOLD), topMargin(-1, -2, 8));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(54));
+        params.topMargin = dp(14);
+        content.addView(code, params);
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Approve this phone")
+                .setView(content).setPositiveButton("Continue", null).setNegativeButton("Cancel", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String value = code.getText().toString().trim();
+            if (!value.matches("[0-9]{6}")) { code.setError("Enter the six-digit code."); return; }
+            dialog.dismiss();
+            setupApprovalDevice(value);
+        }));
+        dialog.show();
+    }
+
     private void styleCloudCredentialField(EditText field, String hint) {
         field.setSingleLine(true);
         field.setTextColor(INK);
@@ -1895,7 +2097,7 @@ public class MainActivity extends Activity {
             try {
                 String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                 String fcm = Tasks.await(FirebaseMessaging.getInstance().getToken(), 20, TimeUnit.SECONDS);
-                CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, replacementCode);
+                CloudAccountClient.registerDevice(token, CloudAccountClient.deviceId(this), fcm, replacementCode, true);
                 getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit()
                         .putString("registered_device_id", CloudAccountClient.deviceId(this))
                         .putString("registered_uid", user.getUid())
@@ -2000,6 +2202,19 @@ public class MainActivity extends Activity {
     }
 
     private void beginAccountDeletionReauthentication(FirebaseUser user) {
+        beginSensitiveAccountActionReauthentication(user, "delete_account");
+    }
+
+    private void confirmDeleteCloudSnapshot() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
+        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Delete cloud copy")
+                .setMessage("This permanently removes the synced Rollcall snapshot and pauses future uploads on this phone. Attendance stored locally on this phone is kept.")
+                .setPositiveButton("Delete cloud copy", (d, w) -> beginSensitiveAccountActionReauthentication(user, "delete_snapshot"))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void beginSensitiveAccountActionReauthentication(FirebaseUser user, String action) {
         boolean google = false, email = false;
         for (com.google.firebase.auth.UserInfo provider : user.getProviderData()) {
             google |= "google.com".equals(provider.getProviderId());
@@ -2011,18 +2226,70 @@ public class MainActivity extends Activity {
                 @Override public void onToken(String token) {
                     new RollCallAuthRepository(MainActivity.this).reauthenticateWithGoogle(token)
                             .addOnCompleteListener(MainActivity.this, task -> {
-                                if (task.isSuccessful()) deleteReauthenticatedCloudAccount();
-                                else Toast.makeText(MainActivity.this, task.getException() == null ? "Google verification failed. Account was not deleted."
+                                if (task.isSuccessful()) performReauthenticatedAccountAction(action);
+                                else Toast.makeText(MainActivity.this, task.getException() == null ? "Google verification failed. No cloud data was changed."
                                         : RollCallAuthRepository.userMessage(task.getException()), Toast.LENGTH_LONG).show();
                             });
                 }
                 @Override public void onError(String message) { Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); }
             });
         } else if (email && user.getEmail() != null) {
-            new RollCallAuthRepository(this).sendEmailReauthenticationLink(user.getEmail()).addOnCompleteListener(this, task ->
-                    Toast.makeText(this, task.isSuccessful() ? "A secure confirmation link was sent to your account email. Open it on this device to finish deleting the account."
-                            : "Could not send a confirmation link. Your account was not deleted.", Toast.LENGTH_LONG).show());
-        } else Toast.makeText(this, "This account has no supported sign-in method for secure deletion. Contact support.", Toast.LENGTH_LONG).show();
+            getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putString("pending_account_action", action).apply();
+            new RollCallAuthRepository(this).sendEmailReauthenticationLink(user.getEmail()).addOnCompleteListener(this, task -> {
+                if (!task.isSuccessful()) getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("pending_account_action").apply();
+                Toast.makeText(this, task.isSuccessful() ? "A secure confirmation link was sent to your account email. Open it on this device to continue."
+                        : "Could not send a confirmation link. No cloud data was changed.", Toast.LENGTH_LONG).show();
+            });
+        } else Toast.makeText(this, "This account has no supported sign-in method for secure confirmation.", Toast.LENGTH_LONG).show();
+    }
+
+    private void performReauthenticatedAccountAction(String action) {
+        if ("delete_snapshot".equals(action)) deleteReauthenticatedCloudSnapshot();
+        else if ("revoke_all_sessions".equals(action)) revokeReauthenticatedWebSessions(null);
+        else if (action != null && action.startsWith("revoke_session:")) revokeReauthenticatedWebSessions(action.substring("revoke_session:".length()));
+        else if ("enroll_approval".equals(action)) setupApprovalDevice(null);
+        else deleteReauthenticatedCloudAccount();
+    }
+
+    private void revokeReauthenticatedWebSessions(String sessionId) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) return;
+        new Thread(() -> {
+            try {
+                String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                if (sessionId == null) CloudAccountClient.revokeAllWebSessions(token);
+                else CloudAccountClient.revokeWebSession(token, sessionId);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, sessionId == null ? "All browser sessions signed out." : "Browser session revoked.", Toast.LENGTH_LONG).show();
+                    showCloudAccountDialog();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this, error.getMessage() == null
+                        ? "Could not revoke browser sessions. Try again while online." : error.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-revoke-web-session").start();
+    }
+
+    private void deleteReauthenticatedCloudSnapshot() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) return;
+        new Thread(() -> {
+            try {
+                String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                CloudAccountClient.deleteCloudSnapshot(token);
+                WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("rollcall-cloud-snapshot");
+                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("cloud_sync_uid")
+                        .remove("cloud_last_sync_uid").remove("cloud_last_sync_at").remove("cloud_last_sync_error").apply();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Cloud copy deleted. Local attendance remains on this phone.", Toast.LENGTH_LONG).show();
+                    showAbout();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this, error.getMessage() == null
+                        ? "Could not delete the cloud copy. Check your connection and try again."
+                        : error.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-delete-cloud-snapshot").start();
     }
 
     private void deleteReauthenticatedCloudAccount() {
@@ -2048,38 +2315,88 @@ public class MainActivity extends Activity {
 
     private void showPendingWebCode(String challengeId) {
         if (challengeId == null || challengeId.isEmpty()) return;
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser(); if (user == null || !user.isEmailVerified()) { Toast.makeText(this, "Sign in to your Rollcall account to retrieve the web code.", Toast.LENGTH_LONG).show(); return; }
+        SharedPreferences prefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        String code = prefs.getString("pending_web_login_code", "");
+        String matchCode = prefs.getString("pending_web_match_code", "");
+        long expiresAt = prefs.getLong("pending_web_expires_at", 0L);
+        prefs.edit().remove("pending_web_challenge_id").remove("pending_web_login_code")
+                .remove("pending_web_match_code").remove("pending_web_expires_at").apply();
+        if (!code.matches("[0-9]{6}") || expiresAt <= System.currentTimeMillis() / 1000L) {
+            Toast.makeText(this, "This web sign-in request expired. Request a new one in your browser.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) {
+            Toast.makeText(this, "Sign in to the matching Rollcall account to review this request.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        boolean hasKey = false;
+        try { hasKey = ApprovalKeyStore.hasKey(user.getUid()); } catch (Exception ignored) { }
+        if (!hasKey) { showWebLoginCode(code); return; }
+        final String approvalNumber = matchCode;
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("New Rollcall web sign-in")
+                .setMessage("Compare this number with the number shown in your browser:\n\n" + approvalNumber
+                        + "\n\nApprove only if they match and you started this sign-in.")
+                .setPositiveButton("Approve", (d, w) -> respondToWebLogin(challengeId, approvalNumber, true))
+                .setNegativeButton("Not me", (d, w) -> respondToWebLogin(challengeId, approvalNumber, false))
+                .setNeutralButton("Use code instead", (d, w) -> showWebLoginCode(code)).create();
+        dialog.show();
+        dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    private void showWebLoginCode(String value) {
+        CodeSlotsView slots = new CodeSlotsView(this, SECONDARY, INK, HERO);
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Web sign-in code")
+                .setMessage("Enter this one-time code in your browser. It expires in 5 minutes.")
+                .setView(slots)
+                .setPositiveButton("Copy code", (d, which) -> {
+                    android.content.ClipData clip = android.content.ClipData.newPlainText("Rollcall web code", value);
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        android.os.PersistableBundle extras = new android.os.PersistableBundle();
+                        extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
+                        clip.getDescription().setExtras(extras);
+                    }
+                    ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(clip);
+                })
+                .setNegativeButton("Done", null).create();
+        dialog.show();
+        dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        slots.setCode(value);
+    }
+
+    private void respondToWebLogin(String challengeId, String matchCode, boolean approve) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
         new Thread(() -> {
             try {
                 String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
-                JSONObject result = CloudAccountClient.fetchPendingCode(token, CloudAccountClient.deviceId(this), challengeId);
-                runOnUiThread(() -> {
-                    String value = result.optString("code", "");
-                    if (!value.matches("[0-9]{6}")) {
-                        Toast.makeText(this, "The web sign-in code is unavailable. Request a new one in your browser.", Toast.LENGTH_LONG).show();
-                        return;
+                CloudAccountClient.respondToWebLogin(token, CloudAccountClient.deviceId(this), challengeId, matchCode, approve);
+                runOnUiThread(() -> Toast.makeText(this, approve ? "Sign-in approved in your browser." : "Sign-in denied.", Toast.LENGTH_LONG).show());
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this, "Could not send your response. The request may have expired.", Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-web-approval").start();
+    }
+
+    private void confirmApprovalKeyEnrollment(String requestId, String nonce) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) return;
+        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle("Secure this Rollcall phone")
+                .setMessage("This phone can approve web sign-ins and authorize another Rollcall phone. The approval key stays in Android Keystore. Continue only if you requested this setup.")
+                .setPositiveButton("Enable approvals", (d, w) -> new Thread(() -> {
+                    try {
+                        String token = Tasks.await(user.getIdToken(false), 20, TimeUnit.SECONDS).getToken();
+                        CloudAccountClient.completeLegacyApprovalEnrollment(token, CloudAccountClient.deviceId(this), requestId, nonce);
+                        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit()
+                                .putString("approval_uid", user.getUid()).putString("approval_device_id", CloudAccountClient.deviceId(this)).apply();
+                        runOnUiThread(() -> Toast.makeText(this, "This phone is ready to approve Rollcall sign-ins.", Toast.LENGTH_LONG).show());
+                    } catch (Exception error) {
+                        runOnUiThread(() -> Toast.makeText(this, "Could not secure this phone. Open the Rollcall account settings and retry.", Toast.LENGTH_LONG).show());
                     }
-                    CodeSlotsView slots = new CodeSlotsView(this, SECONDARY, INK, HERO);
-                    AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
-                            .setTitle("Web sign-in code")
-                            .setMessage("Copy this six-digit code into your browser. It expires in 5 minutes.")
-                            .setView(slots)
-                            .setPositiveButton("Copy code", (d, which) -> {
-                                android.content.ClipData clip = android.content.ClipData.newPlainText("Rollcall web code", value);
-                                if (Build.VERSION.SDK_INT >= 33) {
-                                    android.os.PersistableBundle extras = new android.os.PersistableBundle();
-                                    extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
-                                    clip.getDescription().setExtras(extras);
-                                }
-                                ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(clip);
-                            })
-                            .setNegativeButton("Done", null).create();
-                    dialog.show();
-                    dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-                    slots.setCode(value);
-                });
-            } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "The web sign-in code expired or this is not the trusted phone.", Toast.LENGTH_LONG).show()); }
-        }, "rollcall-web-code").start();
+                }, "rollcall-approval-key").start())
+                .setNegativeButton("Not now", null).show();
     }
 
     private View holdToConfirm(String labelText, int accent, Runnable confirmed) {
@@ -3493,10 +3810,9 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         String launchChallenge = getIntent() == null ? null : getIntent().getStringExtra("rollcall_web_challenge_id");
-        if (launchChallenge != null) {
-            getIntent().removeExtra("rollcall_web_challenge_id");
-            getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putString("pending_web_challenge_id", launchChallenge).apply();
-        }
+        if (launchChallenge != null) getIntent().removeExtra("rollcall_web_challenge_id");
+        String launchApprovalKey = getIntent() == null ? null : getIntent().getStringExtra("rollcall_approval_key_request");
+        if (launchApprovalKey != null) getIntent().removeExtra("rollcall_approval_key_request");
         FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
         SharedPreferences cloudAccountPrefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
         if (cloudUser != null && cloudUser.isEmailVerified()
@@ -3506,10 +3822,17 @@ public class MainActivity extends Activity {
         if (cloudUser != null && CloudSyncPolicy.allowsUpload(cloudUser.getUid(), cloudAccountPrefs.getString("cloud_sync_uid", ""))
                 && !CloudAccountClient.deviceId(this).equals(cloudAccountPrefs.getString("registered_device_id", "")))
             cloudUser.reload().addOnCompleteListener(task -> { if (task.isSuccessful() && cloudUser.isEmailVerified()) registerCloudDevice(null); });
-        String challengeId = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("pending_web_challenge_id", "");
+        SharedPreferences approvalPrefs = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE);
+        String challengeId = approvalPrefs.getString("pending_web_challenge_id", "");
         if (!challengeId.isEmpty()) {
-            getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("pending_web_challenge_id").apply();
+            approvalPrefs.edit().remove("pending_web_challenge_id").apply();
             handler.postDelayed(() -> showPendingWebCode(challengeId), 2800L);
+        }
+        String keyRequest = approvalPrefs.getString("pending_approval_key_request", "");
+        String keyNonce = approvalPrefs.getString("pending_approval_key_nonce", "");
+        if (!keyRequest.isEmpty() && !keyNonce.isEmpty()) {
+            approvalPrefs.edit().remove("pending_approval_key_request").remove("pending_approval_key_nonce").apply();
+            handler.postDelayed(() -> confirmApprovalKeyEnrollment(keyRequest, keyNonce), challengeId.isEmpty() ? 900L : 6500L);
         }
         if (dashboardView != null && dashboard != null && dashboard.getVisibility() == View.VISIBLE)
             dashboardView.restoreSelectedPage();
@@ -3527,11 +3850,9 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleRollCallEmailLink(intent);
-        String challengeId = intent.getStringExtra("rollcall_web_challenge_id");
         intent.removeExtra("rollcall_web_challenge_id");
-        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().remove("pending_web_challenge_id").apply();
+        intent.removeExtra("rollcall_approval_key_request");
         routeWidgetLaunch(intent);
-        if (challengeId != null) handler.postDelayed(() -> showPendingWebCode(challengeId), 450L);
     }
 
     @Override protected void onPause() {

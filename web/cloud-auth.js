@@ -16,13 +16,17 @@ const passwordToggle = document.querySelector('#web-password-toggle');
 const resetPassword = document.querySelector('#web-reset-password');
 const linkGoogle = document.querySelector('#web-link-google');
 const codeRow = document.querySelector('#web-code-row');
+const approvalRow = document.querySelector('#web-approval-row');
+const approvalNumber = document.querySelector('#web-approval-number');
+const approvalStatus = document.querySelector('#web-approval-status');
+const useCode = document.querySelector('#web-use-code');
 const resend = document.querySelector('#web-resend-code');
 const submit = document.querySelector('#web-account-submit');
 const googleButton = document.querySelector('#web-google-signin');
 const emailButton = document.querySelector('#web-email-link');
 const accountButton = document.querySelector('#web-account-button');
 let auth, stage = 'choose', challengeId = '';
-let resendUntil = 0, resendTimer;
+let resendUntil = 0, resendTimer, approvalPollTimer, approvalPollBusy = false;
 
 function updateResend() {
   const seconds = Math.max(0, Math.ceil((resendUntil - Date.now()) / 1000));
@@ -73,22 +77,63 @@ async function requestCode(user) {
   const token = await user.getIdToken(true);
   const result = await api('auth/challenge', { method: 'POST', body: JSON.stringify({}), headers: { authorization: `Bearer ${token}` } });
   challengeId = result.challengeId;
-  stage = 'code';
-  codeRow.hidden = false;
-  form.elements.code.required = true;
+  stage = 'approval';
+  approvalRow.hidden = false;
+  approvalNumber.textContent = result.matchCode || '··';
+  approvalStatus.textContent = 'Waiting for approval on your phone…';
+  codeRow.hidden = true;
+  form.elements.code.required = false;
   resend.hidden = false;
   passwordRow.hidden = true;
   resetPassword.hidden = true;
   passwordToggle.hidden = true;
   googleButton.hidden = true;
   emailButton.hidden = true;
-  submit.hidden = false;
-  submit.textContent = 'Verify code';
+  submit.hidden = true;
   resendUntil = Date.now() + 30_000;
   clearInterval(resendTimer);
   resendTimer = setInterval(updateResend, 1000);
   updateResend();
-  message('A sign-in code was sent to your signed-in Rollcall apps. Enter the code from any one of them. It expires in 5 minutes.');
+  message('Open Rollcall on an enrolled phone. Compare the two-digit number and approve this browser request.');
+  pollApprovalStatus();
+  clearInterval(approvalPollTimer);
+  approvalPollTimer = setInterval(pollApprovalStatus, 2200);
+}
+
+async function pollApprovalStatus() {
+  if (stage !== 'approval' || !challengeId || approvalPollBusy) return;
+  approvalPollBusy = true;
+  try {
+    const result = await api('auth/status', { method: 'POST', body: JSON.stringify({ challengeId }) });
+    if (result.status === 'approved') {
+      clearInterval(approvalPollTimer); approvalPollTimer = undefined;
+      await signOut(auth);
+      stage = 'snapshot';
+      await showSnapshot();
+    } else if (result.status === 'denied') {
+      clearInterval(approvalPollTimer); approvalPollTimer = undefined;
+      approvalStatus.textContent = 'The request was denied. If this was not you, change your password.';
+      message('This browser sign-in was denied.', true);
+    }
+  } catch (error) {
+    if (error.status === 404 || error.status === 409) {
+      clearInterval(approvalPollTimer); approvalPollTimer = undefined;
+      approvalStatus.textContent = error.message;
+      message(error.message, true);
+    }
+  } finally { approvalPollBusy = false; }
+}
+
+function useVerificationCode() {
+  if (stage !== 'approval') return;
+  clearInterval(approvalPollTimer); approvalPollTimer = undefined;
+  stage = 'code';
+  approvalRow.hidden = true;
+  codeRow.hidden = false;
+  form.elements.code.required = true;
+  submit.hidden = false;
+  submit.textContent = 'Verify code';
+  form.elements.code.focus();
 }
 
 async function continueWithFirebaseUser(user) {
@@ -107,7 +152,8 @@ async function showSnapshot() {
 
 function prepareDialog() {
   stage = 'choose'; challengeId = '';
-  resend.hidden = true; codeRow.hidden = true; passwordRow.hidden = true;
+  clearInterval(approvalPollTimer); approvalPollTimer = undefined;
+  resend.hidden = true; codeRow.hidden = true; approvalRow.hidden = true; passwordRow.hidden = true;
   resetPassword.hidden = true; linkGoogle.hidden = !auth?.currentUser;
   passwordToggle.hidden = false; googleButton.hidden = false; emailButton.hidden = false;
   submit.hidden = true; form.elements.code.required = false;
@@ -122,6 +168,8 @@ function prepareDialog() {
   dialog.showModal();
   form.elements.email.focus();
 }
+
+useCode.addEventListener('click', useVerificationCode);
 
 accountButton.addEventListener('click', async () => {
   if (document.body.classList.contains('remote-data')) {
@@ -234,19 +282,19 @@ form.addEventListener('submit', async event => {
 
 dialog.addEventListener('close', () => {
   sessionStorage.setItem('rollcall-signin-dismissed', '1');
-  clearInterval(resendTimer); resend.hidden = true; resendUntil = 0;
-  form.reset(); stage = 'choose'; challengeId = ''; codeRow.hidden = true;
+  clearInterval(resendTimer); clearInterval(approvalPollTimer); approvalPollTimer = undefined; resend.hidden = true; resendUntil = 0;
+  form.reset(); stage = 'choose'; challengeId = ''; codeRow.hidden = true; approvalRow.hidden = true;
   passwordRow.hidden = true; resetPassword.hidden = true; submit.hidden = true;
   form.elements.password.required = false; form.elements.code.required = false;
 });
 
 resend.addEventListener('click', async () => {
-  if (stage !== 'code' || resend.disabled) return;
+  if (!['approval', 'code'].includes(stage) || resend.disabled) return;
   resend.disabled = true;
   try {
     await requestCode(auth.currentUser);
     form.elements.code.value = '';
-    message('A new sign-in code was sent to your signed-in Rollcall apps.');
+    message('A new approval request was sent to your enrolled Rollcall phone.');
   } catch (error) { message(error.message || 'Could not send a new approval request.', true); updateResend(); }
 });
 

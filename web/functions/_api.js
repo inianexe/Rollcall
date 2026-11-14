@@ -71,7 +71,7 @@ async function authFromHeader(request, env, requireVerified = true, requireRecen
   const user = await verifyFirebaseToken(match[1], env);
   if (requireVerified && !user.emailVerified) throw new Error("Verify your email address before using web sync.");
   if (requireRecent && (!Number.isFinite(user.authTime) || user.authTime > now() + 60 || now() - user.authTime > 5 * 60))
-    throw new Error("Sign in again before deleting your Rollcall account.");
+    throw new Error("Sign in again before this sensitive account action.");
   return user;
 }
 
@@ -80,7 +80,8 @@ async function sessionUser(request, env) {
   const token = request.headers.get("cookie")?.split(";").map(x => x.trim()).find(x => x.startsWith("rc_session="))?.slice("rc_session=".length);
   if (!token) return null;
   const hash = await digest(`${env.SESSION_HASH_KEY}:${token}`);
-  const row = await env.DB.prepare("SELECT uid FROM web_sessions WHERE session_hash=? AND expires_at>?").bind(hash, now()).first();
+  const row = await env.DB.prepare("SELECT uid,session_id FROM web_sessions WHERE session_hash=? AND expires_at>?").bind(hash, now()).first();
+  if (row) await env.DB.prepare("UPDATE web_sessions SET last_used_at=? WHERE session_id=?").bind(now(), row.session_id).run();
   return row?.uid || null;
 }
 
@@ -126,8 +127,8 @@ async function sendPushToDevices(env, tokens, data, ttl) {
   return results.filter(Boolean).length;
 }
 
-async function sendCodePush(env, tokens, uid, challengeId) {
-  return sendPushToDevices(env, tokens, { type: "web_login", uid, challengeId }, "300s");
+async function sendCodePush(env, tokens, uid, challengeId, code, expiresAt) {
+  return sendPushToDevices(env, tokens, { type: "web_login", uid, challengeId, code, matchCode: code.slice(0, 2), expiresAt: String(expiresAt) }, "300s");
 }
 
 async function encryptCode(code, env) {
@@ -138,11 +139,31 @@ async function encryptCode(code, env) {
   return { iv: b64url(iv), cipher: b64url(encrypted) };
 }
 
-async function decryptCode(row, env) {
-  const raw = Uint8Array.from(atob(env.OTP_ENCRYPTION_KEY), c => c.charCodeAt(0));
-  const key = await secretKey(raw, ["decrypt"]);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64url(row.code_iv) }, key, fromB64url(row.code_cipher));
-  return new TextDecoder().decode(plain);
+async function verifyApprovalSignature(publicKey, message, signature) {
+  try {
+    const key = await importApprovalKey(publicKey);
+    return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, fromB64url(signature), encoder.encode(message));
+  } catch (_) { return false; }
+}
+
+async function importApprovalKey(publicKey) {
+  const key = await crypto.subtle.importKey("spki", fromB64url(publicKey),
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  if (key.algorithm.modulusLength < 2048 || key.algorithm.modulusLength > 4096) throw new Error("Invalid approval key size.");
+  return key;
+}
+
+async function consumeReplacementCode(env, uid, code) {
+  if (!/^\d{6}$/.test(String(code || ""))) return { code: "replacement_code_invalid", error: "That app code was not accepted. Request a new code and try again." };
+  const row = await env.DB.prepare("SELECT code_hash FROM device_replacement_codes WHERE uid=? AND expires_at>? AND attempts<5 AND used_at IS NULL").bind(uid, now()).first();
+  if (!row) return { code: "replacement_code_expired", error: "That app code expired or reached its attempt limit. Request a fresh code." };
+  if (!constantEqual(await hmac(code, env.SESSION_HASH_KEY), row.code_hash)) {
+    const attempt = await env.DB.prepare("UPDATE device_replacement_codes SET attempts=attempts+1 WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(uid, now()).run();
+    if (!attempt.meta.changes) return { code: "replacement_code_expired", error: "That app code expired or reached its attempt limit. Request a fresh code." };
+    return { code: "replacement_code_invalid", error: "That app code was not accepted. Request a new code and try again." };
+  }
+  const claimed = await env.DB.prepare("UPDATE device_replacement_codes SET used_at=? WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(now(), uid, now()).run();
+  return claimed.meta.changes === 1 ? null : { code: "replacement_code_invalid", error: "That app code has expired or was already used. Request a new code." };
 }
 
 function makeOneTimeCode() {
@@ -150,11 +171,13 @@ function makeOneTimeCode() {
   return String(value).padStart(6, "0");
 }
 
-async function createWebSession(env, uid) {
+async function createWebSession(env, uid, request) {
   const token = b64url(random(32));
+  const sessionId = b64url(random(18));
   const createdAt = now();
-  await env.DB.prepare("INSERT INTO web_sessions(session_hash,uid,created_at,expires_at) VALUES(?,?,?,?)")
-    .bind(await digest(`${env.SESSION_HASH_KEY}:${token}`), uid, createdAt, createdAt + SESSION_TTL_SECONDS).run();
+  await env.DB.prepare("INSERT INTO web_sessions(session_hash,uid,created_at,expires_at,session_id,user_agent,last_used_at) VALUES(?,?,?,?,?,?,?)")
+    .bind(await digest(`${env.SESSION_HASH_KEY}:${token}`), uid, createdAt, createdAt + SESSION_TTL_SECONDS,
+      sessionId, String(request.headers.get("user-agent") || "").slice(0, 256), createdAt).run();
   return json({ ok: true }, 200, { "set-cookie": `rc_session=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}` });
 }
 
@@ -170,15 +193,16 @@ function normalizeSnapshot(input) {
 
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname, method = request.method;
-  if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "allow": "GET, POST, PUT, OPTIONS" } });
-  if ((method === "POST" || method === "PUT") && !sameOrigin(request)) return json({ error: "Invalid request origin." }, 403);
+  if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "allow": "GET, POST, PUT, DELETE, OPTIONS" } });
+  if ((method === "POST" || method === "PUT" || method === "DELETE") && !sameOrigin(request)) return json({ error: "Invalid request origin." }, 403);
 
   if (path === "/api/device/trust" && method === "POST") {
     const user = await authFromHeader(request, env), body = await readBody(request, 12000);
     if (!/^[\w-]{12,100}$/.test(String(body.deviceId || "")) || !String(body.fcmToken || "") || String(body.fcmToken).length > 4096)
       return json({ error: "Invalid device details." }, 400);
-    await env.DB.prepare("INSERT INTO app_devices(device_id,uid,fcm_token,updated_at) VALUES(?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET uid=excluded.uid,fcm_token=excluded.fcm_token,updated_at=excluded.updated_at")
+    const registration = await env.DB.prepare("INSERT INTO app_devices(device_id,uid,fcm_token,updated_at) VALUES(?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET fcm_token=excluded.fcm_token,updated_at=excluded.updated_at WHERE app_devices.uid=excluded.uid")
       .bind(body.deviceId, user.uid, body.fcmToken, now()).run();
+    if (!registration.meta.changes) return json({ error: "This app installation is already linked to another Rollcall account. Sign out there first.", code: "device_account_conflict" }, 409);
     return json({ ok: true });
   }
 
@@ -195,31 +219,88 @@ async function route(request, env) {
     const existing = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
     if (existing && existing.device_id !== body.deviceId) {
       if (!body.replacementCode) return json({ error: "A code from another signed-in Rollcall app is required to link this phone.", code: "replacement_code_required" }, 403);
-      if (!/^\d{6}$/.test(String(body.replacementCode))) return json({ error: "That app code was not accepted. Request a new code and try again.", code: "replacement_code_invalid" }, 403);
-      const codeRow = await env.DB.prepare("SELECT code_hash FROM device_replacement_codes WHERE uid=? AND expires_at>? AND attempts<5 AND used_at IS NULL").bind(user.uid, now()).first();
-      if (!codeRow) return json({ error: "That app code expired or reached its attempt limit. Request a fresh code.", code: "replacement_code_expired" }, 403);
-      if (!constantEqual(await hmac(body.replacementCode, env.SESSION_HASH_KEY), codeRow.code_hash)) {
-        const attempt = await env.DB.prepare("UPDATE device_replacement_codes SET attempts=attempts+1 WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(user.uid, now()).run();
-        if (!attempt.meta.changes) return json({ error: "That app code expired or reached its attempt limit. Request a fresh code.", code: "replacement_code_expired" }, 403);
-        return json({ error: "That app code was not accepted. Request a new code and try again.", code: "replacement_code_invalid" }, 403);
-      }
-      const claimed = await env.DB.prepare("UPDATE device_replacement_codes SET used_at=? WHERE uid=? AND used_at IS NULL AND expires_at>? AND attempts<5").bind(now(), user.uid, now()).run();
-      if (claimed.meta.changes !== 1) return json({ error: "That app code has expired or was already used. Request a new code.", code: "replacement_code_invalid" }, 403);
+      const codeError = await consumeReplacementCode(env, user.uid, body.replacementCode);
+      if (codeError) return json(codeError, 403);
       await env.DB.prepare("DELETE FROM web_sessions WHERE uid=?").bind(user.uid).run();
     }
-    await env.DB.prepare("INSERT INTO trusted_devices(uid,device_id,fcm_token,updated_at) VALUES(?,?,?,?) ON CONFLICT(uid) DO UPDATE SET device_id=excluded.device_id,fcm_token=excluded.fcm_token,updated_at=excluded.updated_at")
-      .bind(user.uid, body.deviceId, body.fcmToken, now()).run();
+    await env.DB.prepare("INSERT INTO trusted_devices(uid,device_id,fcm_token,updated_at,sync_enabled) VALUES(?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET device_id=excluded.device_id,fcm_token=excluded.fcm_token,updated_at=excluded.updated_at,sync_enabled=CASE WHEN excluded.sync_enabled=1 THEN 1 ELSE trusted_devices.sync_enabled END")
+      .bind(user.uid, body.deviceId, body.fcmToken, now(), body.enableSync === false ? 0 : 1).run();
     return json({ ok: true });
+  }
+
+  if (path === "/api/device/sync/pause" && method === "POST") {
+    const user = await authFromHeader(request, env);
+    await env.DB.prepare("UPDATE trusted_devices SET sync_enabled=0 WHERE uid=?").bind(user.uid).run();
+    return json({ ok: true, syncEnabled: false });
+  }
+
+  if (path === "/api/device/approval/enroll" && method === "POST") {
+    const user = await authFromHeader(request, env), body = await readBody(request, 12000);
+    const publicKey = String(body.publicKey || ""), fcmToken = String(body.fcmToken || "");
+    if (!/^[\w-]{12,100}$/.test(String(body.deviceId || "")) || fcmToken.length < 1 || fcmToken.length > 4096
+        || !/^[A-Za-z0-9_-]{300,4096}$/.test(publicKey)) return json({ error: "Invalid approval device details." }, 400);
+    try { await importApprovalKey(publicKey); } catch (_) { return json({ error: "This phone provided an invalid approval key." }, 400); }
+    const current = await env.DB.prepare("SELECT public_key FROM approval_devices WHERE uid=? AND device_id=?").bind(user.uid, body.deviceId).first();
+    if (current?.public_key === publicKey) {
+      await env.DB.prepare("UPDATE approval_devices SET fcm_token=?,updated_at=? WHERE uid=? AND device_id=?").bind(fcmToken, now(), user.uid, body.deviceId).run();
+      return json({ ok: true, enrolled: true });
+    }
+    if (current && !current.public_key)
+      return json({ error: "This existing phone must approve its own secure setup from the Rollcall notification.", code: "approval_key_enrollment_required" }, 409);
+    const devices = await env.DB.prepare("SELECT device_id FROM approval_devices WHERE uid=?").bind(user.uid).all();
+    if (devices.results?.length) {
+      if (!body.replacementCode) return json({ error: "A code from an enrolled Rollcall approval phone is required.", code: "replacement_code_required" }, 403);
+      const codeError = await consumeReplacementCode(env, user.uid, body.replacementCode);
+      if (codeError) return json(codeError, 403);
+    } else if (!Number.isFinite(user.authTime) || user.authTime > now() + 60 || now() - user.authTime > 5 * 60) {
+      return json({ error: "Sign in again before enrolling the first approval phone.", code: "recent_auth_required" }, 401);
+    }
+    const createdAt = now();
+    await env.DB.prepare("INSERT INTO approval_devices(device_id,uid,fcm_token,public_key,key_enrolled_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
+      .bind(body.deviceId, user.uid, fcmToken, publicKey, createdAt, createdAt, createdAt).run();
+    return json({ ok: true, enrolled: true });
+  }
+
+  if (path === "/api/device/approval/enroll-existing" && method === "POST") {
+    const user = await authFromHeader(request, env), body = await readBody(request, 3000);
+    const device = await env.DB.prepare("SELECT fcm_token,public_key FROM approval_devices WHERE uid=? AND device_id=?").bind(user.uid, body.deviceId).first();
+    if (!device || device.public_key) return json({ error: "This phone does not need legacy approval setup." }, 409);
+    await env.DB.prepare("DELETE FROM approval_enrollment_requests WHERE expires_at<=?").bind(now()).run();
+    const recent = await env.DB.prepare("SELECT created_at FROM approval_enrollment_requests WHERE uid=? ORDER BY created_at DESC LIMIT 1").bind(user.uid).first();
+    if (recent && recent.created_at > now() - 60) return json({ error: "A setup request was just sent. Wait a minute and try again." }, 429);
+    const requestId = b64url(random(18)), nonce = b64url(random(32)), createdAt = now();
+    await env.DB.prepare("INSERT INTO approval_enrollment_requests(id,uid,device_id,nonce_hash,created_at,expires_at,completed_at) VALUES(?,?,?,?,?,?,NULL)")
+      .bind(requestId, user.uid, body.deviceId, await digest(nonce), createdAt, createdAt + 300).run();
+    const delivered = await sendPushToDevices(env, [device.fcm_token], { type: "approval_key_enroll", uid: user.uid, deviceId: body.deviceId, requestId, nonce }, "300s").catch(() => 0);
+    if (!delivered) {
+      await env.DB.prepare("DELETE FROM approval_enrollment_requests WHERE id=?").bind(requestId).run();
+      return json({ error: "Could not reach this phone. Check its notifications and try again." }, 503);
+    }
+    return json({ ok: true, requestId, expiresAt: createdAt + 300 });
+  }
+
+  if (path === "/api/device/approval/enroll-complete" && method === "POST") {
+    const user = await authFromHeader(request, env), body = await readBody(request, 12000);
+    const requestId = String(body.requestId || ""), nonce = String(body.nonce || ""), publicKey = String(body.publicKey || "");
+    if (!/^[A-Za-z0-9_-]{16,100}$/.test(requestId) || !/^[A-Za-z0-9_-]{32,100}$/.test(nonce)
+        || !/^[A-Za-z0-9_-]{300,4096}$/.test(publicKey) || !/^[A-Za-z0-9_-]{300,4096}$/.test(String(body.signature || "")))
+      return json({ error: "Invalid approval setup proof." }, 400);
+    const requestRow = await env.DB.prepare("SELECT device_id,nonce_hash FROM approval_enrollment_requests WHERE id=? AND uid=? AND completed_at IS NULL AND expires_at>?").bind(requestId, user.uid, now()).first();
+    if (!requestRow || !constantEqual(await digest(nonce), requestRow.nonce_hash)) return json({ error: "This setup request expired. Start again from the phone." }, 401);
+    const signed = `rollcall:enroll-approval:v1\n${user.uid}\n${requestRow.device_id}\n${requestId}\n${nonce}`;
+    if (!await verifyApprovalSignature(publicKey, signed, body.signature)) return json({ error: "This phone could not prove its approval key." }, 403);
+    const claimed = await env.DB.prepare("UPDATE approval_enrollment_requests SET completed_at=? WHERE id=? AND uid=? AND completed_at IS NULL AND expires_at>?").bind(now(), requestId, user.uid, now()).run();
+    if (!claimed.meta.changes) return json({ error: "This setup request was already completed." }, 409);
+    const stored = await env.DB.prepare("UPDATE approval_devices SET public_key=?,key_enrolled_at=?,updated_at=? WHERE uid=? AND device_id=? AND public_key IS NULL").bind(publicKey, now(), now(), user.uid, requestRow.device_id).run();
+    if (!stored.meta.changes) return json({ error: "This phone is no longer waiting for secure setup." }, 409);
+    return json({ ok: true, enrolled: true });
   }
 
   if (path === "/api/device/replacement-code" && method === "POST") {
     const user = await authFromHeader(request, env), body = await readBody(request, 3000);
     if (!/^[\w-]{12,100}$/.test(String(body.deviceId || ""))) return json({ error: "Sign in to Rollcall on this phone first." }, 400);
-    const device = await env.DB.prepare("SELECT device_id,fcm_token FROM trusted_devices WHERE uid=?").bind(user.uid).first();
-    if (!device) return json({ error: "Connect your first phone before requesting a replacement code." }, 409);
-    const appDevices = await env.DB.prepare("SELECT device_id,fcm_token FROM app_devices WHERE uid=? AND device_id<>?").bind(user.uid, body.deviceId).all();
-    const recipients = [...new Set((appDevices.results || []).map(row => row.fcm_token).filter(Boolean))];
-    if (!recipients.length && device.device_id !== body.deviceId && device.fcm_token) recipients.push(device.fcm_token);
+    const enrolled = await env.DB.prepare("SELECT device_id,fcm_token FROM approval_devices WHERE uid=? AND device_id<>?").bind(user.uid, body.deviceId).all();
+    const recipients = [...new Set((enrolled.results || []).map(row => row.fcm_token).filter(Boolean))];
     if (!recipients.length) return json({ error: "Open Rollcall on another signed-in phone to receive the link code." }, 409);
     await env.DB.prepare("DELETE FROM device_replacement_sends WHERE created_at<?").bind(now() - 86400).run();
     const recent = await env.DB.prepare("SELECT created_at FROM device_replacement_sends WHERE uid=? ORDER BY created_at DESC LIMIT 1").bind(user.uid).first();
@@ -240,12 +321,8 @@ async function route(request, env) {
 
   if (path === "/api/auth/challenge" && method === "POST") {
     const user = await authFromHeader(request, env);
-    const devices = await env.DB.prepare("SELECT fcm_token FROM app_devices WHERE uid=?").bind(user.uid).all();
+    const devices = await env.DB.prepare("SELECT fcm_token FROM approval_devices WHERE uid=?").bind(user.uid).all();
     const appTokens = [...new Set((devices.results || []).map(row => row.fcm_token).filter(Boolean))];
-    if (!appTokens.length) {
-      const device = await env.DB.prepare("SELECT fcm_token FROM trusted_devices WHERE uid=?").bind(user.uid).first();
-      if (device?.fcm_token) appTokens.push(device.fcm_token);
-    }
     if (!appTokens.length) return json({ error: "Sign in to Rollcall on your phone to receive web sign-in codes." }, 409);
     await env.DB.prepare("DELETE FROM web_challenges WHERE uid=? AND (expires_at<=? OR consumed_at IS NOT NULL)").bind(user.uid, now()).run();
     await env.DB.prepare("DELETE FROM web_challenge_sends WHERE created_at<?").bind(now() - 86400).run();
@@ -256,39 +333,60 @@ async function route(request, env) {
     do { source = crypto.getRandomValues(new Uint32Array(1))[0]; } while (source >= 4294000000);
     const challengeId = b64url(random(18)), code = String(source % 1_000_000).padStart(6, "0");
     const encrypted = await encryptCode(code, env), expires = now() + 300;
-    await env.DB.prepare("INSERT INTO web_challenges(id,uid,code_hash,code_iv,code_cipher,expires_at,created_at) VALUES(?,?,?,?,?,?,?)")
-      .bind(challengeId, user.uid, await hmac(code, env.SESSION_HASH_KEY), encrypted.iv, encrypted.cipher, expires, now()).run();
-    try { await sendCodePush(env, appTokens, user.uid, challengeId); }
+    const matchCode = code.slice(0, 2);
+    await env.DB.prepare("INSERT INTO web_challenges(id,uid,code_hash,code_iv,code_cipher,expires_at,created_at,match_code) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(challengeId, user.uid, await hmac(code, env.SESSION_HASH_KEY), encrypted.iv, encrypted.cipher, expires, now(), matchCode).run();
+    try { await sendCodePush(env, appTokens, user.uid, challengeId, code, expires); }
     catch (error) { await env.DB.prepare("DELETE FROM web_challenges WHERE id=?").bind(challengeId).run(); throw error; }
-    return json({ ok: true, challengeId, expiresAt: expires });
+    return json({ ok: true, challengeId, expiresAt: expires, matchCode });
   }
 
-  if (path === "/api/auth/pending" && method === "POST") {
+  if ((path === "/api/auth/approve" || path === "/api/auth/deny") && method === "POST") {
     const user = await authFromHeader(request, env), body = await readBody(request, 3000);
-    const device = await env.DB.prepare("SELECT device_id FROM app_devices WHERE uid=? AND device_id=?").bind(user.uid, body.deviceId).first();
-    if (!device) {
-      const legacyDevice = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
-      if (!legacyDevice || legacyDevice.device_id !== body.deviceId) return json({ error: "This app is not signed in to the Rollcall account." }, 403);
+    const device = await env.DB.prepare("SELECT public_key FROM approval_devices WHERE uid=? AND device_id=?").bind(user.uid, body.deviceId).first();
+    const row = await env.DB.prepare("SELECT match_code FROM web_challenges WHERE id=? AND uid=? AND consumed_at IS NULL AND approved_at IS NULL AND denied_at IS NULL AND expires_at>? AND attempts<5").bind(body.challengeId, user.uid, now()).first();
+    if (!device?.public_key || !row || !/^\d{2}$/.test(String(row.match_code || "")))
+      return json({ error: "This sign-in request is no longer available." }, 404);
+    const action = path.endsWith("/approve") ? "approve" : "deny";
+    const signed = `rollcall:web-${action}:v1\n${user.uid}\n${body.deviceId}\n${body.challengeId}\n${row.match_code}`;
+    if (!/^[A-Za-z0-9_-]{300,4096}$/.test(String(body.signature || ""))
+        || !await verifyApprovalSignature(device.public_key, signed, body.signature)) {
+      await env.DB.prepare("UPDATE web_challenges SET attempts=attempts+1 WHERE id=? AND uid=? AND consumed_at IS NULL AND approved_at IS NULL AND denied_at IS NULL AND expires_at>? AND attempts<5")
+        .bind(body.challengeId, user.uid, now()).run();
+      return json({ error: "This phone could not prove its approval key." }, 403);
     }
-    const row = await env.DB.prepare("SELECT * FROM web_challenges WHERE id=? AND uid=? AND consumed_at IS NULL AND expires_at>?").bind(body.challengeId, user.uid, now()).first();
-    if (!row) return json({ error: "This sign-in request expired. Request a new code on the web." }, 404);
-    return json({ code: await decryptCode(row, env), expiresAt: row.expires_at });
+    const column = action === "approve" ? "approved_at" : "denied_at";
+    const result = await env.DB.prepare(`UPDATE web_challenges SET ${column}=?,approved_by_device_id=? WHERE id=? AND uid=? AND consumed_at IS NULL AND approved_at IS NULL AND denied_at IS NULL AND expires_at>?`)
+      .bind(now(), body.deviceId, body.challengeId, user.uid, now()).run();
+    return result.meta.changes ? json({ ok: true }) : json({ error: "This sign-in request was already handled." }, 409);
+  }
+
+  if (path === "/api/auth/status" && method === "POST") {
+    const body = await readBody(request, 3000);
+    const row = await env.DB.prepare("SELECT uid,approved_at,denied_at FROM web_challenges WHERE id=? AND consumed_at IS NULL AND expires_at>?").bind(body.challengeId, now()).first();
+    if (!row) return json({ error: "This sign-in request expired. Start again from the website." }, 404);
+    if (row.denied_at) return json({ status: "denied" });
+    if (!row.approved_at) return json({ status: "pending" });
+    const claimed = await env.DB.prepare("UPDATE web_challenges SET consumed_at=? WHERE id=? AND uid=? AND consumed_at IS NULL AND approved_at IS NOT NULL AND denied_at IS NULL AND expires_at>?")
+      .bind(now(), body.challengeId, row.uid, now()).run();
+    if (!claimed.meta.changes) return json({ error: "This sign-in request was already completed." }, 409);
+    return createWebSession(env, row.uid, request);
   }
 
   if (path === "/api/auth/verify" && method === "POST") {
     const body = await readBody(request, 3000);
-    const row = await env.DB.prepare("SELECT * FROM web_challenges WHERE id=? AND consumed_at IS NULL AND expires_at>? AND attempts<5").bind(body.challengeId, now()).first();
+    const row = await env.DB.prepare("SELECT * FROM web_challenges WHERE id=? AND consumed_at IS NULL AND approved_at IS NULL AND denied_at IS NULL AND expires_at>? AND attempts<5").bind(body.challengeId, now()).first();
     if (!row) return json({ error: "That code expired or can no longer be used. Request another code." }, 401);
     const code = String(body.code || "").trim();
     const valid = /^\d{6}$/.test(code) && constantEqual(await hmac(code, env.SESSION_HASH_KEY), row.code_hash);
     if (!valid) {
-      const attempt = await env.DB.prepare("UPDATE web_challenges SET attempts=attempts+1 WHERE id=? AND consumed_at IS NULL AND expires_at>? AND attempts<5").bind(row.id, now()).run();
+      const attempt = await env.DB.prepare("UPDATE web_challenges SET attempts=attempts+1 WHERE id=? AND consumed_at IS NULL AND approved_at IS NULL AND denied_at IS NULL AND expires_at>? AND attempts<5").bind(row.id, now()).run();
       if (!attempt.meta.changes) return json({ error: "That code expired or can no longer be used. Request another code." }, 401);
       return json({ error: "The code was not accepted. Check it and try again." }, 401);
     }
-    const claimed = await env.DB.prepare("UPDATE web_challenges SET consumed_at=? WHERE id=? AND consumed_at IS NULL AND expires_at>? AND attempts<5").bind(now(), row.id, now()).run();
+    const claimed = await env.DB.prepare("UPDATE web_challenges SET consumed_at=? WHERE id=? AND consumed_at IS NULL AND approved_at IS NULL AND denied_at IS NULL AND expires_at>? AND attempts<5").bind(now(), row.id, now()).run();
     if (!claimed.meta.changes) return json({ error: "That code has already been used." }, 401);
-    return createWebSession(env, row.uid);
+    return createWebSession(env, row.uid, request);
   }
 
   if (path === "/api/auth/session" && method === "GET") {
@@ -296,6 +394,25 @@ async function route(request, env) {
     if (!uid) return json({ signedIn: false }, 401);
     const row = await env.DB.prepare("SELECT updated_at FROM snapshots WHERE uid=?").bind(uid).first();
     return json({ signedIn: true, updatedAt: row?.updated_at || 0 });
+  }
+
+  if (path === "/api/auth/sessions" && method === "GET") {
+    const user = await authFromHeader(request, env);
+    const result = await env.DB.prepare("SELECT session_id,created_at,last_used_at,expires_at,user_agent FROM web_sessions WHERE uid=? AND expires_at>? ORDER BY last_used_at DESC")
+      .bind(user.uid, now()).all();
+    return json({ sessions: result.results || [] });
+  }
+
+  if (path === "/api/auth/sessions/revoke" && method === "POST") {
+    const user = await authFromHeader(request, env, true, true), body = await readBody(request, 3000);
+    if (body.all === true) {
+      await env.DB.prepare("DELETE FROM web_sessions WHERE uid=?").bind(user.uid).run();
+      return json({ ok: true, revoked: "all" });
+    }
+    const sessionId = String(body.sessionId || "");
+    if (!/^[A-Za-z0-9_-]{20,100}$/.test(sessionId)) return json({ error: "Choose a valid browser session." }, 400);
+    const result = await env.DB.prepare("DELETE FROM web_sessions WHERE uid=? AND session_id=?").bind(user.uid, sessionId).run();
+    return result.meta.changes ? json({ ok: true, revoked: 1 }) : json({ error: "That browser session is no longer active." }, 404);
   }
 
   if (path === "/api/auth/logout" && method === "POST") {
@@ -307,8 +424,8 @@ async function route(request, env) {
 
   if (path === "/api/snapshot" && method === "PUT") {
     const user = await authFromHeader(request, env), body = await readBody(request);
-    const device = await env.DB.prepare("SELECT device_id FROM trusted_devices WHERE uid=?").bind(user.uid).first();
-    if (!device || device.device_id !== body.deviceId) return json({ error: "Only the trusted Rollcall app can update this snapshot." }, 403);
+    const device = await env.DB.prepare("SELECT device_id,sync_enabled FROM trusted_devices WHERE uid=?").bind(user.uid).first();
+    if (!device || device.device_id !== body.deviceId || !device.sync_enabled) return json({ error: "Cloud sync is paused or this is not the trusted Rollcall app." }, 403);
     const snapshot = normalizeSnapshot(body.snapshot), serialized = JSON.stringify(snapshot);
     if (serialized.length > 1_900_000) return json({ error: "Snapshot is too large to sync." }, 413);
     await env.DB.prepare("INSERT INTO snapshots(uid,schema_version,snapshot_json,updated_at) VALUES(?,1,?,?) ON CONFLICT(uid) DO UPDATE SET schema_version=1,snapshot_json=excluded.snapshot_json,updated_at=excluded.updated_at")
@@ -323,9 +440,18 @@ async function route(request, env) {
     return row ? json({ snapshot: JSON.parse(row.snapshot_json), updatedAt: row.updated_at }) : json({ error: "No phone snapshot has been synced yet." }, 404);
   }
 
+  if (path === "/api/snapshot" && method === "DELETE") {
+    const user = await authFromHeader(request, env, true, true);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE trusted_devices SET sync_enabled=0 WHERE uid=?").bind(user.uid),
+      env.DB.prepare("DELETE FROM snapshots WHERE uid=?").bind(user.uid)
+    ]);
+    return json({ ok: true });
+  }
+
   if (path === "/api/account/delete" && method === "POST") {
     const user = await authFromHeader(request, env, true, true);
-    await env.DB.batch(["trusted_devices", "app_devices", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_sends"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
+    await env.DB.batch(["trusted_devices", "app_devices", "approval_devices", "approval_enrollment_requests", "snapshots", "web_challenges", "web_challenge_sends", "web_sessions", "device_replacement_codes", "device_replacement_sends", "recovery_codes"].map(table => env.DB.prepare(`DELETE FROM ${table} WHERE uid=?`).bind(user.uid)));
     return json({ ok: true });
   }
 
