@@ -10,3 +10,4 @@ Thumbs.db
 
 # Web tooling created locally
 node_modules/
+.wrangler/

@@ -10,6 +10,8 @@ final class UpdatePushNotifications {
     private UpdatePushNotifications() { }
 
     static void subscribeIfAllowed(Context context) {
+        if (!context.getSharedPreferences("rollcall_notification_state", Context.MODE_PRIVATE)
+                .getBoolean("enabled", false)) return;
         if (!ClassReminderScheduler.canNotify(context)) return;
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 24 && (manager == null || !manager.areNotificationsEnabled())) return;

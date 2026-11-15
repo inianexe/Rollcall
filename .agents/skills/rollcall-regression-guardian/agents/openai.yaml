@@ -1,0 +1,4 @@
+interface:
+  display_name: "RollCall Regression Guardian"
+  short_description: "Protect RollCall data, auth, and core behavior"
+  default_prompt: "Use $rollcall-regression-guardian before changes that touch RollCall data or integrations."

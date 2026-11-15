@@ -1,0 +1,4 @@
+interface:
+  display_name: "RollCall Performance Gate"
+  short_description: "Measure RollCall performance on physical devices"
+  default_prompt: "Use $rollcall-performance-gate for a measured RollCall performance comparison."

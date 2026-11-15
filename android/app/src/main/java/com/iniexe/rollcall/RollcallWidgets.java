@@ -43,12 +43,10 @@ final class RollcallWidgets {
 
     private static RemoteViews build(Context context, AppWidgetManager manager, int id, Type type) {
         LiveSnapshotStore.Snapshot snapshot = LiveSnapshotStore.get();
-        SharedPreferences preferences = context.getSharedPreferences(MainActivity.class.getSimpleName(), Context.MODE_PRIVATE);
-        boolean dark = preferences.getBoolean("dark_theme", false);
+        SharedPreferences preferences = context.getSharedPreferences(MainActivity.class.getSimpleName() + "_preferences", Context.MODE_PRIVATE);
         int paletteIndex = preferences.contains("color_theme") ? preferences.getInt("color_theme", 0)
-                : preferences.getInt(dark ? "dark_palette" : "light_palette", 0);
-        if (paletteIndex != 5 && paletteIndex != 6) paletteIndex = 0;
-        AppPalette palette = AppPalette.get(dark, paletteIndex);
+                : preferences.getInt("dark_palette", 0);
+        AppPalette palette = AppPalette.get(true, paletteIndex, preferences.getInt("custom_accent_color", 0));
         Size size = size(manager.getAppWidgetOptions(id));
         int layout = type == Type.NEXT ? R.layout.widget_today
                 : type == Type.ATTENDANCE ? R.layout.widget_attendance
@@ -259,7 +257,7 @@ final class RollcallWidgets {
         views.setTextViewTextSize(R.id.widget_streak_count, android.util.TypedValue.COMPLEX_UNIT_SP,
                 size == Size.COMPACT ? 32 : 42);
         views.setTextViewText(R.id.widget_streak_count, streak < 0 ? "—" : String.valueOf(streak));
-        views.setTextColor(R.id.widget_streak_count, streak == 0 ? palette.red : palette.highlight);
+        views.setTextColor(R.id.widget_streak_count, streak == 0 ? palette.muted : palette.green);
         views.setTextViewText(R.id.widget_streak_label, streak < 0
                 ? context.getString(R.string.widget_streak_empty)
                 : context.getString(R.string.widget_streak_present, streak == 1 ? "class" : "classes"));

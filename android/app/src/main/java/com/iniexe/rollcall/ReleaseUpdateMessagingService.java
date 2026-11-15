@@ -5,6 +5,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.os.Build;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -14,6 +16,7 @@ import java.util.Map;
 
 public final class ReleaseUpdateMessagingService extends FirebaseMessagingService {
     private static final String CHANNEL = "app_updates";
+    private static final String CAMPAIGN_CHANNEL = "rollcall_announcement_alerts";
     private static final String WEB_LOGIN_CHANNEL = "web_sign_in";
     private static final int NOTIFICATION_ID = 0x524f4c4c;
 
@@ -33,6 +36,10 @@ public final class ReleaseUpdateMessagingService extends FirebaseMessagingServic
             }
             return;
         }
+        if ("campaign".equals(data.get("type"))) {
+            showCampaignNotification(data);
+            return;
+        }
         if (!"update".equals(data.get("type"))) return;
         try {
             long current = Build.VERSION.SDK_INT >= 28
@@ -44,6 +51,46 @@ public final class ReleaseUpdateMessagingService extends FirebaseMessagingServic
         ReleaseUpdateNotifier.checkNow(this, (release, error) -> {
             if (release != null) showUpdateNotification(release);
         });
+    }
+
+    private void showCampaignNotification(Map<String, String> data) {
+        if (!ClassReminderScheduler.canNotify(this)) return;
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null || (Build.VERSION.SDK_INT >= 24 && !manager.areNotificationsEnabled())) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(CAMPAIGN_CHANNEL, "Rollcall announcements",
+                    NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Themed announcements from Rollcall");
+            manager.createNotificationChannel(channel);
+        }
+        String title = data.get("title"), body = data.get("body"), id = data.get("campaignId");
+        if (title == null || title.trim().isEmpty() || body == null || body.trim().isEmpty()
+                || title.length() > 100 || body.length() > 1200 || id == null || id.length() > 100) return;
+        android.content.Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (intent == null) return;
+        PendingIntent open = PendingIntent.getActivity(this, id.hashCode(), intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        android.content.SharedPreferences preferences = getSharedPreferences(
+                MainActivity.class.getSimpleName(), Context.MODE_PRIVATE);
+        AppPalette palette = AppPalette.get(true,
+                preferences.getInt("color_theme", preferences.getInt("dark_palette", AppPalette.SIGNAL)),
+                preferences.getInt("custom_accent_color", 0));
+        int logoSize = Math.round(64 * getResources().getDisplayMetrics().density);
+        Bitmap logo = Bitmap.createBitmap(logoSize, logoSize, Bitmap.Config.ARGB_8888);
+        Canvas logoCanvas = new Canvas(logo);
+        RollcallLogo.Mark mark = RollcallLogo.themedMark(this, palette);
+        RollcallLogo.draw(mark, logoCanvas, 0, 0, logoSize, 1f);
+        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, CAMPAIGN_CHANNEL) : new Notification.Builder(this);
+        builder.setSmallIcon(R.drawable.ic_notification_bell)
+                .setLargeIcon(logo)
+                .setColor(palette.button)
+                .setContentTitle(title.trim()).setContentText(body.trim())
+                .setStyle(new Notification.BigTextStyle().bigText(body.trim()))
+                .setContentIntent(open).setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_MESSAGE)
+                .setVisibility(Notification.VISIBILITY_PRIVATE);
+        manager.notify(0x524f4c00 | (id.hashCode() & 0xffff), builder.build());
     }
 
     private void showWebLoginRequest(String challengeId) {

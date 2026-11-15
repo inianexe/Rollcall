@@ -68,6 +68,8 @@ final class CloudSnapshotPayload {
         String rawRecords = prefs.getString("kct_academic_records", "[]");
         JSONArray academicRecords = new JSONArray(rawRecords);
         result.put("academicRecords", academicRecords);
+        JSONArray internalMarks = new JSONArray(prefs.getString("kct_internal_marks", "[]"));
+        result.put("internalMarks", internalMarks);
         result.put("academicUpdatedAt", prefs.getLong("kct_academic_updated_at", 0));
         String rawExam = prefs.getString("kct_upcoming_exam", "{}");
         JSONObject exam = new JSONObject(rawExam);

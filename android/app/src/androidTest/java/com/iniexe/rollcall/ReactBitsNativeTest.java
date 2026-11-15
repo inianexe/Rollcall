@@ -31,7 +31,8 @@ public class ReactBitsNativeTest {
             scenario.onActivity(activity -> {
                 ShuffleTextView headline = find(activity.dashboard, ShuffleTextView.class);
                 assertEquals("ALEX.\nYOU GOT THIS.", headline.settledText());
-                assertNotNull(find(activity.dashboard, LetterGlitchView.class));
+                assertNull(find(activity.dashboard, LetterGlitchView.class));
+                assertNotNull(findText(activity.dashboard, "Updated just now"));
                 assertEquals(StatusMarkView.State.DONE,
                         find(activity.dashboard, StatusMarkView.class).state());
             });
@@ -57,12 +58,11 @@ public class ReactBitsNativeTest {
             screenshot("week-history");
             scenario.onActivity(activity -> {
                 assertNotNull(find(activity.dashboard, BellToggleView.class));
-                FolderFloatView folder = find(activity.dashboard, FolderFloatView.class);
-                assertNotNull(folder);
-                folder.toggle();
-                assertNotNull(findText(folder, "All Leave & OD"));
-                findText(folder, "All Leave & OD").performClick();
+                assertNull(find(activity.dashboard, FolderFloatView.class));
+                findText(activity.dashboard, "Leave & OD records  →").performClick();
                 assertNotNull(findText(activity.dashboard, "Leave & OD"));
+                assertNotNull(findText(activity.dashboard, "Current sem · 0"));
+                assertNotNull(findText(activity.dashboard, "All OD · 0"));
                 activity.dashboard.closeOdDetailsForBack();
                 findText(activity.dashboard, "SCHEDULE").performClick();
                 assertNotNull(findText(activity.dashboard, "Data Structures lab"));
@@ -74,6 +74,11 @@ public class ReactBitsNativeTest {
             scenario.onActivity(activity -> {
                 findText(activity.dashboard, "ATTEND").performClick();
                 assertNotNull(findText(activity.dashboard, "YOUR ATTENDANCE / PROJECTED"));
+                android.widget.SeekBar classCount = find(activity.dashboard, android.widget.SeekBar.class);
+                assertNotNull(classCount);
+                assertEquals(19, classCount.getMax());
+                assertTrue(classCount.getMinimumHeight() > 0);
+                assertEquals(1, countViewsOfType(activity.dashboard, android.widget.SeekBar.class));
             });
 
             tab(scenario, "Marks and academics");
@@ -81,6 +86,9 @@ public class ReactBitsNativeTest {
             scenario.onActivity(activity -> {
                 OptionWheelView wheel = find(activity.dashboard, OptionWheelView.class);
                 assertNotNull(wheel);
+                assertNull(findText(activity.dashboard, "Semester GPA trend"));
+                assertNotNull(findText(activity.dashboard, "Internal assessments"));
+                assertNotNull(findText(activity.dashboard, "No internal marks synced"));
                 wheel.select(1);
                 assertNotNull(findText(activity.dashboard, "Semester results"));
             });
@@ -248,6 +256,17 @@ public class ReactBitsNativeTest {
             }
         }
         return null;
+    }
+
+    private static int countViewsOfType(View root, Class<? extends View> type) {
+        int count = type.isInstance(root) ? 1 : 0;
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                count += countViewsOfType(group.getChildAt(i), type);
+            }
+        }
+        return count;
     }
 
     private static JellyRadioView findRadio(View root, String firstLabel) {

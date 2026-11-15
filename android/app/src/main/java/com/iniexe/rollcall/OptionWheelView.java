@@ -52,6 +52,7 @@ final class OptionWheelView extends View {
         if (next == selected) { target = selected; invalidate(); return; }
         selected = next;
         target = next;
+        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
         if (!NativeMotion.enabled(getContext())) position = target;
         describe();
         invalidate();
@@ -79,28 +80,24 @@ final class OptionWheelView extends View {
         } else position = target;
         lastFrame = now;
         float cx = getWidth() / 2f, cy = getHeight() / 2f;
-        float rowH = dp(40), tilt = (float) Math.toRadians(6), radius = rowH / tilt;
+        float rowH = dp(40);
         focus.set(dp(4), cy - dp(23), getWidth() - dp(4), cy + dp(23));
         paint.setColor(highlight);
         paint.setAlpha(32);
-        canvas.drawRoundRect(focus, dp(10), dp(10), paint);
+        canvas.drawRoundRect(focus, dp(5), dp(5), paint);
         for (int i = 0; i < items.size(); i++) {
             float distance = i - position;
             if (Math.abs(distance) > 2.5f) continue;
-            float angle = Math.max(-(float) Math.PI / 2, Math.min((float) Math.PI / 2, distance * tilt));
-            float x = -radius * (1f - (float) Math.cos(angle));
-            float y = radius * (float) Math.sin(angle);
-            float opacity = Math.max(.1f, 1f - Math.abs(distance) * .34f);
+            float y = cy + distance * rowH;
+            float edgeDistance = Math.min(y, getHeight() - y);
+            float opacity = Math.max(0f, Math.min(1f, (edgeDistance - dp(2)) / dp(22)));
             paint.setColor(i == selected ? ink : muted);
             paint.setAlpha(Math.round(255 * opacity));
-            float available = getWidth() - dp(32) + x;
+            float available = getWidth() - dp(32);
             CharSequence label = TextUtils.ellipsize(items.get(i), paint, available, TextUtils.TruncateAt.END);
-            float tx = cx - paint.measureText(label.toString()) / 2f + x;
-            float baseline = cy + y - (paint.ascent() + paint.descent()) / 2f;
-            canvas.save();
-            canvas.rotate((float) Math.toDegrees(angle), cx + x, cy + y);
+            float tx = cx - paint.measureText(label.toString()) / 2f;
+            float baseline = y - (paint.ascent() + paint.descent()) / 2f;
             canvas.drawText(label.toString(), tx, baseline, paint);
-            canvas.restore();
         }
         paint.setAlpha(255);
     }

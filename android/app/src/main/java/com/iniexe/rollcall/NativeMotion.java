@@ -4,6 +4,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.os.Build;
 import android.provider.Settings;
+import android.widget.ScrollView;
 
 final class NativeMotion {
     private NativeMotion() { }
@@ -16,6 +17,11 @@ final class NativeMotion {
         } catch (Exception ignored) {
             return true;
         }
+    }
+
+    static void enableScrollDissolve(ScrollView scroll, int lengthPx) {
+        scroll.setVerticalFadingEdgeEnabled(true);
+        scroll.setFadingEdgeLength(lengthPx);
     }
 
     static int color(int from, int to, float progress) {
