@@ -7,6 +7,8 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -41,12 +43,25 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.ClearCredentialStateRequest;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.ClearCredentialException;
+import androidx.credentials.exceptions.GetCredentialException;
+
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -61,29 +76,37 @@ import java.util.Set;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.EmailAuthProvider;
+import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.android.gms.tasks.Tasks;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
     private static final int REMINDER_PERMISSION_REQUEST = 7301;
     private static final int ONBOARDING_NOTIFICATION_REQUEST = 7302;
+    private static final int PROFILE_PHOTO_REQUEST = 7303;
     private static final String CONNECTED_KEY = "mycamu_connected";
     private static final String MYCAMU_CONSENT_KEY = "mycamu_data_access_consent";
     private static final String DARK_KEY = "dark_theme";
-    private static final String APPEARANCE_MODE_KEY = "appearance_mode";
-    private static final String LIGHT_PALETTE_KEY = "light_palette";
     private static final String DARK_PALETTE_KEY = "dark_palette";
     private static final String COLOR_THEME_KEY = "color_theme";
+    private static final String CUSTOM_ACCENT_KEY = "custom_accent_color";
     private static final String ONBOARDING_STARTED_KEY = "onboarding_started";
+    private static final String DISPLAY_NAME_KEY = "display_name";
+    private static final String PROFILE_SETUP_COMPLETED_KEY = "profile_setup_completed";
     private static final String NOTIFICATION_PERMISSION_DENIED_KEY = "notification_permission_denied";
     private static final String ACADEMIC_RECORDS_KEY = "kct_academic_records";
     private static final String ACADEMIC_UPDATED_KEY = "kct_academic_updated_at";
     private static final String UPCOMING_EXAM_KEY = "kct_upcoming_exam";
+    private static final String EXAM_SCHEDULE_CHECKED_KEY = "kct_exam_schedule_checked_at";
     static final String EXTRA_WIDGET_DESTINATION = "widget_destination";
     private int INK, MUTED, CANVAS, GREEN, AMBER, RED, SURFACE, BORDER, SECONDARY, TRACK, BUTTON, BUTTON_TEXT;
     private int HIGHLIGHT, HERO, HERO_TEXT, HERO_MUTED;
     private Typeface appTypeface, appBoldTypeface;
+    private ThemeTypography themeTypography;
     private static final String HOME = "https://www.mycamu.co.in/v2/attendance";
     private static final long AUTO_SYNC_INTERVAL_MS = 30_000L;
     private static final long ACADEMIC_SYNC_INTERVAL_MS = 15 * 60_000L;
@@ -128,6 +151,17 @@ public class MainActivity extends Activity {
             + "return 'started';}catch(e){window.__rollcallAttendanceResult={state:'error'};return 'error';}})(__INCLUDE_ACADEMIC__,__INCLUDE_HISTORY__)";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final ArrayList<DashboardView.Announcement> rollcallAnnouncements = new ArrayList<>();
+    private boolean announcementsLoading, announcementRequestInFlight;
+    private boolean announcementPopupOpen;
+    private final Runnable announcementPopupCheck = () -> showNewAnnouncementPopup(new ArrayList<>(rollcallAnnouncements));
+    private String announcementsError = "";
+    private final Runnable announcementRefresh = new Runnable() {
+        @Override public void run() {
+            refreshAnnouncements();
+            handler.postDelayed(this, 60_000L);
+        }
+    };
     private TextView webStatus;
     private TextView kctPortalStatus;
     private View dashboard;
@@ -149,6 +183,11 @@ public class MainActivity extends Activity {
     private Button notificationSettingsButton;
     private WebView webView;
     private WebView kctWebView;
+    private ScrollView profilePage;
+    private ImageView profilePhotoView;
+    private ImageView onboardingProfilePhotoView;
+    private Button onboardingChoosePhotoButton;
+    private Bitmap profilePhoto;
     private String lastAcademicImportSignature = "";
     private boolean kctLoginReturnPending;
     private long kctSyncStartedAt;
@@ -166,12 +205,18 @@ public class MainActivity extends Activity {
     private boolean lastProgramAvailable;
     private boolean showBelowOnly;
     private boolean darkTheme;
-    private String appearanceMode = "dark";
     private int colorThemeIndex;
+    private int customAccentColor;
+    private int onboardingStep;
     private AppPalette palette;
     private boolean connectedOnce;
     private boolean forceForegroundSync;
     private boolean onboardingStarted;
+    private boolean onboardingGoogleSignIn;
+    private boolean onboardingNewGoogleAccount;
+    private AlertDialog returningAccountDialog;
+    private Button returningAccountContinue;
+    private TextView returningAccountStatus;
     private boolean onboardingChoiceTransitioning;
     private Runnable onboardingAdvance;
     private String onboardingAttendanceStyle = "";
@@ -180,6 +225,7 @@ public class MainActivity extends Activity {
     private String latestClassAttendanceId = "", latestClassAttendanceStatus = "", latestClassAttendanceName = "";
     private double attendanceTarget = 75;
     private String studentName = "";
+    private String displayName = "";
     private String instituteName = "";
     private String rollNumber = "";
     private String rollNumberLabel = "Roll No.";
@@ -267,9 +313,9 @@ public class MainActivity extends Activity {
             + "return {authenticated:true,records:records,complete:courseVisible&&records.length>=2&&records.length===expectedCount,expectedCount:expectedCount,candidateCount:cards.length,coursePanel:!courseRoot?'missing':courseVisible?'visible':'hidden',exams:exams,examPage:examVisited,stage:stage,action:action,source:courseVisible?'Student_complete_course':'none'};}catch(e){return {records:[]};}})()";
     private static final String KCT_EXAM_CARD_EXTRACTOR = "(function(){try{"
             + "var norm=function(s){return String(s||'').replace(/\\u00a0/g,' ').replace(/[\\t ]+/g,' ').trim();};"
-            + "var body=norm(document.body&&document.body.innerText);if(!/exam scheduler/i.test(body))return {examPage:false,exams:[]};"
+            + "var body=norm(document.body&&document.body.innerText);if(!/exam scheduler/i.test(body))return {examPage:false,exams:[]};var verifiedEmpty=/no upcoming exams?|no exams? (are )?scheduled/i.test(body);"
             + "var leaves=Array.from(document.querySelectorAll('body *')).filter(function(e){return e.children.length===0&&/\\b(start in \\d+ days|today|tomorrow)\\b/i.test(norm(e.innerText));});"
-            + "var seen={},exams=[];leaves.forEach(function(leaf){var node=leaf,chosen=null;for(var i=0;i<10&&node;i++,node=node.parentElement){var raw=norm(node.innerText);if(raw.length>600)break;var lines=String(node.innerText||'').split(/\\n+/).map(norm).filter(Boolean),codeLine=lines.find(function(line){return /\\b(?:\\d{2,4}[A-Z]{2,5}\\d{2,6}|[A-Z]{2,5}\\d{2,6})\\b/i.test(line)&&!/(roll|register|student|contact|email)/i.test(line);}),date=raw.match(/\\b(\\d{1,2})[-/](\\d{1,2})[-/](\\d{4})\\b/);if(codeLine&&date){chosen={raw:raw,lines:lines,codeLine:codeLine,date:date};break;}}if(!chosen)return;var raw=chosen.raw,lines=chosen.lines,codeMatch=chosen.codeLine.match(/\\b(?:\\d{2,4}[A-Z]{2,5}\\d{2,6}|[A-Z]{2,5}\\d{2,6})\\b/i),date=chosen.date,code=codeMatch[0].toUpperCase(),key=code+'|'+date[0];if(seen[key])return;seen[key]=1;var at=new Date(Number(date[3]),Number(date[2])-1,Number(date[1])).getTime();if(!Number.isFinite(at)||at<Date.now()-86400000)return;var course=chosen.codeLine.replace(codeMatch[0],'').replace(/^[\\s:–—-]+|[\\s:–—-]+$/g,'').trim()||code,typeLine=lines.find(function(line){return /\\b(embedded|theory|practical)\\b/i.test(line);})||'',type=/embed/i.test(typeLine)?'Embedded':/pract/i.test(typeLine)?'Practical':/theor/i.test(typeLine)?'Theory':'',sessionLine=lines.find(function(line){return /\\b(a\\.?n\\.?|f\\.?n\\.?|forenoon|afternoon)\\b/i.test(line);})||'',session=/\\b(a\\.?n\\.?|afternoon)\\b/i.test(sessionLine)?'AN':/\\b(f\\.?n\\.?|forenoon)\\b/i.test(sessionLine)?'FN':'',details=lines.filter(function(line){return line!==chosen.codeLine&&line!==typeLine&&line!==sessionLine&&!/\\b\\d{1,2}[-/]\\d{1,2}[-/]\\d{4}\\b/.test(line)&&!/^(upcoming|start in \\d+ days|today|tomorrow)$/i.test(line)&&!/^(roll number|register number|email|mobile|address)/i.test(line);}).slice(0,5).join(' · ');exams.push({title:course.slice(0,120),course:course,type:type,session:session,code:code,details:details.slice(0,180),startsAt:at,hasTime:false});});exams.sort(function(a,b){return a.startsAt-b.startsAt;});return {examPage:true,exams:exams};}catch(_){return {examPage:false,exams:[]};}})()";
+            + "var seen={},exams=[];leaves.forEach(function(leaf){var node=leaf,chosen=null;for(var i=0;i<10&&node;i++,node=node.parentElement){var raw=norm(node.innerText);if(raw.length>600)break;var lines=String(node.innerText||'').split(/\\n+/).map(norm).filter(Boolean),codeLine=lines.find(function(line){return /\\b(?:\\d{2,4}[A-Z]{2,5}\\d{2,6}|[A-Z]{2,5}\\d{2,6})\\b/i.test(line)&&!/(roll|register|student|contact|email)/i.test(line);}),date=raw.match(/\\b(\\d{1,2})[-/](\\d{1,2})[-/](\\d{4})\\b/);if(codeLine&&date){chosen={raw:raw,lines:lines,codeLine:codeLine,date:date};break;}}if(!chosen)return;var raw=chosen.raw,lines=chosen.lines,codeMatch=chosen.codeLine.match(/\\b(?:\\d{2,4}[A-Z]{2,5}\\d{2,6}|[A-Z]{2,5}\\d{2,6})\\b/i),date=chosen.date,code=codeMatch[0].toUpperCase(),key=code+'|'+date[0];if(seen[key])return;seen[key]=1;var at=new Date(Number(date[3]),Number(date[2])-1,Number(date[1])).getTime();if(!Number.isFinite(at)||at<Date.now()-86400000)return;var course=chosen.codeLine.replace(codeMatch[0],'').replace(/^[\\s:–—-]+|[\\s:–—-]+$/g,'').trim()||code,typeLine=lines.find(function(line){return /\\b(embedded|theory|practical)\\b/i.test(line);})||'',type=/embed/i.test(typeLine)?'Embedded':/pract/i.test(typeLine)?'Practical':/theor/i.test(typeLine)?'Theory':'',sessionLine=lines.find(function(line){return /\\b(a\\.?n\\.?|f\\.?n\\.?|forenoon|afternoon)\\b/i.test(line);})||'',session=/\\b(a\\.?n\\.?|afternoon)\\b/i.test(sessionLine)?'AN':/\\b(f\\.?n\\.?|forenoon)\\b/i.test(sessionLine)?'FN':'',details=lines.filter(function(line){return line!==chosen.codeLine&&line!==typeLine&&line!==sessionLine&&!/\\b\\d{1,2}[-/]\\d{1,2}[-/]\\d{4}\\b/.test(line)&&!/^(upcoming|start in \\d+ days|today|tomorrow)$/i.test(line)&&!/^(roll number|register number|email|mobile|address)/i.test(line);}).slice(0,5).join(' · ');exams.push({title:course.slice(0,120),course:course,type:type,session:session,code:code,details:details.slice(0,180),startsAt:at,hasTime:false});});exams.sort(function(a,b){return a.startsAt-b.startsAt;});return {examPage:true,verified:exams.length>0||verifiedEmpty,exams:exams};}catch(_){return {examPage:false,exams:[]};}})()";
     private static final String KCT_AUTH_CHECK = "(function(){var t=(document.body&&document.body.innerText||'').toLowerCase();"
             + "return location.hostname==='portal.kct.ac.in'&&!/(sign in|log in|verification code|enter code)/.test(t)"
             + "&&(/student_profile/i.test(location.pathname)||/(student profile|student result|academics|completed courses)/.test(t));})()";
@@ -292,12 +338,14 @@ public class MainActivity extends Activity {
         }
         if (preferences.getInt("kct_academic_schema_version", 0) < 2) {
             preferences.edit().remove(ACADEMIC_RECORDS_KEY).remove(ACADEMIC_UPDATED_KEY)
-                    .remove(UPCOMING_EXAM_KEY).remove("last_academic_sync_attempt")
+                    .remove(UPCOMING_EXAM_KEY).remove(EXAM_SCHEDULE_CHECKED_KEY)
+                    .remove("last_academic_sync_attempt")
                     .putInt("kct_academic_schema_version", 2).apply();
         }
         if (preferences.getInt("kct_academic_schema_version", 0) < 4) {
             preferences.edit().remove(ACADEMIC_RECORDS_KEY).remove(ACADEMIC_UPDATED_KEY)
-                    .remove(UPCOMING_EXAM_KEY).putInt("kct_academic_schema_version", 4).apply();
+                    .remove(UPCOMING_EXAM_KEY).remove(EXAM_SCHEDULE_CHECKED_KEY)
+                    .putInt("kct_academic_schema_version", 4).apply();
         }
         if (preferences.getInt("kct_academic_schema_version", 0) < 5) {
             preferences.edit().remove(ACADEMIC_RECORDS_KEY).remove(ACADEMIC_UPDATED_KEY)
@@ -321,30 +369,34 @@ public class MainActivity extends Activity {
         }
         if (preferences.getInt("rollback_design_version", 0) < 1) {
             preferences.edit().putInt("rollback_design_version", 1).putInt(COLOR_THEME_KEY, 0)
-                    .putInt(LIGHT_PALETTE_KEY, 0).putInt(DARK_PALETTE_KEY, 0).apply();
+                    .putInt(DARK_PALETTE_KEY, 0).apply();
         }
         if (!preferences.getBoolean("torch_html_palette_applied", false)) {
             preferences.edit().putBoolean(DARK_KEY, true).putBoolean("torch_html_palette_applied", true).apply();
         }
         attendanceTarget = preferences.getInt("attendance_target", 75);
-        appearanceMode = preferences.getString(APPEARANCE_MODE_KEY,
-                preferences.getBoolean(DARK_KEY, true) ? "dark" : "light");
-        if (!appearanceMode.equals("system") && !appearanceMode.equals("light") && !appearanceMode.equals("dark"))
-            appearanceMode = preferences.getBoolean(DARK_KEY, true) ? "dark" : "light";
-        darkTheme = appearanceMode.equals("system") ? isSystemDark() : appearanceMode.equals("dark");
+        darkTheme = true;
         colorThemeIndex = preferences.contains(COLOR_THEME_KEY) ? preferences.getInt(COLOR_THEME_KEY, 0)
-                : preferences.getInt(darkTheme ? DARK_PALETTE_KEY : LIGHT_PALETTE_KEY, 0);
+                : preferences.getInt(DARK_PALETTE_KEY, 0);
+        customAccentColor = preferences.getInt(CUSTOM_ACCENT_KEY, 0);
         if (AppPalette.normalizeIndex(colorThemeIndex) != colorThemeIndex) {
             colorThemeIndex = 0;
             preferences.edit().putInt(COLOR_THEME_KEY, 0).apply();
         }
+        preferences.edit().putBoolean(DARK_KEY, true).putInt(COLOR_THEME_KEY, colorThemeIndex).apply();
         connectedOnce = preferences.getBoolean(CONNECTED_KEY, false) || !LiveSnapshotStore.get().attendance.isEmpty();
         onboardingStarted = false; // An unfinished connection always starts at the welcome screen.
         if (connectedOnce) preferences.edit().putBoolean(CONNECTED_KEY, true).apply();
         studentName = preferences.getString("student_name", "");
+        displayName = cleanDisplayName(preferences.getString(DISPLAY_NAME_KEY, ""));
         instituteName = preferences.getString("institute_name", "");
         rollNumber = preferences.getString("roll_number", "");
         rollNumberLabel = preferences.getString("roll_number_label", "Roll No.");
+        String savedProfilePhoto = preferences.getString("profile_photo_uri", "");
+        if (!savedProfilePhoto.isEmpty()) {
+            profilePhoto = decodeProfilePhoto(Uri.parse(savedProfilePhoto));
+            if (profilePhoto == null) preferences.edit().remove("profile_photo_uri").apply();
+        }
         lastAcademicSyncAttemptAt = preferences.getLong("last_academic_sync_attempt", 0);
         lastClassLogSyncAt = preferences.getLong("last_class_log_sync_attempt", 0);
         classRemindersEnabled = ClassReminderScheduler.enabled(this);
@@ -377,6 +429,9 @@ public class MainActivity extends Activity {
         aboutPage = buildAboutPage();
         aboutPage.setVisibility(View.GONE);
         content.addView(aboutPage, new FrameLayout.LayoutParams(-1, -1));
+        profilePage = buildProfilePage();
+        profilePage.setVisibility(View.GONE);
+        content.addView(profilePage, new FrameLayout.LayoutParams(-1, -1));
         kctPortalPage = buildKctPortalPage();
         kctPortalPage.setVisibility(View.GONE);
         content.addView(kctPortalPage, new FrameLayout.LayoutParams(-1, -1));
@@ -390,7 +445,8 @@ public class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         setContentView(root);
         applyTheme();
-        if (saved != null && saved.getBoolean("restore_about_settings", false)) showAbout();
+        if (saved != null && saved.getBoolean("restore_profile_account", false)) showProfile();
+        else if (saved != null && saved.getBoolean("restore_about_settings", false)) showAbout();
         else routeWidgetLaunch(getIntent());
         if (saved == null) showStartupAnimation(root);
 
@@ -424,6 +480,7 @@ public class MainActivity extends Activity {
         startupDestination = null;
         ViewGroup parent = animation.getParent() instanceof ViewGroup ? (ViewGroup) animation.getParent() : null;
         if (parent != null) parent.removeView(animation);
+        scheduleAnnouncementPopup();
     }
 
     private void beginStartupTransition() {
@@ -455,7 +512,10 @@ public class MainActivity extends Activity {
     }
 
     private void applyTheme() {
-        palette = AppPalette.get(darkTheme, colorThemeIndex);
+        palette = AppPalette.get(true, colorThemeIndex, customAccentColor);
+        themeTypography = ThemeTypography.load(this, palette.themeIndex);
+        appTypeface = null;
+        appBoldTypeface = null;
         INK = palette.ink; MUTED = palette.muted; CANVAS = palette.canvas;
         GREEN = palette.green; AMBER = palette.amber; RED = palette.red;
         SURFACE = palette.surface; BORDER = palette.border; SECONDARY = palette.soft;
@@ -469,17 +529,14 @@ public class MainActivity extends Activity {
             getWindow().setStatusBarContrastEnforced(false);
             getWindow().setNavigationBarContrastEnforced(false);
         }
-        int lightBars = darkTheme ? 0
-                : android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+        int lightBars = 0;
         int barMask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                 | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             android.view.WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) controller.setSystemBarsAppearance(lightBars, barMask);
         } else {
-            int systemUi = darkTheme ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            if (Build.VERSION.SDK_INT >= 26 && !darkTheme) systemUi |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            int systemUi = 0;
             View decor = getWindow().getDecorView();
             int layoutFlags = decor.getSystemUiVisibility()
                     & (View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -488,20 +545,14 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean isSystemDark() {
-        return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
-                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
-    }
-
     private DashboardView buildDashboardView() {
         dashboardView = new DashboardView(this, new DashboardView.Actions() {
             @Override public void onSync() { syncAttendance(true); }
             @Override public void onPortal() { showMyCamu(); }
             @Override public void onAcademicsPortal() { showKctPortal(); }
             @Override public void onTarget() { chooseTarget(); }
-            @Override public void onTheme() { toggleTheme(); }
-            @Override public void onPalette() { choosePalette(); }
             @Override public void onAbout() { showAbout(); }
+            @Override public void onProfile() { showProfile(); }
             @Override public void onRemindersToggle() {
                 if (classRemindersEnabled) confirmDisableReminders();
                 else setClassRemindersEnabled(true);
@@ -512,9 +563,113 @@ public class MainActivity extends Activity {
                 if (!expandedCourses.add(code)) expandedCourses.remove(code);
                 render(LiveSnapshotStore.get());
             }
+            @Override public void onAnnouncementReceipt(String campaignId, String receiptState) {
+                saveAnnouncementReceipt(campaignId, receiptState);
+            }
+            @Override public void onHomePageShown() { scheduleAnnouncementPopup(); }
         }, palette);
+        dashboardView.setProfilePhoto(profilePhoto);
         render(LiveSnapshotStore.get());
         return dashboardView;
+    }
+
+    private Bitmap decodeProfilePhoto(Uri uri) {
+        if (uri == null) return null;
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream input = getContentResolver().openInputStream(uri)) {
+                if (input == null) return null;
+                BitmapFactory.decodeStream(input, null, bounds);
+            }
+            int sample = 1;
+            while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2;
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = sample;
+            try (InputStream input = getContentResolver().openInputStream(uri)) {
+                return input == null ? null : BitmapFactory.decodeStream(input, null, options);
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void openProfilePhotoPicker() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("image/*");
+        picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(picker, PROFILE_PHOTO_REQUEST);
+    }
+
+    private void setProfilePhoto(Uri uri) {
+        Bitmap selected = decodeProfilePhoto(uri);
+        if (selected == null) {
+            Toast.makeText(this, "That image couldn’t be opened. Choose another photo.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        profilePhoto = selected;
+        getPreferences(MODE_PRIVATE).edit().putString("profile_photo_uri", uri.toString()).apply();
+        updateProfilePhotoViews();
+        Toast.makeText(this, "Profile photo updated", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateProfilePhotoViews() {
+        if (profilePhotoView != null) {
+            profilePhotoView.setImageBitmap(profilePhoto);
+            profilePhotoView.setVisibility(profilePhoto == null ? View.GONE : View.VISIBLE);
+        }
+        if (onboardingProfilePhotoView != null) {
+            onboardingProfilePhotoView.setImageBitmap(profilePhoto);
+            onboardingProfilePhotoView.setVisibility(profilePhoto == null ? View.GONE : View.VISIBLE);
+        }
+        if (onboardingChoosePhotoButton != null)
+            onboardingChoosePhotoButton.setText(profilePhoto == null ? "Choose profile photo" : "Change photo");
+        if (dashboardView != null) dashboardView.setProfilePhoto(profilePhoto);
+    }
+
+    private EditText newDisplayNameField(String value, String hint) {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setText(value);
+        field.setHint(hint);
+        field.setTextSize(15);
+        field.setTextColor(INK);
+        field.setHintTextColor(MUTED);
+        field.setTypeface(appTypeface());
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+                | android.text.InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
+        field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        field.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(32)});
+        field.setPadding(dp(14), 0, dp(14), 0);
+        field.setBackground(background(SURFACE, BORDER, palette.controlRadius));
+        return field;
+    }
+
+    private String cleanDisplayName(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ");
+    }
+
+    private boolean saveDisplayName(String value) {
+        String cleaned = cleanDisplayName(value);
+        if (cleaned.isEmpty()) return false;
+        displayName = cleaned;
+        getPreferences(MODE_PRIVATE).edit().putString(DISPLAY_NAME_KEY, displayName).apply();
+        render(LiveSnapshotStore.get());
+        return true;
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != PROFILE_PHOTO_REQUEST || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        try {
+            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            setProfilePhoto(uri);
+        } catch (SecurityException error) {
+            Toast.makeText(this, "Rollcall couldn’t access that photo. Please choose it again.", Toast.LENGTH_LONG).show();
+        }
     }
 
     private FrameLayout buildOnboardingPage() {
@@ -526,6 +681,7 @@ public class MainActivity extends Activity {
 
     private void showOnboardingStep(int step) {
         if (onboardingPage == null) return;
+        onboardingStep = step;
         if (onboardingAdvance != null) handler.removeCallbacks(onboardingAdvance);
         onboardingAdvance = null;
         onboardingChoiceTransitioning = false;
@@ -553,7 +709,7 @@ public class MainActivity extends Activity {
 
     private void showAppScreen(View incoming) {
         if (incoming == null) return;
-        View[] screens = {onboardingPage, webPage, dashboard, aboutPage, kctPortalPage, myCamuConsentPage};
+        View[] screens = {onboardingPage, webPage, dashboard, aboutPage, profilePage, kctPortalPage, myCamuConsentPage};
         boolean entering = incoming.getVisibility() != View.VISIBLE;
         for (View screen : screens) {
             if (screen == null) continue;
@@ -563,6 +719,7 @@ public class MainActivity extends Activity {
             screen.setVisibility(screen == incoming ? View.VISIBLE : View.GONE);
         }
         incoming.bringToFront();
+        if (incoming == dashboard) scheduleAnnouncementPopup();
         if (!entering || startupAnimation != null || !animationsEnabled()) return;
         if (incoming == dashboard && dashboardView != null) {
             dashboardView.animateCurrentPageEntry();
@@ -576,6 +733,7 @@ public class MainActivity extends Activity {
     private View buildOnboardingStep(int step) {
         final int paper = palette.canvas, ink = palette.ink, muted = palette.muted;
         ScrollView scroll = new ScrollView(this);
+        NativeMotion.enableScrollDissolve(scroll, dp(24));
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(paper);
         LinearLayout content = new LinearLayout(this);
@@ -606,7 +764,7 @@ public class MainActivity extends Activity {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(34)));
         }
 
-        TextView progress = text("GET STARTED  ·  0" + (step + 1) + " / 04", 10, muted, Typeface.BOLD);
+        TextView progress = text("GET STARTED  ·  0" + (step + 1) + " / 06", 10, muted, Typeface.BOLD);
         progress.setLetterSpacing(.12f);
         content.addView(progress);
 
@@ -637,12 +795,15 @@ public class MainActivity extends Activity {
             label.setGravity(android.view.Gravity.CENTER);
             label.setPadding(0, dp(22), 0, dp(12));
             content.addView(label);
-            content.addView(onboardingButton("GET STARTED  ↗", palette.button, palette.buttonText,
-                    v -> showOnboardingStep(1)), new LinearLayout.LayoutParams(-1, dp(56)));
+            content.addView(onboardingButton("Continue with Google  ↗", palette.button, palette.buttonText,
+                    v -> {
+                        onboardingGoogleSignIn = true;
+                        startGoogleSignIn();
+                    }), new LinearLayout.LayoutParams(-1, dp(56)));
         } else if (step == 1) {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(42)));
             TextView headline = text("Class reminders.", 35, ink, Typeface.BOLD);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
+            headline.setTypeface(themeTypography.display, Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(1), topMargin(-1, dp(126), 12));
             boolean allowed = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -656,9 +817,9 @@ public class MainActivity extends Activity {
             content.addView(detail);
             LinearLayout howItWorks = onboardingCard();
             howItWorks.setBackground(background(palette.focusSurface, palette.focusBorder, 16));
-            howItWorks.addView(text("HOW IT WORKS", 10, 0xFF111111, Typeface.BOLD));
+            howItWorks.addView(text("HOW IT WORKS", 10, INK, Typeface.BOLD));
             TextView note = text("Rollcall checks for updates while open and refreshes in the background when Android allows. Class reminders use your saved timetable; event alerts follow Android notification settings.",
-                    13, 0xFF333344, Typeface.NORMAL);
+                    13, MUTED, Typeface.NORMAL);
             note.setLineSpacing(dp(3), 1f);
             note.setPadding(0, dp(8), 0, 0);
             howItWorks.addView(note);
@@ -680,18 +841,102 @@ public class MainActivity extends Activity {
             onboardingChoiceTransitioning = false;
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(22)));
             TextView headline = text("What should\nwe focus on?", 35, ink, Typeface.BOLD);
-            headline.setTypeface(appTypeface(), Typeface.BOLD);
+            headline.setTypeface(themeTypography.display, Typeface.BOLD);
             content.addView(headline);
             addOnboardingChoiceGroup(content, "What do you want help with first?",
                     new String[]{"Keep attendance on track", "Find safe skips", "See my week at a glance"},
                     new int[]{R.drawable.ic_onboarding_target, R.drawable.ic_nav_courses, R.drawable.ic_nav_week});
+        } else if (step == 3) {
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(26)));
+            TextView headline = text("Make it yours.", 35, ink, Typeface.BOLD);
+            headline.setTypeface(themeTypography.display, Typeface.BOLD);
+            content.addView(headline);
+            TextView intro = text("Choose a display name and photo for your Rollcall home screen. You can change either later in Profile.",
+                    14, muted, Typeface.NORMAL);
+            intro.setLineSpacing(dp(3), 1f);
+            content.addView(intro, topMargin(-1, -2, 8));
+
+            FrameLayout avatar = new FrameLayout(this);
+            GradientDrawable avatarBackground = new GradientDrawable();
+            avatarBackground.setShape(GradientDrawable.OVAL);
+            avatarBackground.setColor(palette.focusSurface);
+            avatarBackground.setStroke(dp(1), palette.focusBorder);
+            avatar.setBackground(avatarBackground);
+            TextView initials = text("R", 26, palette.muted, Typeface.BOLD);
+            initials.setGravity(android.view.Gravity.CENTER);
+            avatar.addView(initials, new FrameLayout.LayoutParams(-1, -1));
+            onboardingProfilePhotoView = new ImageView(this);
+            onboardingProfilePhotoView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            onboardingProfilePhotoView.setBackground(avatarBackground);
+            onboardingProfilePhotoView.setClipToOutline(true);
+            onboardingProfilePhotoView.setContentDescription("Selected profile photo preview");
+            onboardingProfilePhotoView.setImageBitmap(profilePhoto);
+            onboardingProfilePhotoView.setVisibility(profilePhoto == null ? View.GONE : View.VISIBLE);
+            avatar.addView(onboardingProfilePhotoView, new FrameLayout.LayoutParams(-1, -1));
+            LinearLayout photoRow = new LinearLayout(this);
+            photoRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            photoRow.addView(avatar, new LinearLayout.LayoutParams(dp(76), dp(76)));
+            onboardingChoosePhotoButton = button(profilePhoto == null ? "Choose profile photo" : "Change photo");
+            onboardingChoosePhotoButton.setOnClickListener(v -> openProfilePhotoPicker());
+            LinearLayout.LayoutParams choosePhotoParams = new LinearLayout.LayoutParams(0, dp(48), 1f);
+            choosePhotoParams.leftMargin = dp(14);
+            photoRow.addView(onboardingChoosePhotoButton, choosePhotoParams);
+            content.addView(photoRow, topMargin(-1, -2, 22));
+            content.addView(text("DISPLAY NAME", 11, muted, Typeface.BOLD), topMargin(-1, -2, 22));
+            EditText nameField = newDisplayNameField(displayName, "What should we call you?");
+            content.addView(nameField, topMargin(-1, dp(54), 6));
+            content.addView(text("Your photo stays on this device. Your display name is used only in Rollcall.",
+                    12, muted, Typeface.NORMAL), topMargin(-1, -2, 8));
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+            content.addView(onboardingButton("Save profile & continue", palette.button, palette.buttonText, v -> {
+                if (!saveDisplayName(nameField.getText().toString())) {
+                    nameField.setError("Enter a display name to continue");
+                    nameField.requestFocus();
+                    return;
+                }
+                getPreferences(MODE_PRIVATE).edit().putBoolean(PROFILE_SETUP_COMPLETED_KEY, true).apply();
+                onboardingProfilePhotoView = null;
+                onboardingChoosePhotoButton = null;
+                showOnboardingStep(4);
+            }), new LinearLayout.LayoutParams(-1, dp(54)));
+            TextView skip = text("Skip for now", 14, muted, Typeface.BOLD);
+            skip.setGravity(android.view.Gravity.CENTER);
+            skip.setMinHeight(dp(48));
+            skip.setOnClickListener(v -> {
+                getPreferences(MODE_PRIVATE).edit().putBoolean(PROFILE_SETUP_COMPLETED_KEY, true).apply();
+                onboardingProfilePhotoView = null;
+                onboardingChoosePhotoButton = null;
+                showOnboardingStep(4);
+            });
+            content.addView(skip);
+        } else if (step == 4) {
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(24)));
+            TextView headline = text("Choose your look.", 34, ink, Typeface.BOLD);
+            headline.setTypeface(themeTypography.display, Typeface.BOLD);
+            content.addView(headline);
+            TextView intro = text("Pick a Rollcall style, then tune its accent to a color that feels like yours.",
+                    14, muted, Typeface.NORMAL);
+            intro.setLineSpacing(dp(3), 1f);
+            content.addView(intro, topMargin(-1, -2, 14));
+            content.addView(buildThemeGallery());
+            TextView colorHeading = text("MAKE THE ACCENT YOURS", 10, palette.highlight, Typeface.BOLD);
+            colorHeading.setLetterSpacing(.1f);
+            content.addView(colorHeading, topMargin(-1, -2, 18));
+            content.addView(buildAccentPickerRow());
+            TextView note = text("Rollcall adjusts its surfaces and text contrast around your chosen color.",
+                    12, muted, Typeface.NORMAL);
+            note.setLineSpacing(dp(3), 1f);
+            content.addView(note, topMargin(-1, -2, 8));
+            content.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+            content.addView(onboardingButton("Continue  →", palette.button, palette.buttonText,
+                    v -> showOnboardingStep(5)), new LinearLayout.LayoutParams(-1, dp(56)));
         } else {
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
             TextView headline = text("Your week.\nAll in one place.", 35, ink, Typeface.BOLD);
-            headline.setTypeface(appTypeface, Typeface.BOLD);
+            headline.setTypeface(themeTypography.display, Typeface.BOLD);
             content.addView(headline);
             content.addView(onboardingArtifact(2), topMargin(-1, dp(112), 12));
-            TextView accountIntro = text("Connect MyCamu to build your attendance dashboard. Your Rollcall web account is optional and lives in Settings.", 14, muted, Typeface.NORMAL);
+            TextView accountIntro = text("Connect MyCamu to build your attendance dashboard. Your Rollcall web account is optional and lives in Profile.", 14, muted, Typeface.NORMAL);
             accountIntro.setLineSpacing(dp(4), 1f);
             content.addView(accountIntro, topMargin(-1, -2, 12));
             content.addView(new View(this), new LinearLayout.LayoutParams(1, dp(28)));
@@ -705,7 +950,7 @@ public class MainActivity extends Activity {
             note.setPadding(0, dp(12), 0, 0);
             content.addView(note);
         }
-        if (step != 3) return scroll;
+        if (step != 5) return scroll;
         SignalShapeGridView grid = new SignalShapeGridView(this, palette);
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(paper);
@@ -819,9 +1064,9 @@ public class MainActivity extends Activity {
                     chosen ? palette.hero : palette.focusBorder, 12));
             ImageView mark = new ImageView(this);
             mark.setImageResource(icon);
-            mark.setColorFilter(chosen ? paper : 0xFF111111);
+            mark.setColorFilter(chosen ? paper : ink);
             option.addView(mark, new LinearLayout.LayoutParams(dp(20), dp(20)));
-            TextView label = text(choice, 14, chosen ? paper : 0xFF111111, Typeface.BOLD);
+            TextView label = text(choice, 14, chosen ? paper : ink, Typeface.BOLD);
             LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, -2, 1f);
             labelParams.leftMargin = dp(12);
             option.addView(label, labelParams);
@@ -843,8 +1088,8 @@ public class MainActivity extends Activity {
                     View item = group.getChildAt(itemIndex);
                     item.setBackground(background(isChosen ? palette.hero : palette.focusSurface,
                             isChosen ? palette.hero : palette.focusBorder, 12));
-                    labels[itemIndex].setTextColor(isChosen ? paper : 0xFF111111);
-                    marks[itemIndex].setColorFilter(isChosen ? paper : 0xFF111111);
+                    labels[itemIndex].setTextColor(isChosen ? paper : ink);
+                    marks[itemIndex].setColorFilter(isChosen ? paper : ink);
                     checks[itemIndex].setVisibility(isChosen ? View.VISIBLE : View.INVISIBLE);
                     item.setEnabled(false);
                 }
@@ -854,9 +1099,10 @@ public class MainActivity extends Activity {
                 checks[optionIndex].setScaleX(.4f);
                 checks[optionIndex].setScaleY(.4f);
                 checks[optionIndex].animate().scaleX(1f).scaleY(1f).setDuration(220).start();
-                onboardingChoiceStatus.setText("Great choice. Let’s connect MyCamu.");
+                onboardingChoiceStatus.setText("Great choice. Let’s set up your profile.");
                 onboardingChoiceStatus.setVisibility(View.VISIBLE);
-                onboardingAdvance = () -> showOnboardingStep(3);
+                onboardingAdvance = () -> showOnboardingStep(getPreferences(MODE_PRIVATE)
+                        .getBoolean(PROFILE_SETUP_COMPLETED_KEY, false) ? 4 : 3);
                 handler.postDelayed(onboardingAdvance, 1200);
             });
         }
@@ -872,6 +1118,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                 == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             getPreferences(MODE_PRIVATE).edit().remove(NOTIFICATION_PERMISSION_DENIED_KEY).apply();
+            getSharedPreferences("rollcall_notification_state", MODE_PRIVATE).edit().putBoolean("enabled", true).apply();
             UpdatePushNotifications.subscribeIfAllowed(this);
             showOnboardingStep(2);
         } else {
@@ -920,6 +1167,7 @@ public class MainActivity extends Activity {
         layout.addView(header);
 
         ScrollView scroll = new ScrollView(this);
+        NativeMotion.enableScrollDissolve(scroll, dp(24));
         scroll.setFillViewport(false);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -938,22 +1186,22 @@ public class MainActivity extends Activity {
         LinearLayout account = new LinearLayout(this);
         account.setGravity(android.view.Gravity.CENTER_VERTICAL);
         account.setPadding(dp(14), dp(13), dp(14), dp(13));
-        account.setBackground(background(0xFFC8C8FF, 0xFF111111, 16));
+        account.setBackground(background(palette.button, palette.border, palette.cardRadius));
         LinearLayout.LayoutParams accountParams = new LinearLayout.LayoutParams(-1, -2);
         accountParams.topMargin = dp(20);
         content.addView(account, accountParams);
-        TextView accountMark = text("M", 17, 0xFFCCFF00, Typeface.BOLD);
+        TextView accountMark = text("M", 17, palette.highlight, Typeface.BOLD);
         accountMark.setGravity(android.view.Gravity.CENTER);
-        accountMark.setBackground(background(0xFF121212, 0, 13));
+        accountMark.setBackground(background(palette.focusSurface, palette.focusBorder, palette.controlRadius));
         account.addView(accountMark, new LinearLayout.LayoutParams(dp(42), dp(42)));
         LinearLayout accountCopy = new LinearLayout(this);
         accountCopy.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams accountCopyParams = new LinearLayout.LayoutParams(0, -2, 1f);
         accountCopyParams.leftMargin = dp(12);
         account.addView(accountCopy, accountCopyParams);
-        accountCopy.addView(text("MyCamu student account", 14, 0xFF111111, Typeface.BOLD));
-        accountCopy.addView(text("Signed in on this device", 12, 0xFF333344, Typeface.NORMAL), topMargin(-1, -2, 3));
-        TextView connected = text("CONNECTED", 10, 0xFF176146, Typeface.BOLD);
+        accountCopy.addView(text("MyCamu student account", 14, palette.buttonText, Typeface.BOLD));
+        accountCopy.addView(text("Signed in on this device", 12, palette.buttonText, Typeface.NORMAL), topMargin(-1, -2, 3));
+        TextView connected = text("CONNECTED", 10, palette.buttonText, Typeface.BOLD);
         account.addView(connected);
 
         TextView scopeHeading = text("Rollcall will read", 16, INK, Typeface.BOLD);
@@ -967,11 +1215,11 @@ public class MainActivity extends Activity {
         LinearLayout privacy = new LinearLayout(this);
         privacy.setOrientation(LinearLayout.VERTICAL);
         privacy.setPadding(dp(14), dp(13), dp(14), dp(13));
-        privacy.setBackground(background(0xFFC8C8FF, 0, 14));
+        privacy.setBackground(background(palette.focusSurface, palette.border, palette.controlRadius));
         content.addView(privacy, topMargin(-1, -2, 14));
-        privacy.addView(text("Your password stays with MyCamu", 13, 0xFF111111, Typeface.BOLD));
+        privacy.addView(text("Your password stays with MyCamu", 13, INK, Typeface.BOLD));
         TextView privacyText = text("Rollcall does not read or store your password. The data above is saved on this device and can be removed from About & Settings.",
-                12, 0xFF333344, Typeface.NORMAL);
+                12, MUTED, Typeface.NORMAL);
         privacyText.setLineSpacing(dp(2), 1f);
         privacy.addView(privacyText, topMargin(-1, -2, 4));
 
@@ -1040,8 +1288,33 @@ public class MainActivity extends Activity {
         handler.postDelayed(() -> {
             if (isFinishing() || isDestroyed()) return;
             showAppScreen(webPage);
-            syncAttendance(true);
+            showNotificationPrimer();
         }, 600L);
+    }
+
+    private void showNotificationPrimer() {
+        AlertDialog primer = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Stay up to date")
+                .setMessage("Rollcall can remind you before scheduled classes and share important attendance updates, helping you stay on top of your week. You can change this anytime in app settings.")
+                .setNegativeButton("Not now", (dialog, which) -> finishNotificationChoice(false))
+                .setPositiveButton("Allow notifications", (dialog, which) -> finishNotificationChoice(true))
+                .create();
+        primer.setOnCancelListener(dialog -> finishNotificationChoice(false));
+        primer.show();
+    }
+
+    private void finishNotificationChoice(boolean enabled) {
+        if (enabled && Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, ONBOARDING_NOTIFICATION_REQUEST);
+            return;
+        }
+        getPreferences(MODE_PRIVATE).edit().remove(NOTIFICATION_PERMISSION_DENIED_KEY).apply();
+        getSharedPreferences("rollcall_notification_state", MODE_PRIVATE).edit().putBoolean("enabled", enabled).apply();
+        if (enabled) UpdatePushNotifications.subscribeIfAllowed(this);
+        else com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic("app_updates");
+        syncAttendance(true);
     }
 
     private void deferMyCamuConsent() {
@@ -1049,6 +1322,158 @@ public class MainActivity extends Activity {
         reconnectAttempted = true;
         if (webStatus != null) webStatus.setText("Access was not approved. Rollcall has not read your MyCamu data. You can review access later.");
         showAppScreen(webPage);
+    }
+
+    private View buildThemePreview(int index) {
+        AppPalette preview = AppPalette.get(true, index, index == colorThemeIndex ? customAccentColor : 0);
+        ThemeTypography fonts = ThemeTypography.load(this, index);
+        boolean selected = colorThemeIndex == index;
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(RollcallSpacing.SPACE_3), dp(RollcallSpacing.SPACE_3),
+                dp(RollcallSpacing.SPACE_3), dp(RollcallSpacing.SPACE_3));
+        card.setMinimumHeight(dp(120));
+        GradientDrawable cardShape = new GradientDrawable();
+        cardShape.setColor(preview.surface);
+        cardShape.setCornerRadius(dp(preview.cardRadius));
+        cardShape.setStroke(dp(selected ? 2 : 1), selected ? preview.highlight : preview.border);
+        card.setBackground(cardShape);
+        card.setFocusable(true);
+        card.setClickable(true);
+        card.setContentDescription(preview.name + " theme, " + AppPalette.fontNameFor(index)
+                + (selected ? ", selected" : ", select"));
+        card.addView(themePreviewText(preview.name, 13, preview.ink, fonts.bodyBold));
+        TextView heading = themePreviewText("Your attendance", 11, preview.muted, fonts.display);
+        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(-1, -2);
+        headingParams.topMargin = dp(RollcallSpacing.SPACE_2);
+        card.addView(heading, headingParams);
+        TextView statistic = themePreviewText("87.5%", 21, preview.ink, fonts.bodyBold);
+        card.addView(statistic);
+        TextView selectedLabel = themePreviewText(selected ? "Selected ✓" : AppPalette.fontNameFor(index),
+                10, selected ? preview.highlight : preview.muted, fonts.body);
+        LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(-1, -2);
+        detailParams.topMargin = dp(RollcallSpacing.SPACE_1);
+        card.addView(selectedLabel, detailParams);
+        card.setOnClickListener(v -> selectTheme(index));
+        return card;
+    }
+
+    private TextView themePreviewText(String value, float size, int color, Typeface face) {
+        TextView view = new TextView(this);
+        view.setText(value);
+        view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, size);
+        view.setTextColor(color);
+        view.setTypeface(face);
+        view.setFontFeatureSettings("tnum");
+        view.setIncludeFontPadding(true);
+        return view;
+    }
+
+    private void selectTheme(int index) {
+        int next = AppPalette.normalizeIndex(index);
+        if (next == colorThemeIndex) return;
+        colorThemeIndex = next;
+        getPreferences(MODE_PRIVATE).edit().putInt(COLOR_THEME_KEY, next).apply();
+        refreshPaletteSurfaces();
+
+        Toast.makeText(this, palette.name + " applied", Toast.LENGTH_SHORT).show();
+    }
+
+    private LinearLayout buildThemeGallery() {
+        LinearLayout gallery = new LinearLayout(this);
+        gallery.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout firstRow = new LinearLayout(this);
+        LinearLayout secondRow = new LinearLayout(this);
+        firstRow.setOrientation(LinearLayout.HORIZONTAL);
+        secondRow.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < AppPalette.THEME_COUNT; i++) {
+            View preview = buildThemePreview(i);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1f);
+            if (i % 2 == 0) params.rightMargin = dp(RollcallSpacing.SPACE_2);
+            else params.leftMargin = dp(RollcallSpacing.SPACE_2);
+            (i < 2 ? firstRow : secondRow).addView(preview, params);
+        }
+        gallery.addView(firstRow);
+        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(-1, -2);
+        second.topMargin = dp(RollcallSpacing.SPACE_2);
+        gallery.addView(secondRow, second);
+        return gallery;
+    }
+
+    private View buildAccentPickerRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(10), dp(10), dp(10));
+        row.setBackground(background(palette.focusSurface, palette.focusBorder, 14));
+        row.setFocusable(true);
+        row.setClickable(true);
+        TextView swatch = text("●", 24, customAccentColor == 0 ? palette.button : customAccentColor, Typeface.BOLD);
+        swatch.setGravity(android.view.Gravity.CENTER);
+        row.addView(swatch, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.addView(text(customAccentColor == 0 ? "Choose a custom color" : "Custom accent",
+                14, INK, Typeface.BOLD));
+        labels.addView(text(String.format(Locale.US, "#%06X", (customAccentColor == 0
+                ? palette.button : customAccentColor) & 0x00FFFFFF), 11, MUTED, Typeface.NORMAL),
+                topMargin(-1, -2, 3));
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, -2, 1f);
+        labelParams.leftMargin = dp(10);
+        row.addView(labels, labelParams);
+        TextView action = text("EDIT  →", 11, HIGHLIGHT, Typeface.BOLD);
+        row.addView(action);
+        row.setContentDescription("Choose custom accent color. Current color "
+                + String.format(Locale.US, "#%06X", (customAccentColor == 0
+                ? palette.button : customAccentColor) & 0x00FFFFFF));
+        row.setOnClickListener(v -> showCustomColorPicker());
+        return row;
+    }
+
+    private void showCustomColorPicker() {
+        int initial = customAccentColor == 0 ? palette.button : customAccentColor;
+        ColorPickerView picker = new ColorPickerView(this, initial);
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Choose accent color")
+                .setView(picker)
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Reset", null)
+                .setPositiveButton("Apply", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                if (!picker.hasValidColor()) return;
+                customAccentColor = picker.getColor();
+                getPreferences(MODE_PRIVATE).edit().putInt(CUSTOM_ACCENT_KEY, customAccentColor).apply();
+                refreshPaletteSurfaces();
+                dialog.dismiss();
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                customAccentColor = 0;
+                getPreferences(MODE_PRIVATE).edit().remove(CUSTOM_ACCENT_KEY).apply();
+                refreshPaletteSurfaces();
+                dialog.dismiss();
+            });
+        });
+        dialog.show();
+    }
+
+    private void refreshPaletteSurfaces() {
+        applyTheme();
+
+        if (dashboard != null && dashboard.getParent() instanceof ViewGroup) {
+            ViewGroup parent = (ViewGroup) dashboard.getParent();
+            int position = parent.indexOfChild(dashboard);
+            int visibility = dashboard.getVisibility();
+            ViewGroup.LayoutParams params = dashboard.getLayoutParams();
+            parent.removeView(dashboard);
+            dashboard = buildDashboardView();
+            dashboard.setVisibility(visibility);
+            parent.addView(dashboard, position, params);
+        }
+        if (aboutPage != null && aboutPage.getVisibility() == View.VISIBLE) showAbout();
+        if (onboardingPage != null && onboardingPage.getVisibility() == View.VISIBLE && onboardingStep == 4)
+            showOnboardingStep(4);
     }
 
     private void chooseTarget() {
@@ -1203,9 +1628,12 @@ public class MainActivity extends Activity {
             boolean granted = grantResults.length > 0
                     && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
             getPreferences(MODE_PRIVATE).edit().putBoolean(NOTIFICATION_PERMISSION_DENIED_KEY, !granted).apply();
+            getSharedPreferences("rollcall_notification_state", MODE_PRIVATE).edit().putBoolean("enabled", granted).apply();
             if (granted)
                 UpdatePushNotifications.subscribeIfAllowed(this);
-            showOnboardingStep(2);
+            else com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic("app_updates");
+            if (onboardingStarted) syncAttendance(true);
+            else showOnboardingStep(2);
             return;
         }
         if (requestCode != REMINDER_PERMISSION_REQUEST) return;
@@ -1217,78 +1645,10 @@ public class MainActivity extends Activity {
         render(LiveSnapshotStore.get());
     }
 
-    private void toggleTheme() {
-        if (!connectedOnce) return;
-        darkTheme = !darkTheme;
-        appearanceMode = darkTheme ? "dark" : "light";
-        getPreferences(MODE_PRIVATE).edit().putBoolean(DARK_KEY, darkTheme)
-                .putString(APPEARANCE_MODE_KEY, appearanceMode).apply();
-        recreate();
-    }
-
     @Override protected void onSaveInstanceState(Bundle outState) {
         outState.putBoolean("restore_about_settings", aboutPage != null && aboutPage.getVisibility() == View.VISIBLE);
+        outState.putBoolean("restore_profile_account", profilePage != null && profilePage.getVisibility() == View.VISIBLE);
         super.onSaveInstanceState(outState);
-    }
-
-    private void choosePalette() {
-        if (!connectedOnce) return;
-        int selected = colorThemeIndex;
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(20), dp(18), dp(20), dp(8));
-        content.setBackground(background(SURFACE, 0, 20));
-        content.addView(text(darkTheme ? "Night colors" : "Day colors", 20, INK, Typeface.BOLD));
-        TextView hint = text("Pick a palette for " + (darkTheme ? "dark" : "light") + " mode.", 13, MUTED, Typeface.NORMAL);
-        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
-        hintParams.topMargin = dp(4);
-        content.addView(hint, hintParams);
-
-        for (int i = 0; i < 5; i++) {
-            final int index = i;
-            AppPalette option = AppPalette.get(darkTheme, i);
-            LinearLayout optionRow = new LinearLayout(this);
-            optionRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            optionRow.setPadding(dp(12), dp(10), dp(12), dp(10));
-            optionRow.setBackground(background(i == selected ? SECONDARY : SURFACE, BORDER, 14));
-            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-            rowParams.topMargin = dp(9);
-            content.addView(optionRow, rowParams);
-
-            LinearLayout labels = new LinearLayout(this);
-            labels.setOrientation(LinearLayout.VERTICAL);
-            labels.addView(text(option.name, 14, INK, Typeface.BOLD));
-            labels.addView(text(darkTheme ? "Dark palette" : "Light palette", 11, MUTED, Typeface.NORMAL));
-            optionRow.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-
-            LinearLayout swatches = new LinearLayout(this);
-            swatches.setOrientation(LinearLayout.HORIZONTAL);
-            int[] colors = {option.hero, option.green, option.highlight, option.soft};
-            for (int color : colors) {
-                View swatch = new View(this);
-                swatch.setBackground(background(color, 0, 5));
-                LinearLayout.LayoutParams swatchParams = new LinearLayout.LayoutParams(dp(13), dp(24));
-                swatchParams.leftMargin = dp(3);
-                swatches.addView(swatch, swatchParams);
-            }
-            LinearLayout.LayoutParams swatchParams = new LinearLayout.LayoutParams(-2, -2);
-            swatchParams.rightMargin = dp(8);
-            optionRow.addView(swatches, swatchParams);
-            optionRow.addView(text(i == selected ? "✓" : "", 17, HIGHLIGHT, Typeface.BOLD));
-            optionRow.setOnClickListener(v -> {
-                colorThemeIndex = index;
-                getPreferences(MODE_PRIVATE).edit().putInt(COLOR_THEME_KEY, index).apply();
-                recreate();
-            });
-        }
-        int dialogTheme = cloudDialogTheme();
-        ScrollView paletteScroll = new ScrollView(this);
-        paletteScroll.setFillViewport(true);
-        paletteScroll.addView(content);
-        AlertDialog dialog = new AlertDialog.Builder(this, dialogTheme)
-                .setView(paletteScroll).setNegativeButton("Done", null).create();
-        dialog.show();
-        dialog.getWindow().setBackgroundDrawable(background(SURFACE, BORDER, 20));
     }
 
     private void saveProfile(JSONObject profile) {
@@ -1308,11 +1668,13 @@ public class MainActivity extends Activity {
 
     private ScrollView buildAboutPage() {
         ScrollView scroll = new ScrollView(this);
+        NativeMotion.enableScrollDissolve(scroll, dp(24));
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(CANVAS);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(20), dp(22), dp(20), dp(30));
+        page.setPadding(dp(RollcallSpacing.SPACE_5), dp(RollcallSpacing.SPACE_5),
+                dp(RollcallSpacing.SPACE_5), dp(30));
         scroll.addView(page);
 
         Button back = button("←  BACK TO DASHBOARD");
@@ -1325,7 +1687,7 @@ public class MainActivity extends Activity {
         eyebrow.setPadding(0, dp(24), 0, dp(8));
         page.addView(eyebrow);
         TextView title = text("Settings.", 35, INK, Typeface.BOLD);
-        title.setTypeface(appTypeface(), Typeface.BOLD);
+        title.setTypeface(themeTypography.display, Typeface.BOLD);
         title.setPadding(0, 0, 0, dp(3));
         page.addView(title);
         TextView subtitle = text("Make this your space.", 14, MUTED, Typeface.NORMAL);
@@ -1340,50 +1702,18 @@ public class MainActivity extends Activity {
         LinearLayout modeCopy = new LinearLayout(this);
         modeCopy.setOrientation(LinearLayout.VERTICAL);
         modeCopy.addView(text("Appearance", 15, INK, Typeface.BOLD));
-        TextView modeHint = text(appearanceMode.substring(0, 1).toUpperCase(Locale.ROOT) + appearanceMode.substring(1)
-                + " · " + palette.name, 12, MUTED, Typeface.NORMAL);
+        TextView modeHint = text("Dark appearance · " + palette.name + " · "
+                + AppPalette.fontNameFor(colorThemeIndex), 12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams modeHintParams = new LinearLayout.LayoutParams(-1, -2);
         modeHintParams.topMargin = dp(4);
         modeCopy.addView(modeHint, modeHintParams);
         modeRow.addView(modeCopy, new LinearLayout.LayoutParams(0, -2, 1));
+        modeRow.setContentDescription("Appearance. Dark mode. Current theme: " + palette.name);
         settings.addView(modeRow);
-        LinearLayout appearanceModes = new LinearLayout(this);
-        appearanceModes.setGravity(android.view.Gravity.CENTER);
-        appearanceModes.setBackground(background(SECONDARY, 0, 12));
-        String[] modes = {"Light", "Dark", "System"};
-        for (String mode : modes) {
-            TextView choice = text(mode, 12, mode.equalsIgnoreCase(appearanceMode) ? HERO_TEXT : INK, Typeface.BOLD);
-            choice.setGravity(android.view.Gravity.CENTER);
-            choice.setMinHeight(dp(44));
-            choice.setBackground(background(mode.equalsIgnoreCase(appearanceMode) ? HERO : Color.TRANSPARENT, 0, 10));
-            choice.setContentDescription(mode + " appearance" + (mode.equalsIgnoreCase(appearanceMode) ? ", selected" : ""));
-            choice.setOnClickListener(v -> {
-                if (mode.equalsIgnoreCase(appearanceMode)) return;
-                appearanceMode = mode.toLowerCase(Locale.ROOT);
-                darkTheme = appearanceMode.equals("system") ? isSystemDark() : appearanceMode.equals("dark");
-                getPreferences(MODE_PRIVATE).edit().putString(APPEARANCE_MODE_KEY, appearanceMode)
-                        .putBoolean(DARK_KEY, darkTheme).apply();
-                recreate();
-            });
-            appearanceModes.addView(choice, new LinearLayout.LayoutParams(0, dp(44), 1));
-        }
-        LinearLayout.LayoutParams appearanceModeParams = new LinearLayout.LayoutParams(-1, -2);
-        appearanceModeParams.topMargin = dp(8);
-        settings.addView(appearanceModes, appearanceModeParams);
-        LinearLayout paletteRow = new LinearLayout(this);
-        paletteRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        paletteRow.setPadding(0, dp(10), 0, dp(2));
-        paletteRow.addView(text("Color palette", 14, INK, Typeface.BOLD),
-                new LinearLayout.LayoutParams(0, -2, 1));
-        TextView paletteChoice = text(palette.name + "  →", 12, HERO_TEXT, Typeface.BOLD);
-        paletteChoice.setGravity(android.view.Gravity.CENTER);
-        paletteChoice.setPadding(dp(12), dp(9), dp(12), dp(9));
-        paletteChoice.setBackground(background(HERO, 0, 10));
-        paletteRow.addView(paletteChoice);
-        paletteRow.setContentDescription("Color palette, " + palette.name);
-        paletteRow.setFocusable(true);
-        paletteRow.setOnClickListener(v -> choosePalette());
-        settings.addView(paletteRow);
+        LinearLayout.LayoutParams themeGalleryParams = new LinearLayout.LayoutParams(-1, -2);
+        themeGalleryParams.topMargin = dp(RollcallSpacing.SPACE_3);
+        settings.addView(buildThemeGallery(), themeGalleryParams);
+        settings.addView(buildAccentPickerRow(), topMargin(-1, -2, RollcallSpacing.SPACE_3));
         LinearLayout targetRow = new LinearLayout(this);
         targetRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         targetRow.setPadding(0, dp(12), 0, dp(4));
@@ -1416,7 +1746,7 @@ public class MainActivity extends Activity {
         reminderCopy.addView(text("Attendance, OD, schedule, and sync alerts follow Android notification settings.", 11, MUTED, Typeface.NORMAL), eventHintParams);
         reminderRow.addView(reminderCopy, new LinearLayout.LayoutParams(-1, -2));
         settings.addView(reminderRow);
-        reminderBell = new BellToggleView(this, SECONDARY, HERO, INK, HERO_TEXT);
+        reminderBell = new BellToggleView(this, SECONDARY, HERO, INK, HERO_TEXT, themeTypography.bodyBold);
         reminderBell.setChecked(classRemindersEnabled);
         reminderBell.onToggle(() -> {
             if (classRemindersEnabled) confirmDisableReminders();
@@ -1437,23 +1767,6 @@ public class MainActivity extends Activity {
         page.addView(settings);
         updateReminderSettings();
 
-        LinearLayout cloud = cardContainer();
-        LinearLayout.LayoutParams cloudParams = new LinearLayout.LayoutParams(-1, -2);
-        cloudParams.topMargin = dp(12);
-        page.addView(cloud, cloudParams);
-        cloud.addView(text("ROLLCALL WEB ACCOUNT", 12, MUTED, Typeface.BOLD));
-        FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
-        boolean cloudPhoneLinked = cloudUser != null && CloudAccountClient.deviceId(this).equals(getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("registered_device_id", ""));
-        TextView cloudInfo = text(cloudUser == null ? "Optional. Create an account to securely view your synced Rollcall snapshot on the web." : cloudUser.getEmail() + (cloudUser.isEmailVerified() ? (cloudPhoneLinked ? " · phone linked" : " · connect this phone") : " · verify email to connect"), 13, MUTED, Typeface.NORMAL);
-        cloudInfo.setPadding(0, dp(8), 0, dp(8));
-        cloud.addView(cloudInfo);
-        Button cloudButton = button(cloudUser == null ? "Sign in or create account" : "Manage web account");
-        cloudButton.setOnClickListener(v -> showCloudAccountDialog());
-        cloud.addView(cloudButton, new LinearLayout.LayoutParams(-1, dp(48)));
-        TextView cloudPrivacy = text("Your MyCamu password is never sent to Rollcall. A verified email and this app are required. Attendance, schedule, leave/OD and KCT marks are encrypted in transit and stored on Rollcall’s cloud service for the web mirror. This is not end-to-end encryption.", 12, MUTED, Typeface.NORMAL);
-        cloudPrivacy.setPadding(0, dp(8), 0, 0);
-        cloud.addView(cloudPrivacy);
-
         String versionLabel = "Version";
         try { versionLabel += " " + getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
         catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
@@ -1465,12 +1778,12 @@ public class MainActivity extends Activity {
         page.addView(version, versionParams);
 
         LinearLayout project = cardContainer();
-        project.setBackground(background(0xFFC8C8FF, 0, 16));
-        project.addView(text("ABOUT / THE PROJECT", 11, 0xFF111111, Typeface.BOLD));
-        TextView description = text("GOOD DESIGN.\nBETTER ATTENDANCE.", 22, 0xFF111111, Typeface.BOLD);
+        project.setBackground(background(palette.raisedSurface, palette.border, palette.cardRadius));
+        project.addView(text("ABOUT / THE PROJECT", 11, HIGHLIGHT, Typeface.BOLD));
+        TextView description = text("GOOD DESIGN.\nBETTER ATTENDANCE.", 22, INK, Typeface.BOLD);
         description.setPadding(0, dp(8), 0, 0);
         project.addView(description);
-        TextView privacy = text("Rollcall connects your real attendance, timetable, marks, and goals. Your academic data stays yours; Rollcall is an independent project and is not affiliated with your institution or service provider.", 12, 0xFF333344, Typeface.NORMAL);
+        TextView privacy = text("Rollcall connects your real attendance, timetable, marks, and goals. Your academic data stays yours; Rollcall is an independent project and is not affiliated with your institution or service provider.", 12, MUTED, Typeface.NORMAL);
         privacy.setPadding(0, dp(10), 0, 0);
         project.addView(privacy);
         page.addView(project);
@@ -1517,6 +1830,121 @@ public class MainActivity extends Activity {
         termsOfUse.setOnClickListener(v -> openUrl("https://github.com/inianexe/Rollcall/blob/main/TERMS.md"));
         legal.addView(termsOfUse);
 
+        return scroll;
+    }
+
+    private ScrollView buildProfilePage() {
+        ScrollView scroll = new ScrollView(this);
+        NativeMotion.enableScrollDissolve(scroll, dp(24));
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(CANVAS);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(RollcallSpacing.SPACE_5), dp(RollcallSpacing.SPACE_5),
+                dp(RollcallSpacing.SPACE_5), dp(30));
+        scroll.addView(page);
+
+        Button back = button("←  BACK TO HOME");
+        back.setBackgroundTintList(ColorStateList.valueOf(SECONDARY));
+        back.setTextColor(INK);
+        back.setOnClickListener(v -> showDashboard());
+        page.addView(back, new LinearLayout.LayoutParams(-1, dp(48)));
+        TextView title = text("Profile & account", 30, INK, Typeface.BOLD);
+        title.setTypeface(themeTypography.display, Typeface.BOLD);
+        title.setPadding(0, dp(24), 0, dp(6));
+        page.addView(title);
+        page.addView(text("Your student identity and Rollcall web access.", 14, MUTED, Typeface.NORMAL),
+                topMargin(-1, -2, 0));
+
+        LinearLayout identity = cardContainer();
+        LinearLayout.LayoutParams identityParams = new LinearLayout.LayoutParams(-1, -2);
+        identityParams.topMargin = dp(16);
+        page.addView(identity, identityParams);
+        identity.addView(text("STUDENT PROFILE", 12, HIGHLIGHT, Typeface.BOLD));
+        LinearLayout photoRow = new LinearLayout(this);
+        photoRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        photoRow.setPadding(0, dp(12), 0, dp(12));
+        profilePhotoView = new ImageView(this);
+        profilePhotoView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        GradientDrawable photoShape = new GradientDrawable();
+        photoShape.setShape(GradientDrawable.OVAL);
+        photoShape.setColor(SECONDARY);
+        profilePhotoView.setBackground(photoShape);
+        profilePhotoView.setClipToOutline(true);
+        profilePhotoView.setContentDescription("Your profile photo");
+        profilePhotoView.setImageBitmap(profilePhoto);
+        photoRow.addView(profilePhotoView, new LinearLayout.LayoutParams(dp(72), dp(72)));
+        LinearLayout photoActions = new LinearLayout(this);
+        photoActions.setOrientation(LinearLayout.VERTICAL);
+        photoActions.setPadding(dp(14), 0, 0, 0);
+        Button changePhoto = button(profilePhoto == null ? "Add profile photo" : "Change photo");
+        changePhoto.setOnClickListener(v -> openProfilePhotoPicker());
+        photoActions.addView(changePhoto, new LinearLayout.LayoutParams(-1, dp(46)));
+        TextView photoHint = text("Stored only on this device.", 12, MUTED, Typeface.NORMAL);
+        photoActions.addView(photoHint, topMargin(-1, -2, 5));
+        photoRow.addView(photoActions, new LinearLayout.LayoutParams(0, -2, 1));
+        identity.addView(photoRow);
+        profilePhotoView.setVisibility(profilePhoto == null ? View.GONE : View.VISIBLE);
+        identity.addView(text("DISPLAY NAME", 11, MUTED, Typeface.BOLD), topMargin(-1, -2, 8));
+        EditText profileNameField = newDisplayNameField(displayName, "Add a display name");
+        identity.addView(profileNameField, topMargin(-1, dp(52), 5));
+        Button saveName = button("Save display name");
+        saveName.setOnClickListener(v -> {
+            if (!saveDisplayName(profileNameField.getText().toString())) {
+                profileNameField.setError("Enter a display name");
+                return;
+            }
+            Toast.makeText(this, "Display name updated", Toast.LENGTH_SHORT).show();
+            showProfile();
+        });
+        identity.addView(saveName, topMargin(-1, dp(46), 6));
+        if (!studentName.isEmpty() && !studentName.equals(displayName))
+            identity.addView(text("MyCamu name · " + studentName, 13, MUTED, Typeface.NORMAL), topMargin(-1, -2, 10));
+        if (!rollNumber.isEmpty()) identity.addView(text(rollNumberLabel + "  " + rollNumber,
+                14, MUTED, Typeface.NORMAL), topMargin(-1, -2, 4));
+        if (!instituteName.isEmpty()) identity.addView(text(instituteName,
+                13, MUTED, Typeface.NORMAL), topMargin(-1, -2, 4));
+        if (studentName.isEmpty() && rollNumber.isEmpty() && instituteName.isEmpty()) {
+            identity.addView(text("Connect MyCamu to load your student details.", 13, MUTED, Typeface.NORMAL),
+                    topMargin(-1, -2, 4));
+        }
+
+        LinearLayout cloud = cardContainer();
+        LinearLayout.LayoutParams cloudParams = new LinearLayout.LayoutParams(-1, -2);
+        cloudParams.topMargin = dp(12);
+        page.addView(cloud, cloudParams);
+        cloud.addView(text("ROLLCALL WEB ACCOUNT", 12, MUTED, Typeface.BOLD));
+        FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
+        boolean cloudPhoneLinked = cloudUser != null && CloudAccountClient.deviceId(this).equals(
+                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("registered_device_id", ""));
+        TextView cloudInfo = text(cloudUser == null
+                        ? "Optional. Create an account to securely view your synced Rollcall snapshot on the web."
+                        : cloudUser.getEmail() + (cloudUser.isEmailVerified()
+                        ? (cloudPhoneLinked ? " · phone linked" : " · connect this phone")
+                        : " · verify email to connect"),
+                13, MUTED, Typeface.NORMAL);
+        cloudInfo.setPadding(0, dp(8), 0, dp(8));
+        cloud.addView(cloudInfo);
+        Button cloudButton = button(cloudUser == null ? "Sign in or create account" : "Manage web account");
+        cloudButton.setOnClickListener(v -> showCloudAccountDialog());
+        cloud.addView(cloudButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        Button scanWebButton = button("Scan QR to sign in on web");
+        scanWebButton.setEnabled(cloudPhoneLinked);
+        scanWebButton.setOnClickListener(v -> startWebSignInScan());
+        LinearLayout.LayoutParams scanWebParams = new LinearLayout.LayoutParams(-1, dp(48));
+        scanWebParams.topMargin = dp(8);
+        cloud.addView(scanWebButton, scanWebParams);
+        if (!cloudPhoneLinked) {
+            TextView scanHint = text("Sign in and connect this phone before scanning a web sign-in code.",
+                    11, MUTED, Typeface.NORMAL);
+            scanHint.setPadding(0, dp(5), 0, 0);
+            cloud.addView(scanHint);
+        }
+        TextView cloudPrivacy = text("Your MyCamu password is never sent to Rollcall. A verified email and this app are required. Attendance, schedule, leave/OD and KCT marks are encrypted in transit and stored on Rollcall’s cloud service for the web mirror. This is not end-to-end encryption.",
+                12, MUTED, Typeface.NORMAL);
+        cloudPrivacy.setPadding(0, dp(8), 0, 0);
+        cloud.addView(cloudPrivacy);
+
         LinearLayout data = cardContainer();
         LinearLayout.LayoutParams dataParams = new LinearLayout.LayoutParams(-1, -2);
         dataParams.topMargin = dp(12);
@@ -1524,16 +1952,12 @@ public class MainActivity extends Activity {
         data.addView(text("SAVED MYCAMU DATA", 12, MUTED, Typeface.BOLD));
         TextView dataDescription = text("Disconnect this account and remove saved attendance, timetable, history, and profile details from this device.",
                 13, INK, Typeface.NORMAL);
-        LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
-        descriptionParams.topMargin = dp(7);
-        data.addView(dataDescription, descriptionParams);
+        data.addView(dataDescription, topMargin(-1, -2, 7));
         Button clear = button("DELETE / DISCONNECT");
         clear.setTextColor(RED);
         clear.setBackgroundTintList(ColorStateList.valueOf(SECONDARY));
         clear.setOnClickListener(v -> confirmClearSavedData());
-        LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(-1, dp(48));
-        clearParams.topMargin = dp(10);
-        data.addView(clear, clearParams);
+        data.addView(clear, topMargin(-1, dp(48), 10));
         return scroll;
     }
 
@@ -1622,8 +2046,15 @@ public class MainActivity extends Activity {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
         fields.setPadding(dp(24), dp(12), dp(24), dp(4));
+        Button google = button("Continue with Google");
+        google.setTextColor(INK);
+        google.setBackground(background(SURFACE, BORDER, 10));
+        fields.addView(google, new LinearLayout.LayoutParams(-1, dp(52)));
+        TextView orEmail = text("OR CONTINUE WITH EMAIL", 10, MUTED, Typeface.BOLD);
+        orEmail.setGravity(android.view.Gravity.CENTER);
+        fields.addView(orEmail, topMargin(-1, dp(34), 8));
         TextView emailLabel = text("EMAIL ADDRESS", 11, MUTED, Typeface.BOLD);
-        fields.addView(emailLabel);
+        fields.addView(emailLabel, topMargin(-1, -2, 8));
         EditText email = new EditText(this);
         styleCloudCredentialField(email, "you@example.com");
         email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
@@ -1643,7 +2074,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams passwordParams = new LinearLayout.LayoutParams(-1, dp(52));
         passwordParams.topMargin = dp(5);
         fields.addView(password, passwordParams);
-        new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in to Rollcall")
+        AlertDialog credentialsDialog = new AlertDialog.Builder(this, cloudDialogTheme()).setTitle(create ? "Create Rollcall account" : "Sign in to Rollcall")
                 .setMessage("Your verified email protects the web copy of your Rollcall data. Use a password you do not use for MyCamu.")
                 .setView(fields)
                 .setPositiveButton(create ? "Create account" : "Sign in", (d, w) -> {
@@ -1651,7 +2082,191 @@ public class MainActivity extends Activity {
                     else cloudSignIn(email.getText().toString().trim(), password.getText().toString());
                 })
                 .setNeutralButton(create ? "Have an account?" : "No account?", (d, w) -> showCloudCredentials(!create))
-                .setNegativeButton("Not now", null).show();
+                .setNegativeButton("Not now", null).create();
+        google.setOnClickListener(v -> {
+            credentialsDialog.dismiss();
+            startGoogleSignIn();
+        });
+        credentialsDialog.show();
+    }
+
+    private void startGoogleSignIn() {
+        String serverClientId = getString(R.string.google_sign_in_server_client_id);
+        if (serverClientId.isEmpty()) {
+            Toast.makeText(this, "Google sign-in is not configured for this build yet.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        GetGoogleIdOption googleOption = new GetGoogleIdOption.Builder()
+                .setServerClientId(serverClientId)
+                .setFilterByAuthorizedAccounts(false)
+                .setAutoSelectEnabled(false)
+                .build();
+        GetCredentialRequest request = new GetCredentialRequest.Builder()
+                .addCredentialOption(googleOption)
+                .build();
+        CredentialManager.create(this).getCredentialAsync(this, request, new android.os.CancellationSignal(),
+                command -> handler.post(command), new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override public void onResult(GetCredentialResponse result) {
+                        authenticateWithGoogle(result.getCredential());
+                    }
+
+                    @Override public void onError(GetCredentialException error) {
+                        if (error.getMessage() == null || !error.getMessage().toLowerCase(Locale.ROOT).contains("cancel"))
+                            Toast.makeText(MainActivity.this, "Google sign-in could not start. "
+                                    + (error.getMessage() == null ? "Try again." : error.getMessage()), Toast.LENGTH_LONG).show();
+                    }
+                });
+    }
+
+    private void authenticateWithGoogle(Credential credential) {
+        if (!(credential instanceof CustomCredential)
+                || !GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
+            Toast.makeText(this, "Google did not return a sign-in credential. Try again.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        GoogleIdTokenCredential googleCredential = GoogleIdTokenCredential.createFrom(credential.getData());
+        String selectedEmail = googleCredential.getId();
+        if (selectedEmail == null || !android.util.Patterns.EMAIL_ADDRESS.matcher(selectedEmail).matches()) {
+            Toast.makeText(this, "Google did not return a valid email address. Choose an account again.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Continue with this account?")
+                .setMessage("Rollcall will use " + selectedEmail + ". Confirm the address before creating or connecting a Rollcall account.")
+                .setPositiveButton("Continue", (dialog, which) -> finishGoogleAuthentication(googleCredential))
+                .setNegativeButton("Choose another", (dialog, which) -> startGoogleSignIn())
+                .setNeutralButton("Cancel", null)
+                .show();
+    }
+
+    private void finishGoogleAuthentication(GoogleIdTokenCredential googleCredential) {
+        FirebaseAuth.getInstance().signInWithCredential(
+                GoogleAuthProvider.getCredential(googleCredential.getIdToken(), null))
+                .addOnCompleteListener(this, task -> {
+                    if (!task.isSuccessful()) {
+                        String reason = task.getException() == null ? "Try again." : task.getException().getLocalizedMessage();
+                        Toast.makeText(this, "Google sign-in failed. " + reason, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    FirebaseUser user = task.getResult().getUser();
+                    if (user == null || !user.isEmailVerified()) {
+                        Toast.makeText(this, "Google did not verify this email address.", Toast.LENGTH_LONG).show();
+                        FirebaseAuth.getInstance().signOut();
+                        return;
+                    }
+                    if (onboardingGoogleSignIn) {
+                        com.google.firebase.auth.AdditionalUserInfo accountInfo = task.getResult().getAdditionalUserInfo();
+                        onboardingNewGoogleAccount = accountInfo != null && accountInfo.isNewUser();
+                        if (!onboardingNewGoogleAccount) showReturningGoogleAccount(user, true);
+                    }
+                    registerCloudDevice(null);
+                });
+    }
+
+    private void showReturningGoogleAccount(FirebaseUser user, boolean linking) {
+        String googleName = cleanDisplayName(user.getDisplayName());
+        String confirmedName = !cleanDisplayName(displayName).isEmpty() ? cleanDisplayName(displayName)
+                : !cleanDisplayName(studentName).isEmpty() ? cleanDisplayName(studentName)
+                : !googleName.isEmpty() ? googleName : "Rollcall account";
+        LinearLayout details = new LinearLayout(this);
+        details.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout profileCard = new LinearLayout(this);
+        profileCard.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        profileCard.setPadding(dp(12), dp(12), dp(12), dp(12));
+        profileCard.setBackground(background(palette.focusSurface, palette.focusBorder, 16));
+        FrameLayout photo = new FrameLayout(this);
+        GradientDrawable photoShape = new GradientDrawable();
+        photoShape.setShape(GradientDrawable.OVAL);
+        photoShape.setColor(palette.surface);
+        photoShape.setStroke(dp(1), palette.focusBorder);
+        photo.setBackground(photoShape);
+        TextView initials = text(confirmedName.substring(0, 1).toUpperCase(Locale.ROOT),
+                19, palette.ink, Typeface.BOLD);
+        initials.setGravity(android.view.Gravity.CENTER);
+        photo.addView(initials, new FrameLayout.LayoutParams(-1, -1));
+        if (profilePhoto != null) {
+            ImageView savedPhoto = new ImageView(this);
+            savedPhoto.setImageBitmap(profilePhoto);
+            savedPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            savedPhoto.setBackground(photoShape);
+            savedPhoto.setClipToOutline(true);
+            photo.addView(savedPhoto, new FrameLayout.LayoutParams(-1, -1));
+        }
+        profileCard.addView(photo, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(12), 0, 0, 0);
+        TextView name = text(confirmedName, 15, palette.ink, Typeface.BOLD);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        copy.addView(name);
+        TextView email = text(user.getEmail() == null ? "Verified Google account" : user.getEmail(),
+                12, palette.muted, Typeface.NORMAL);
+        email.setSingleLine(true);
+        email.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        copy.addView(email, topMargin(-1, -2, 3));
+        profileCard.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
+        details.addView(profileCard, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout status = new LinearLayout(this);
+        status.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        status.setPadding(dp(2), dp(12), dp(2), 0);
+        ProgressBar progress = new ProgressBar(this);
+        progress.setIndeterminate(true);
+        progress.setVisibility(linking ? View.VISIBLE : View.GONE);
+        status.addView(progress, new LinearLayout.LayoutParams(dp(18), dp(18)));
+        returningAccountStatus = text(linking ? "Linking this phone…" : "Your MyCamu connection stays separate.",
+                12, palette.muted, Typeface.NORMAL);
+        LinearLayout.LayoutParams statusTextParams = new LinearLayout.LayoutParams(0, -2, 1f);
+        statusTextParams.leftMargin = linking ? dp(10) : 0;
+        status.addView(returningAccountStatus, statusTextParams);
+        details.addView(status);
+        details.setPadding(dp(24), dp(6), dp(24), 0);
+        AlertDialog confirmation = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Welcome back")
+                .setView(details)
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    FirebaseAuth.getInstance().signOut();
+                    onboardingNewGoogleAccount = false;
+                })
+                .setPositiveButton("Continue", (dialog, which) -> {
+                    onboardingNewGoogleAccount = false;
+                    showOnboardingStep(5);
+                })
+                .create();
+        confirmation.show();
+        returningAccountDialog = confirmation;
+        confirmation.setOnDismissListener(ignored -> {
+            if (returningAccountDialog == confirmation) {
+                returningAccountDialog = null;
+                returningAccountContinue = null;
+                returningAccountStatus = null;
+            }
+        });
+        if (confirmation.getWindow() != null) {
+            int width = Math.min(dp(420), getResources().getDisplayMetrics().widthPixels - dp(40));
+            confirmation.getWindow().setLayout(width, android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+        returningAccountContinue = confirmation.getButton(AlertDialog.BUTTON_POSITIVE);
+        returningAccountContinue.setEnabled(!linking);
+        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(!linking);
+        confirmation.setCancelable(!linking);
+        confirmation.setCanceledOnTouchOutside(!linking);
+    }
+
+    private void returningAccountLinkComplete() {
+        if (returningAccountDialog == null || !returningAccountDialog.isShowing()) return;
+        if (returningAccountStatus != null) returningAccountStatus.setText("Account confirmed. Your MyCamu connection stays separate.");
+        if (returningAccountContinue != null) returningAccountContinue.setEnabled(true);
+        returningAccountDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);
+        returningAccountDialog.setCancelable(true);
+        returningAccountDialog.setCanceledOnTouchOutside(true);
+    }
+
+    private void dismissReturningAccountDialog() {
+        if (returningAccountDialog != null) returningAccountDialog.dismiss();
+        returningAccountDialog = null;
+        returningAccountContinue = null;
+        returningAccountStatus = null;
     }
 
     private void styleCloudCredentialField(EditText field, String hint) {
@@ -1667,17 +2282,63 @@ public class MainActivity extends Activity {
     }
 
     private void cloudCreateAccount(String email, String password) {
-        if (email.isEmpty() || password.length() < 8) { Toast.makeText(this, "Enter a valid email and a password with at least 8 characters.", Toast.LENGTH_LONG).show(); return; }
-        FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) { Toast.makeText(this, task.getException() == null ? "Account creation failed." : task.getException().getMessage(), Toast.LENGTH_LONG).show(); return; }
-            FirebaseUser user = task.getResult().getUser();
-            if (user == null) return;
-            user.sendEmailVerification().addOnCompleteListener(this, sent -> {
-                getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", true).apply();
-                Toast.makeText(this, sent.isSuccessful() ? "Account created. Verify your email, then sign in here to connect this phone." : "Account created, but the verification email could not be sent. Use Resend verification.", Toast.LENGTH_LONG).show();
-                if (connectedOnce) showAbout();
-            });
-        });
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() || password.length() < 8) {
+            Toast.makeText(this, "Enter a valid email and a password with at least 8 characters.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new Thread(() -> {
+            try {
+                CloudAccountClient.startEmailSignup(email);
+                runOnUiThread(() -> promptCloudSignupCode(email, password));
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this, error.getMessage() == null
+                        ? "Could not send the verification email." : error.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-signup-email").start();
+    }
+
+    private void promptCloudSignupCode(String email, String password) {
+        EditText code = new EditText(this);
+        styleCloudCredentialField(code, "6-digit code");
+        code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        code.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(6)});
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(8), dp(24), 0);
+        content.addView(text("We sent a one-time code to " + email + ". Your Rollcall account will be created only after the code is verified.",
+                14, MUTED, Typeface.NORMAL), new LinearLayout.LayoutParams(-1, -2));
+        content.addView(code, topMargin(-1, dp(54), 14));
+        AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Verify your email")
+                .setView(content)
+                .setPositiveButton("Verify & create account", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String value = code.getText().toString().trim();
+            if (!value.matches("[0-9]{6}")) {
+                code.setError("Enter the six-digit code from your email.");
+                return;
+            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            new Thread(() -> {
+                try {
+                    CloudAccountClient.completeEmailSignup(email, value, password);
+                    runOnUiThread(() -> {
+                        dialog.dismiss();
+                        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putBoolean("registration_pending", true).apply();
+                        Toast.makeText(this, "Email verified and account created. Sign in to connect this phone.", Toast.LENGTH_LONG).show();
+                        if (connectedOnce) showProfile();
+                    });
+                } catch (Exception error) {
+                    runOnUiThread(() -> {
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        code.setError(error.getMessage() == null ? "Could not verify this code." : error.getMessage());
+                    });
+                }
+            }, "rollcall-signup-verify").start();
+        }));
+        dialog.show();
     }
 
     private void cloudSignIn(String email, String password) {
@@ -1688,7 +2349,7 @@ public class MainActivity extends Activity {
             if (!user.isEmailVerified()) {
                 user.sendEmailVerification();
                 Toast.makeText(this, "Verify your email before connecting the web dashboard.", Toast.LENGTH_LONG).show();
-                if (connectedOnce) showAbout();
+                if (connectedOnce) showProfile();
             } else registerCloudDevice(null);
         });
     }
@@ -1705,7 +2366,20 @@ public class MainActivity extends Activity {
                 CloudAccountClient.enqueueSnapshotSync(this);
                 runOnUiThread(() -> {
                     Toast.makeText(this, "This phone is linked to your Rollcall web account.", Toast.LENGTH_LONG).show();
-                    showAbout();
+                    if (!onboardingGoogleSignIn) {
+                        showProfile();
+                    } else if (onboardingNewGoogleAccount) {
+                        dismissReturningAccountDialog();
+                        onboardingGoogleSignIn = false;
+                        onboardingNewGoogleAccount = false;
+                        displayName = user.getDisplayName() == null ? "" : user.getDisplayName();
+                        showOnboardingStep(3);
+                    } else {
+                        onboardingGoogleSignIn = false;
+                        if (returningAccountDialog == null || !returningAccountDialog.isShowing())
+                            showReturningGoogleAccount(user, false);
+                        else returningAccountLinkComplete();
+                    }
                 });
             } catch (Exception error) {
                 if (error instanceof CloudAccountClient.ApiException
@@ -1713,27 +2387,45 @@ public class MainActivity extends Activity {
                     try {
                         String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                         CloudAccountClient.sendDeviceReplacementCode(token);
-                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), null));
+                        runOnUiThread(() -> {
+                            dismissReturningAccountDialog();
+                            promptDeviceReplacementCode(user.getEmail(), null);
+                        });
                     } catch (Exception sendError) {
                         String message = sendError.getMessage() == null ? "Could not send the confirmation email." : sendError.getMessage();
-                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                        runOnUiThread(() -> {
+                            dismissReturningAccountDialog();
+                            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                        });
                     }
                 } else if (error instanceof CloudAccountClient.ApiException
                         && "email_code_invalid".equals(((CloudAccountClient.ApiException) error).code)) {
-                    runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code did not match. Check the email and try again."));
+                    runOnUiThread(() -> {
+                        dismissReturningAccountDialog();
+                        promptDeviceReplacementCode(user.getEmail(), "That code did not match. Check the email and try again.");
+                    });
                 } else if (error instanceof CloudAccountClient.ApiException
                         && "email_code_expired".equals(((CloudAccountClient.ApiException) error).code)) {
                     try {
                         String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
                         CloudAccountClient.sendDeviceReplacementCode(token);
-                        runOnUiThread(() -> promptDeviceReplacementCode(user.getEmail(), "That code expired or reached its attempt limit. A fresh code has been emailed to you."));
+                        runOnUiThread(() -> {
+                            dismissReturningAccountDialog();
+                            promptDeviceReplacementCode(user.getEmail(), "That code expired or reached its attempt limit. A fresh code has been emailed to you.");
+                        });
                     } catch (Exception sendError) {
                         String message = sendError.getMessage() == null ? "Could not send a new confirmation code." : sendError.getMessage();
-                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                        runOnUiThread(() -> {
+                            dismissReturningAccountDialog();
+                            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                        });
                     }
                 } else {
                     String message = error.getMessage() == null ? "Could not connect this phone." : error.getMessage();
-                    runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                    runOnUiThread(() -> {
+                        dismissReturningAccountDialog();
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                    });
                 }
             }
         }, "rollcall-cloud-device").start();
@@ -1789,9 +2481,86 @@ public class MainActivity extends Activity {
     }
 
     private void signOutCloudAccount() {
+        new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Sign out and start over?")
+                .setMessage("This clears Rollcall’s saved data and provider sessions from this phone, then returns to the welcome screen. Your Rollcall account and cloud snapshot remain available when you sign in again.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Sign out and clear", (dialog, which) -> resetForLogout())
+                .show();
+    }
+
+    private void resetForLogout() {
+        WorkManager work = WorkManager.getInstance(getApplicationContext());
+        work.cancelUniqueWork("mycamu-attendance-sync");
+        work.cancelUniqueWork("rollcall-cloud-snapshot");
+        handler.removeCallbacks(routeMonitor);
+        handler.removeCallbacks(pollResult);
+        handler.removeCallbacks(syncTimeout);
+        handler.removeCallbacks(scanKctAcademicPage);
+        syncInProgress = false;
+        if (webView != null) {
+            webView.stopLoading();
+            webView.clearHistory();
+            webView.clearCache(true);
+            webView.loadUrl("about:blank");
+        }
+        if (kctWebView != null) {
+            kctWebView.stopLoading();
+            kctWebView.clearHistory();
+            kctWebView.clearCache(true);
+            kctWebView.loadUrl("about:blank");
+        }
+        ClassReminderScheduler.setEnabled(this, false);
+        android.app.NotificationManager notifications = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (notifications != null) notifications.cancelAll();
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic("app_updates");
         FirebaseAuth.getInstance().signOut();
-        Toast.makeText(this, "Signed out of Rollcall web account. Your cloud snapshot remains available when you sign in again.", Toast.LENGTH_LONG).show();
-        showAbout();
+        CredentialManager.create(this).clearCredentialStateAsync(new ClearCredentialStateRequest(),
+                new android.os.CancellationSignal(), command -> handler.post(command),
+                new CredentialManagerCallback<Void, ClearCredentialException>() {
+                    @Override public void onResult(Void result) { }
+                    @Override public void onError(ClearCredentialException error) { }
+                });
+        android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
+        cookies.removeAllCookies(null);
+        cookies.flush();
+        android.webkit.WebStorage.getInstance().deleteAllData();
+        LiveSnapshotStore.clear(this);
+        getSharedPreferences("mycamu_sync", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("attendance_notice_state", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("class_reminders", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("rollcall_notification_state", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("rollcall_announcements", MODE_PRIVATE).edit().clear().apply();
+        getPreferences(MODE_PRIVATE).edit().clear().apply();
+
+        connectedOnce = false;
+        onboardingStarted = false;
+        onboardingStep = 0;
+        onboardingGoogleSignIn = false;
+        onboardingNewGoogleAccount = false;
+        sessionExpired = false;
+        initialSyncAttempted = false;
+        forceForegroundSync = false;
+        hasClassAttendanceSync = false;
+        latestClassAttendanceId = latestClassAttendanceName = latestClassAttendanceStatus = "";
+        studentName = displayName = instituteName = rollNumber = "";
+        rollNumberLabel = "Roll No.";
+        profilePhoto = null;
+        if (profilePhotoView != null) profilePhotoView.setImageDrawable(null);
+        if (onboardingProfilePhotoView != null) onboardingProfilePhotoView.setImageDrawable(null);
+        if (dashboardView != null) dashboardView.setProfilePhoto(null);
+        syncErrorMessage = "";
+        darkTheme = true;
+        colorThemeIndex = 0;
+        customAccentColor = 0;
+        attendanceTarget = 75;
+        onboardingAttendanceStyle = "";
+        classRemindersEnabled = ClassReminderScheduler.enabled(this);
+        applyTheme();
+        showAppScreen(onboardingPage);
+        showOnboardingStep(0);
+        Toast.makeText(this, "Signed out. Rollcall is ready to start again.", Toast.LENGTH_LONG).show();
     }
 
     private void confirmCloudAccountDelete() {
@@ -1811,7 +2580,7 @@ public class MainActivity extends Activity {
                                 }
                                 Tasks.await(user.delete(), 20, TimeUnit.SECONDS);
                                 FirebaseAuth.getInstance().signOut();
-                                runOnUiThread(() -> { Toast.makeText(this, "Rollcall cloud account deleted. Your phone data is unchanged.", Toast.LENGTH_LONG).show(); showAbout(); });
+                                runOnUiThread(() -> { Toast.makeText(this, "Rollcall cloud account deleted. Your phone data is unchanged.", Toast.LENGTH_LONG).show(); showProfile(); });
                             } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "Could not delete the account. Try again while online.", Toast.LENGTH_LONG).show()); }
                         }, "rollcall-delete-account").start();
                     });
@@ -1852,6 +2621,73 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception error) { runOnUiThread(() -> Toast.makeText(this, "The web sign-in code expired or this is not the trusted phone.", Toast.LENGTH_LONG).show()); }
         }, "rollcall-web-code").start();
+    }
+
+    private void startWebSignInScan() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        String linkedId = getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("registered_device_id", "");
+        if (user == null || !user.isEmailVerified() || !CloudAccountClient.deviceId(this).equals(linkedId)) {
+            Toast.makeText(this, "Connect this phone to your verified Rollcall account first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .enableAutoZoom()
+                .build();
+        GmsBarcodeScanning.getClient(this, options).startScan()
+                .addOnSuccessListener(barcode -> previewWebSignIn(user, barcode.getRawValue()))
+                .addOnFailureListener(error -> Toast.makeText(this, "QR scanner is unavailable. Try again when Google Play services is ready.", Toast.LENGTH_LONG).show());
+    }
+
+    private void previewWebSignIn(FirebaseUser user, String rawValue) {
+        WebLoginQr.Payload challenge = WebLoginQr.parse(rawValue);
+        if (challenge == null) {
+            Toast.makeText(this, "That is not a valid Rollcall web sign-in code.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new Thread(() -> {
+            try {
+                String token = Tasks.await(user.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                JSONObject preview = CloudAccountClient.previewWebSignIn(token, CloudAccountClient.deviceId(this), challenge);
+                long expiresAt = preview.optLong("expiresAt", 0);
+                if (expiresAt <= System.currentTimeMillis() / 1000L) throw new IllegalStateException("This sign-in code expired. Refresh it in the browser.");
+                String browser = preview.optString("browserLabel", "A browser");
+                runOnUiThread(() -> confirmWebSignIn(user, challenge, browser));
+            } catch (Exception error) {
+                String text = error.getMessage() == null ? "This code expired or is not for your trusted Rollcall account." : error.getMessage();
+                runOnUiThread(() -> Toast.makeText(this, text, Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-web-qr-preview").start();
+    }
+
+    private void confirmWebSignIn(FirebaseUser user, WebLoginQr.Payload challenge, String browser) {
+        new AlertDialog.Builder(this, cloudDialogTheme())
+                .setTitle("Approve web sign-in?")
+                .setMessage(browser + " is requesting access to your Rollcall web snapshot. Approve only if you started this request in a browser you control. The code expires in two minutes.")
+                .setPositiveButton("Approve sign-in", (dialog, which) -> decideWebSignIn(user, challenge, true))
+                .setNeutralButton("Not me", (dialog, which) -> decideWebSignIn(user, challenge, false))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void decideWebSignIn(FirebaseUser user, WebLoginQr.Payload challenge, boolean approve) {
+        FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
+        if (current == null || !current.getUid().equals(user.getUid()) || !current.isEmailVerified()) {
+            Toast.makeText(this, "Your Rollcall account changed. Sign in again before approving.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new Thread(() -> {
+            try {
+                String token = Tasks.await(current.getIdToken(true), 20, TimeUnit.SECONDS).getToken();
+                CloudAccountClient.decideWebSignIn(token, CloudAccountClient.deviceId(this), challenge, approve);
+                if (approve) CloudAccountClient.enqueueSnapshotSync(this);
+                runOnUiThread(() -> Toast.makeText(this,
+                        approve ? "Browser approved. Rollcall will finish signing in." : "Sign-in request declined.", Toast.LENGTH_LONG).show());
+            } catch (Exception error) {
+                String text = error.getMessage() == null ? "Could not update this sign-in request. Refresh the QR code and try again." : error.getMessage();
+                runOnUiThread(() -> Toast.makeText(this, text, Toast.LENGTH_LONG).show());
+            }
+        }, "rollcall-web-qr-decision").start();
     }
 
     private View holdToConfirm(String labelText, int accent, Runnable confirmed) {
@@ -2032,6 +2868,18 @@ public class MainActivity extends Activity {
             parent.addView(aboutPage, index, new FrameLayout.LayoutParams(-1, -1));
         }
         showAppScreen(aboutPage);
+    }
+
+    private void showProfile() {
+        if (profilePage != null && profilePage.getParent() instanceof ViewGroup) {
+            ViewGroup parent = (ViewGroup) profilePage.getParent();
+            int index = parent.indexOfChild(profilePage);
+            parent.removeView(profilePage);
+            profilePage = buildProfilePage();
+            profilePage.setVisibility(View.GONE);
+            parent.addView(profilePage, index, new FrameLayout.LayoutParams(-1, -1));
+        }
+        showAppScreen(profilePage);
     }
 
     private void routeWidgetLaunch(Intent intent) {
@@ -2344,11 +3192,10 @@ public class MainActivity extends Activity {
             }
             boolean authenticated = response.optBoolean("authenticated", false);
             boolean examPage = response.optBoolean("examPage", false);
-            if (examPage) {
-                JSONObject next = examRows == null || examRows.length() == 0 ? null : examRows.optJSONObject(0);
-                android.content.SharedPreferences.Editor edit = prefs.edit();
-                if (next == null) edit.remove(UPCOMING_EXAM_KEY);
-                else {
+            if (examPage) prefs.edit().putBoolean("kct_portal_authenticated", true).apply();
+            if (examPage && examRows != null && examRows.length() > 0) {
+                JSONObject next = examRows.optJSONObject(0);
+                if (next != null) {
                     String title = next.optString("title", "").trim();
                     long startsAt = next.optLong("startsAt", 0);
                     boolean hasTime = next.optBoolean("hasTime", false);
@@ -2357,27 +3204,31 @@ public class MainActivity extends Activity {
                     today.set(java.util.Calendar.MINUTE, 0);
                     today.set(java.util.Calendar.SECOND, 0);
                     today.set(java.util.Calendar.MILLISECOND, 0);
-                    if (title.isEmpty() || (hasTime ? startsAt <= System.currentTimeMillis() : startsAt < today.getTimeInMillis()))
-                        edit.remove(UPCOMING_EXAM_KEY);
-                    else {
-                        JSONObject safe = new JSONObject();
-                        String course = next.optString("course", "").trim();
-                        safe.put("title", title.substring(0, Math.min(title.length(), 120)));
-                        safe.put("course", course.substring(0, Math.min(course.length(), 120)));
-                        safe.put("type", next.optString("type", "").trim().substring(0,
-                                Math.min(next.optString("type", "").trim().length(), 40)));
-                        safe.put("session", next.optString("session", "").trim().toUpperCase(Locale.ROOT));
-                        safe.put("code", next.optString("code", "").trim().substring(0,
-                                Math.min(next.optString("code", "").trim().length(), 32)));
-                        String details = next.optString("details", "").trim();
-                        safe.put("details", details.substring(0, Math.min(details.length(), 180)));
-                        safe.put("startsAt", startsAt);
-                        safe.put("hasTime", hasTime);
-                        edit.putString(UPCOMING_EXAM_KEY, safe.toString());
+                    if (!title.isEmpty()) {
+                        android.content.SharedPreferences.Editor edit = prefs.edit();
+                        if (hasTime ? startsAt <= System.currentTimeMillis() : startsAt < today.getTimeInMillis())
+                            edit.remove(UPCOMING_EXAM_KEY);
+                        else {
+                            JSONObject safe = new JSONObject();
+                            String course = next.optString("course", "").trim();
+                            safe.put("title", title.substring(0, Math.min(title.length(), 120)));
+                            safe.put("course", course.substring(0, Math.min(course.length(), 120)));
+                            safe.put("type", next.optString("type", "").trim().substring(0,
+                                    Math.min(next.optString("type", "").trim().length(), 40)));
+                            safe.put("session", next.optString("session", "").trim().toUpperCase(Locale.ROOT));
+                            safe.put("code", next.optString("code", "").trim().substring(0,
+                                    Math.min(next.optString("code", "").trim().length(), 32)));
+                            String details = next.optString("details", "").trim();
+                            safe.put("details", details.substring(0, Math.min(details.length(), 180)));
+                            safe.put("startsAt", startsAt);
+                            safe.put("hasTime", hasTime);
+                            edit.putString(UPCOMING_EXAM_KEY, safe.toString());
+                        }
+                        edit.putLong(EXAM_SCHEDULE_CHECKED_KEY, System.currentTimeMillis()).apply();
+                        CloudAccountClient.enqueueSnapshotSync(this);
+                        if (dashboardView != null) render(LiveSnapshotStore.get());
                     }
                 }
-                edit.putBoolean("kct_portal_authenticated", true).apply();
-                CloudAccountClient.enqueueSnapshotSync(this);
             }
             boolean timedOut = authenticated && kctSyncStartedAt > 0
                     && System.currentTimeMillis() - kctSyncStartedAt > 45_000L;
@@ -2420,11 +3271,22 @@ public class MainActivity extends Activity {
             if (!(decoded instanceof JSONObject)) return;
             JSONObject response = (JSONObject) decoded;
             JSONArray exams = response.optJSONArray("exams");
-            if (!response.optBoolean("examPage") || exams == null || exams.length() == 0) return;
+            if (!response.optBoolean("examPage") || exams == null || !response.optBoolean("verified")) return;
+            android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+            if (exams.length() == 0) {
+                prefs.edit().remove(UPCOMING_EXAM_KEY)
+                        .putLong(EXAM_SCHEDULE_CHECKED_KEY, System.currentTimeMillis()).apply();
+                CloudAccountClient.enqueueSnapshotSync(this);
+                if (dashboardView != null) render(LiveSnapshotStore.get());
+                return;
+            }
             JSONObject next = exams.optJSONObject(0);
             String title = next == null ? "" : next.optString("title").trim();
             if (title.isEmpty() || title.matches("(?i).*(roll number|register number|student id|email|mobile|address).*")) {
-                getPreferences(MODE_PRIVATE).edit().remove(UPCOMING_EXAM_KEY).apply();
+                prefs.edit().remove(UPCOMING_EXAM_KEY)
+                        .putLong(EXAM_SCHEDULE_CHECKED_KEY, System.currentTimeMillis()).apply();
+                CloudAccountClient.enqueueSnapshotSync(this);
+                if (dashboardView != null) render(LiveSnapshotStore.get());
                 return;
             }
             JSONObject saved = new JSONObject();
@@ -2436,8 +3298,10 @@ public class MainActivity extends Activity {
             saved.put("details", next.optString("details").trim());
             saved.put("startsAt", next.optLong("startsAt"));
             saved.put("hasTime", next.optBoolean("hasTime"));
-            getPreferences(MODE_PRIVATE).edit().putString(UPCOMING_EXAM_KEY, saved.toString()).apply();
+            prefs.edit().putString(UPCOMING_EXAM_KEY, saved.toString())
+                    .putLong(EXAM_SCHEDULE_CHECKED_KEY, System.currentTimeMillis()).apply();
             CloudAccountClient.enqueueSnapshotSync(this);
+            if (dashboardView != null) render(LiveSnapshotStore.get());
             if (kctPortalStatus != null)
                 kctPortalStatus.setText("Upcoming exam details are saved on this device.");
         } catch (Exception ignored) {
@@ -2471,33 +3335,29 @@ public class MainActivity extends Activity {
     private LinearLayout cardContainer() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(background(SURFACE, BORDER, 16));
+        card.setPadding(dp(RollcallSpacing.SPACE_4), dp(RollcallSpacing.SPACE_4),
+                dp(RollcallSpacing.SPACE_4), dp(RollcallSpacing.SPACE_4));
+        card.setBackground(background(SURFACE, BORDER, palette.cardRadius));
         return card;
     }
 
     private TextView text(String value, float size, int color, int style) {
         TextView view = new TextView(this);
         view.setText(value);
-        view.setTextSize(size);
+        view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, size);
         view.setTextColor(color);
         view.setTypeface(style == Typeface.BOLD ? boldAppTypeface() : appTypeface());
+        view.setFontFeatureSettings("tnum");
         return view;
     }
 
     private Typeface boldAppTypeface() {
-        if (appBoldTypeface == null) {
-            try { appBoldTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
-            catch (RuntimeException ignored) { appBoldTypeface = Typeface.create(appTypeface(), Typeface.BOLD); }
-        }
+        if (appBoldTypeface == null) appBoldTypeface = themeTypography.bodyBold;
         return appBoldTypeface;
     }
 
     private Typeface appTypeface() {
-        if (appTypeface == null) {
-            try { appTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Regular.ttf"); }
-            catch (RuntimeException ignored) { appTypeface = Typeface.create("monospace", Typeface.NORMAL); }
-        }
+        if (appTypeface == null) appTypeface = themeTypography.body;
         return appTypeface;
     }
 
@@ -2528,14 +3388,22 @@ public class MainActivity extends Activity {
         DashboardView.State ui = new DashboardView.State();
         ui.dark = darkTheme;
         ui.remindersEnabled = classRemindersEnabled;
-        ui.name = studentName.isEmpty() ? "MyCamu student" : studentName;
-        String[] nameParts = studentName.trim().split("\\s+");
+        String appName = displayName.isEmpty() ? studentName : displayName;
+        ui.name = appName.isEmpty() ? "MyCamu student" : appName;
+        String[] nameParts = appName.trim().split("\\s+");
         ui.initials = nameParts.length == 0 || nameParts[0].isEmpty() ? "R"
                 : nameParts[0].substring(0, 1).toUpperCase(Locale.ROOT);
         if (nameParts.length > 1 && !nameParts[nameParts.length - 1].isEmpty())
             ui.initials += nameParts[nameParts.length - 1].substring(0, 1).toUpperCase(Locale.ROOT);
         ui.target = (int) Math.round(attendanceTarget);
         ui.attendanceLoaded = snapshot.attendanceAt > 0;
+        ui.attendanceUpdatedAt = snapshot.attendanceAt;
+        FirebaseUser signalUser = FirebaseAuth.getInstance().getCurrentUser();
+        ui.cloudConfigured = signalUser != null && signalUser.isEmailVerified();
+        ui.announcementsLoading = announcementsLoading;
+        ui.announcementsLoaded = !announcementsLoading && announcementsError.isEmpty();
+        ui.announcementsError = announcementsError;
+        ui.announcements = new ArrayList<>(rollcallAnnouncements);
         ui.overallPercent = knownTotal == 0 ? -1 : (int) Math.round(100.0 * knownAttended / knownTotal);
         ui.heroMessage = knownTotal == 0 ? "— / —" : knownAttended + " / " + knownTotal;
         ui.overallCaption = "classes attended";
@@ -2663,6 +3531,7 @@ public class MainActivity extends Activity {
         SimpleDateFormat timeFormat = new SimpleDateFormat("h:mm a", Locale.getDefault());
         for (LiveSnapshotStore.ClassSession session : snapshot.timetable) {
             DashboardView.ScheduleItem item = new DashboardView.ScheduleItem();
+            item.id = session.id;
             item.date = dayFormat.format(new Date(session.startsAt));
             item.startsAt = session.startsAt;
             item.endsAt = session.endsAt;
@@ -2701,6 +3570,7 @@ public class MainActivity extends Activity {
         SimpleDateFormat historyDay = new SimpleDateFormat("EEEE, d MMM yyyy", Locale.getDefault());
         for (LiveSnapshotStore.ClassMark mark : snapshot.classMarks) {
             DashboardView.ClassMarkItem item = new DashboardView.ClassMarkItem();
+            item.id = mark.id;
             item.name = mark.name.isEmpty() ? mark.code : mark.name;
             item.code = mark.code;
             item.day = historyDay.format(new Date(mark.startsAt));
@@ -2743,6 +3613,7 @@ public class MainActivity extends Activity {
     private void loadAcademicRecords(DashboardView.State ui) {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         ui.academicUpdatedAt = prefs.getLong(ACADEMIC_UPDATED_KEY, 0);
+        ui.examScheduleCheckedAt = prefs.getLong(EXAM_SCHEDULE_CHECKED_KEY, 0);
         ui.academicConnected = prefs.getBoolean("kct_portal_authenticated", false);
         ui.academicStatus = ui.academicUpdatedAt > 0 ? "Saved on this device. KCT remains the source of truth." : "";
         try {
@@ -2886,7 +3757,10 @@ public class MainActivity extends Activity {
     private GradientDrawable background(int color, int stroke, int radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(dp(radius));
+        int themeRadius = radius >= 24 ? palette.featureRadius
+                : radius >= 16 && radius <= 22 ? palette.cardRadius
+                : radius >= 10 && radius <= 14 ? palette.controlRadius : radius;
+        drawable.setCornerRadius(dp(themeRadius));
         drawable.setStroke(dp(1), stroke);
         return drawable;
     }
@@ -3267,6 +4141,123 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private void refreshAnnouncements() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) {
+            rollcallAnnouncements.clear();
+            announcementsLoading = false;
+            announcementsError = "";
+            if (dashboardView != null) render(LiveSnapshotStore.get());
+            return;
+        }
+        if (announcementRequestInFlight) return;
+        announcementRequestInFlight = true;
+        announcementsLoading = true;
+        announcementsError = "";
+        if (dashboardView != null) render(LiveSnapshotStore.get());
+        user.getIdToken(false).addOnCompleteListener(this, tokenTask -> {
+            if (!tokenTask.isSuccessful() || tokenTask.getResult() == null) {
+                completeAnnouncementRefresh(user.getUid(), null, "Sign in again to view updates.");
+                return;
+            }
+            String token = tokenTask.getResult().getToken();
+            new Thread(() -> {
+                try {
+                    List<DashboardView.Announcement> items = CloudAccountClient.parseAnnouncements(
+                            CloudAccountClient.fetchAnnouncements(token));
+                    handler.post(() -> completeAnnouncementRefresh(user.getUid(), items, ""));
+                } catch (Exception error) {
+                    handler.post(() -> completeAnnouncementRefresh(user.getUid(), null, error.getMessage()));
+                }
+            }, "rollcall-announcement-sync").start();
+        });
+    }
+
+    private void completeAnnouncementRefresh(String expectedUid, List<DashboardView.Announcement> items, String error) {
+        announcementRequestInFlight = false;
+        FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
+        if (current == null || !current.getUid().equals(expectedUid)) return;
+        rollcallAnnouncements.clear();
+        if (items != null) rollcallAnnouncements.addAll(items);
+        announcementsLoading = false;
+        announcementsError = items == null ? (error == null ? "Unable to refresh updates." : error) : "";
+        if (dashboardView != null) render(LiveSnapshotStore.get());
+        if (items != null) scheduleAnnouncementPopup();
+    }
+
+    private void scheduleAnnouncementPopup() {
+        handler.removeCallbacks(announcementPopupCheck);
+        handler.postDelayed(announcementPopupCheck, 450L);
+    }
+
+    private void showNewAnnouncementPopup(List<DashboardView.Announcement> items) {
+        if (announcementPopupOpen || isFinishing() || isDestroyed() || dashboard == null
+                || dashboard.getVisibility() != View.VISIBLE || dashboardView == null
+                || !dashboardView.isHomePageSelected() || startupAnimation != null || !hasWindowFocus()) return;
+        Set<String> shown = new HashSet<>(getSharedPreferences("rollcall_announcements", MODE_PRIVATE)
+                .getStringSet("shown_popup_ids", Collections.emptySet()));
+        for (DashboardView.Announcement item : items) {
+            if (!item.showPopup || !"unread".equals(item.readState) || shown.contains(item.id)) continue;
+            LinearLayout sheet = new LinearLayout(this);
+            sheet.setOrientation(LinearLayout.VERTICAL);
+            sheet.setPadding(dp(22), dp(22), dp(22), dp(18));
+            sheet.setBackground(background(SURFACE, BORDER, palette.cardRadius));
+            LinearLayout eyebrowRow = new LinearLayout(this);
+            eyebrowRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            TextView eyebrow = text("ROLLCALL  /  UPDATE", 10, HIGHLIGHT, Typeface.BOLD);
+            eyebrow.setLetterSpacing(.09f);
+            eyebrowRow.addView(eyebrow, new LinearLayout.LayoutParams(0, -2, 1f));
+            TextView newLabel = text("NEW", 10, BUTTON_TEXT, Typeface.BOLD);
+            newLabel.setPadding(dp(9), dp(5), dp(9), dp(5));
+            newLabel.setBackground(background(BUTTON, BUTTON, 20));
+            eyebrowRow.addView(newLabel);
+            sheet.addView(eyebrowRow);
+            TextView title = text(item.title, 22, INK, Typeface.BOLD);
+            title.setLineSpacing(dp(1), 1f);
+            sheet.addView(title, topMargin(-1, -2, 12));
+            TextView body = text(item.body, 15, MUTED, Typeface.NORMAL);
+            body.setLineSpacing(dp(4), 1f);
+            sheet.addView(body, topMargin(-1, -2, 4));
+            TextView savedHint = text("You can find this again in More  ·  Updates", 12, MUTED, Typeface.NORMAL);
+            sheet.addView(savedHint, topMargin(-1, -2, 20));
+            announcementPopupOpen = true;
+            AlertDialog dialog = new AlertDialog.Builder(this, cloudDialogTheme()).setView(sheet)
+                    .setPositiveButton("Got it", (dialogInterface, which) -> saveAnnouncementReceipt(item.id, "read"))
+                    .setNegativeButton("Later", null)
+                    .create();
+            dialog.setOnDismissListener(ignored -> announcementPopupOpen = false);
+            dialog.show();
+            if (dialog.getWindow() != null) {
+                int width = Math.min(dp(420), getResources().getDisplayMetrics().widthPixels - dp(32));
+                dialog.getWindow().setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
+            shown.add(item.id);
+            getSharedPreferences("rollcall_announcements", MODE_PRIVATE).edit()
+                    .putStringSet("shown_popup_ids", shown).apply();
+            return;
+        }
+    }
+
+    private void saveAnnouncementReceipt(String campaignId, String receiptState) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || !user.isEmailVerified()) return;
+        user.getIdToken(false).addOnSuccessListener(token -> new Thread(() -> {
+            try {
+                CloudAccountClient.setAnnouncementReceipt(token.getToken(), campaignId, receiptState);
+                handler.post(this::refreshAnnouncements);
+            } catch (Exception error) {
+                handler.post(() -> {
+                    announcementsError = "Unable to save the update status.";
+                    announcementsLoading = false;
+                    if (dashboardView != null) render(LiveSnapshotStore.get());
+                });
+            }
+        }, "rollcall-announcement-receipt").start()).addOnFailureListener(this, error -> {
+            announcementsError = "Sign in again to save the update status.";
+            if (dashboardView != null) render(LiveSnapshotStore.get());
+        });
+    }
+
     @Override protected void onResume() {
         super.onResume();
         String launchChallenge = getIntent() == null ? null : getIntent().getStringExtra("rollcall_web_challenge_id");
@@ -3275,6 +4266,9 @@ public class MainActivity extends Activity {
             getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).edit().putString("pending_web_challenge_id", launchChallenge).apply();
         }
         FirebaseUser cloudUser = FirebaseAuth.getInstance().getCurrentUser();
+        handler.removeCallbacks(announcementRefresh);
+        refreshAnnouncements();
+        handler.postDelayed(announcementRefresh, 60_000L);
         if (cloudUser != null && (getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getBoolean("registration_pending", false)
                 || !CloudAccountClient.deviceId(this).equals(getSharedPreferences("rollcall_cloud_account", MODE_PRIVATE).getString("registered_device_id", ""))))
             cloudUser.reload().addOnCompleteListener(task -> { if (task.isSuccessful() && cloudUser.isEmailVerified()) registerCloudDevice(null); });
@@ -3307,14 +4301,17 @@ public class MainActivity extends Activity {
 
     @Override protected void onPause() {
         handler.removeCallbacks(routeMonitor);
+        handler.removeCallbacks(announcementRefresh);
         super.onPause();
     }
 
     @Override public void onBackPressed() {
         if (myCamuConsentPage != null && myCamuConsentPage.getVisibility() == View.VISIBLE) deferMyCamuConsent();
-        else if (dashboardView != null && dashboardView.closeOdDetailsForBack()) { /* Returned to Week attendance. */ }
+        else if (dashboardView != null && dashboardView.closeMoreMenuForBack()) { /* Closed the More menu. */ }
+        else if (dashboardView != null && dashboardView.closeOdDetailsForBack()) { /* Returned to the previous dashboard screen. */ }
         else if (kctPortalPage != null && kctPortalPage.getVisibility() == View.VISIBLE) showDashboard();
         else if (aboutPage != null && aboutPage.getVisibility() == View.VISIBLE) showDashboard();
+        else if (profilePage != null && profilePage.getVisibility() == View.VISIBLE) showDashboard();
         else if (webPage != null && webPage.getVisibility() == View.VISIBLE) {
             if (connectedOnce) showDashboard();
             else if (webView != null && webView.canGoBack()) webView.goBack();

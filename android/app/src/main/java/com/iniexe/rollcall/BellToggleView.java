@@ -22,13 +22,13 @@ final class BellToggleView extends View {
     private final String offLabel = "Class reminders off";
     private final String onLabel = "Class reminders on";
 
-    BellToggleView(Context context, int offFill, int onFill, int offInk, int onInk) {
+    BellToggleView(Context context, int offFill, int onFill, int offInk, int onInk,
+                   android.graphics.Typeface typeface) {
         super(context);
         this.offFill = offFill; this.onFill = onFill;
         this.offInk = offInk; this.onInk = onInk;
         paint.setTextSize(getResources().getDisplayMetrics().scaledDensity * 14f);
-        paint.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE,
-                android.graphics.Typeface.BOLD));
+        paint.setTypeface(typeface);
         setClickable(true);
         setFocusable(true);
         setOnClickListener(v -> { if (toggle != null) toggle.run(); });

@@ -2,24 +2,30 @@
 
 ## Contract
 
-RollCall keeps its Signal identity: near-black and warm-paper foundations, sharp lime action color, and orange used sparingly for emphasis. The additional themes change the atmosphere while preserving the same hierarchy, status meanings, and readable text contrast.
+RollCall keeps its Signal identity on a dark, near-black foundation. Signal’s soft chartreuse is the primary accent; the other palettes change only the accent and a slight surface tint. Text, icons, controls, and statuses use semantic foreground/background pairs with contrast checks.
 
-- **Typography:** keep the existing JetBrains Mono for compact measurements and use the existing rounded sans display face for headings. Body copy stays sentence case and comfortably sized.
+- **Typography:** Android keeps its existing measurement and display faces. The web dashboard uses the bundled Inter face; reserve monospace for measurements and code. Body copy stays sentence case and comfortably sized.
 - **Layout:** align content to one left edge; use one clear primary summary followed by compact, task-specific sections. Lists scan vertically. A control stays beside the content it changes.
 - **Motion:** keep state changes brief and action-led. Remove continuous decorative animation from status content; respect reduced motion and view lifecycle.
 - **Data:** distinguish recorded, projected, stale, empty, and unavailable states in words. Never present missing duration or marks as zero.
 - **Cross-platform:** retain Java Views on Android and the existing HTML/CSS/JavaScript web app. Use matching theme IDs and semantic roles, with native interaction patterns on each platform.
 
+## Android visual reference (2026-11-14)
+
+The current mobile direction follows the supplied RollCall screen reference: near-black graphite canvas, quiet charcoal surfaces, compact sans-serif typography, and high-chroma yellow, green, pink, and blue reserved for attendance and academic data. Keep status and control states semantic; the accent's paired dark foreground belongs on bright surfaces, while neutral body copy stays on dark surfaces.
+
+The five root destinations are Home, Courses, Week, Marks, and More. Nested detail views provide an explicit back control. The bottom bar floats above the gesture area on a subtly outlined charcoal capsule; inactive destinations show icons only, while the active destination gets a white icon-and-label pill. Week starts on Schedule and includes a date-selectable month grid. Its markers and daily lists come only from actual synced schedule and attendance records. Empty data stays explicit rather than being filled with sample notifications, marks, or grades.
+
 ## Palette directions
 
-These are the implemented surface, action, and emphasis tokens. Each theme has paired light and dark variants. Signal remains the default.
+These are the implemented dark surfaces and palette accents. Signal remains the default. Light and system appearance choices are intentionally removed; older saved preferences normalize to dark mode.
 
 | Theme | Character | Core colors |
 |---|---|---|
-| Signal | Existing RollCall identity | Canvas `#151719` / `#F5F6F3`; action `#CCFF00`; orange emphasis `#FF663D` dark / `#B42F08` light |
-| Cobalt Studio | Cool, precise | Canvas `#151719` / `#F5F6F3`; action `#90A9FF` dark / `#3157D5` light; warm emphasis `#FFC27A` / `#8A4B00` |
-| Copper Night | Warm industrial | Canvas `#151719` / `#F5F6F3`; action `#E6A07A` dark / `#B7653D` light; emphasis `#E6A07A` / `#873E21` |
-| Forest Circuit | Botanical, technical | Canvas `#151719` / `#F5F6F3`; action `#78D4A4` dark / `#287A57` light; emphasis `#78D4A4` / `#176146` |
-| Paper Circuit | Bright editorial | Canvas `#151719` / `#F5F6F3`; action `#2563EB`; emphasis `#FFA77F` dark / `#B94A1A` light |
+| Signal | Bright academic | Canvas `#090A0C`; surface `#131416`; action `#F4EC28` |
+| Cobalt Studio | Cool, precise | Canvas `#090A0C`; surface `#131416`; action `#5795FF` |
+| Copper Night | Warm industrial | Canvas `#090A0C`; surface `#131416`; action `#FFA070` |
+| Forest Circuit | Botanical, technical | Canvas `#090A0C`; surface `#131416`; action `#35E97B` |
+| Paper Circuit | Warm editorial | Canvas `#090A0C`; surface `#131416`; action `#F0E5C8` |
 
-Each direction has intentionally selected light and dark surfaces. Status colors retain their meaning. Android and web use the same five palette IDs and Light/Dark/System preference; the preference is local to the device/browser. Internal assessment rows are a separate optional snapshot field and stay empty until a verified student-authorized source exists. Semester results and GPA calculations remain separate and unchanged.
+All palettes share readable primary and secondary text plus consistent green, amber, and red status pairs. Android and web use the same five palette IDs; the accent preference is local to the device/browser. Internal assessment rows are a separate optional snapshot field and stay empty until a verified student-authorized source exists. Semester results and GPA calculations remain separate and unchanged.

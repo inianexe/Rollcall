@@ -39,6 +39,7 @@ public final class UpdateActivity extends Activity {
     static final String EXTRA_TAG = "release_tag", EXTRA_TITLE = "release_title", EXTRA_NOTES = "release_notes";
     static final String EXTRA_RELEASE_URL = "release_url", EXTRA_APK_NAME = "apk_name";
     static final String EXTRA_DOWNLOAD_URL = "download_url", EXTRA_DIGEST = "apk_digest";
+    static final String EXTRA_POLICY = "update_policy";
     private static final String PREFS = "rollcall_apk_update";
     private static final String CHANNEL_ID = "download_id", CHANNEL_TAG = "download_tag";
     private static final int REQUEST_INSTALL_SOURCE = 7401, REQUEST_INSTALLER = 7402;
@@ -46,7 +47,7 @@ public final class UpdateActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable pollDownload = this::readDownload;
 
-    private String tag, title, notes, releaseUrl, apkName, downloadUrl, digest;
+    private String tag, title, notes, releaseUrl, apkName, downloadUrl, digest, policy;
     private AppPalette palette;
     private Typeface brandTypeface, brandBoldTypeface;
     private LinearLayout root, content;
@@ -72,6 +73,8 @@ public final class UpdateActivity extends Activity {
         apkName = intent.getStringExtra(EXTRA_APK_NAME);
         downloadUrl = intent.getStringExtra(EXTRA_DOWNLOAD_URL);
         digest = intent.getStringExtra(EXTRA_DIGEST);
+        policy = intent.getStringExtra(EXTRA_POLICY);
+        if (!"required".equals(policy) && !"recommended".equals(policy)) policy = "optional";
         if (!validIntent()) { finish(); return; }
 
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -83,13 +86,12 @@ public final class UpdateActivity extends Activity {
         }
         downloads = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
         SharedPreferences theme = getSharedPreferences("MainActivity_preferences", MODE_PRIVATE);
-        boolean dark = theme.getBoolean("dark_theme", false);
-        int index = theme.getInt("color_theme", theme.getInt(dark ? "dark_palette" : "light_palette", 0));
-        palette = AppPalette.get(dark, index);
-        try { brandTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Regular.ttf"); }
-        catch (RuntimeException ignored) { brandTypeface = Typeface.MONOSPACE; }
-        try { brandBoldTypeface = Typeface.createFromAsset(getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
-        catch (RuntimeException ignored) { brandBoldTypeface = Typeface.create(brandTypeface, Typeface.BOLD); }
+        boolean dark = true;
+        int index = theme.getInt("color_theme", theme.getInt("dark_palette", 0));
+        palette = AppPalette.get(true, index, theme.getInt("custom_accent_color", 0));
+        ThemeTypography typography = ThemeTypography.load(this, palette.themeIndex);
+        brandTypeface = typography.body;
+        brandBoldTypeface = typography.bodyBold;
         getWindow().setStatusBarColor(palette.canvas);
         getWindow().setNavigationBarColor(palette.canvas);
         getWindow().getDecorView().setSystemUiVisibility(dark ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
@@ -105,9 +107,9 @@ public final class UpdateActivity extends Activity {
         backLabel.setGravity(Gravity.CENTER_VERTICAL);
         backLabel.setPadding(dp(22), 0, dp(22), 0);
         backLabel.setOnClickListener(v -> finish());
-        if (maybeLaterCount >= 3) backLabel.setVisibility(View.INVISIBLE);
         root.addView(backLabel, new LinearLayout.LayoutParams(-1, dp(48)));
         ScrollView scroll = new ScrollView(this);
+        NativeMotion.enableScrollDissolve(scroll, dp(24));
         scroll.setFillViewport(true);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -160,39 +162,39 @@ public final class UpdateActivity extends Activity {
         hero.setGravity(Gravity.CENTER);
         hero.setPadding(dp(20), dp(22), dp(20), dp(22));
         GradientDrawable broadcast = new GradientDrawable();
-        broadcast.setColor(0xFFCCFF00);
+        broadcast.setColor(palette.button);
         broadcast.setCornerRadius(dp(18));
         hero.setBackground(broadcast);
-        TextView overline = text("TORCH GENESIS / RELEASE TRANSMISSION", 10,
-                0xFF111111, Typeface.BOLD);
+        TextView overline = text("ROLLCALL / " + policy.toUpperCase(java.util.Locale.ROOT) + " UPDATE", 10,
+                palette.buttonText, Typeface.BOLD);
         overline.setLetterSpacing(.06f);
         hero.addView(overline);
         TextView mark = text(state == INSTALLED ? "✓" : state == FAILED ? "×" : "↗", 38,
-                0xFF111111, Typeface.BOLD);
+                palette.buttonText, Typeface.BOLD);
         mark.setGravity(Gravity.CENTER);
         GradientDrawable badge = new GradientDrawable();
         badge.setColor(0x44FFFFFF);
         badge.setCornerRadius(dp(100));
         mark.setBackground(badge);
         hero.addView(mark, centered(dp(54), dp(54)));
-        TextView heading = text(heading().toUpperCase(java.util.Locale.ROOT), 27, 0xFF111111, Typeface.BOLD);
+        TextView heading = text(heading().toUpperCase(java.util.Locale.ROOT), 27, palette.buttonText, Typeface.BOLD);
         heading.setLetterSpacing(-.065f);
         heading.setGravity(Gravity.CENTER);
         heading.setPadding(0, dp(10), 0, dp(3));
         hero.addView(heading);
         TextView version = text(state == INSTALLED ? "You’re on " + tag : "Version " + tag,
-                12, 0xFF343A26, Typeface.BOLD);
+                12, palette.buttonText, Typeface.BOLD);
         version.setGravity(Gravity.CENTER);
         hero.addView(version);
         content.addView(hero, topMargin(dp(8)));
 
         if (state == AVAILABLE || state == FAILED) {
             LinearLayout card = card();
-            card.setBackground(makeCardBackground(0xFFC8C8FF, 0xFF111111));
-            card.addView(text("WHAT'S NEW / " + tag, 10, 0xFF111111, Typeface.BOLD));
+            card.setBackground(makeCardBackground(palette.surface, palette.border));
+            card.addView(text("WHAT'S NEW / " + tag, 10, palette.muted, Typeface.BOLD));
             card.addView(text(title == null || title.trim().isEmpty() ? "What's new" : title,
-                    19, 0xFF111111, Typeface.BOLD), topMargin(dp(8)));
-            TextView note = text(cleanNotes(notes), 13, 0xFF333344, Typeface.NORMAL);
+                    19, palette.ink, Typeface.BOLD), topMargin(dp(8)));
+            TextView note = text(cleanNotes(notes), 13, palette.muted, Typeface.NORMAL);
             note.setLineSpacing(dp(3), 1f);
             note.setPadding(0, dp(10), 0, 0);
             card.addView(note);
@@ -236,22 +238,20 @@ public final class UpdateActivity extends Activity {
         primary.setOnClickListener(v -> primaryAction());
         root.addView(primary, new LinearLayout.LayoutParams(-1, dp(50)) {{ leftMargin = dp(20); rightMargin = dp(20); topMargin = dp(8); bottomMargin = dp(2); }});
         if (state != INSTALLED) {
-            boolean showSecondary = state == DOWNLOADING
-                    || ((state == AVAILABLE || state == FAILED) && maybeLaterCount < 3);
             TextView later = text(state == DOWNLOADING ? "Keep downloading in background" : "Maybe later", 13, palette.muted, Typeface.BOLD);
             later.setGravity(Gravity.CENTER);
             later.setMinHeight(dp(42));
             later.setOnClickListener(v -> {
                 if (state != DOWNLOADING) {
                     maybeLaterCount++;
-                    releasePrefs.edit().putString("snoozed_tag", tag).putInt("snooze_count", maybeLaterCount).apply();
+                    long delay = "required".equals(policy) ? 6L * 60 * 60 * 1000
+                            : "recommended".equals(policy) ? 24L * 60 * 60 * 1000
+                            : 7L * 24 * 60 * 60 * 1000;
+                    releasePrefs.edit().putString("snoozed_tag", tag).putInt("snooze_count", maybeLaterCount)
+                            .putLong("snoozed_until", System.currentTimeMillis() + delay).apply();
                 }
                 finish();
             });
-            if (!showSecondary) {
-                later.setVisibility(View.INVISIBLE);
-                later.setClickable(false);
-            }
             root.addView(later, new LinearLayout.LayoutParams(-1, dp(42)) {{ bottomMargin = dp(8); }});
         }
     }

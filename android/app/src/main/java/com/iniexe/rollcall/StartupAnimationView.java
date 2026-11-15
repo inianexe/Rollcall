@@ -55,7 +55,7 @@ final class StartupAnimationView extends View {
     private final Runnable onFinished;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Typeface wordmarkTypeface;
-    private final Typeface uiTypeface = Typeface.create("monospace", Typeface.NORMAL);
+    private final Typeface uiTypeface;
     private final ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
     private final boolean nightCity;
     private float progress;
@@ -65,6 +65,9 @@ final class StartupAnimationView extends View {
     StartupAnimationView(Context context, AppPalette palette, TransitionListener transitionListener, Runnable onFinished) {
         super(context);
         this.palette = palette;
+        ThemeTypography typography = ThemeTypography.load(context, palette.themeIndex);
+        uiTypeface = typography.body;
+        wordmarkTypeface = typography.display;
         logoMark = RollcallLogo.themedMark(context, palette);
         logoBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.rollcall_animation_brush);
         int logoColor = "Black Monochrome".equals(palette.name) ? palette.ink
@@ -73,17 +76,6 @@ final class StartupAnimationView extends View {
         nightCity = "Night City 2077".equals(palette.name);
         this.transitionListener = transitionListener;
         this.onFinished = onFinished;
-        Typeface selectedTypeface = Typeface.create("monospace", Typeface.BOLD);
-        try { selectedTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/JetBrainsMono-Bold.ttf"); }
-        catch (RuntimeException ignored) { }
-        if ("Night City 2077".equals(palette.name)) {
-            try {
-                selectedTypeface = Typeface.createFromAsset(context.getAssets(), "fonts/Cyberpunk-Regular.ttf");
-            } catch (RuntimeException ignored) {
-                // Fall back to the system typeface if the theme font is unavailable.
-            }
-        }
-        wordmarkTypeface = selectedTypeface;
         setBackgroundColor(palette.canvas);
         setContentDescription("Rollcall startup animation. Tap to continue.");
         setFocusable(true);
@@ -252,7 +244,7 @@ final class StartupAnimationView extends View {
                                   Typeface face, int color, float alpha, float maxWidth) {
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTypeface(face);
-        paint.setTextSize(dp(size));
+        paint.setTextSize(sp(size));
         float measured = paint.measureText(text);
         if (measured > maxWidth) paint.setTextSize(paint.getTextSize() * maxWidth / measured);
         paint.setColor(withAlpha(color, alpha));
@@ -262,7 +254,7 @@ final class StartupAnimationView extends View {
     private void drawAnimatedWordmark(Canvas canvas, String word, float cx, float baseline,
                                       float size, int color, float maxWidth, float progress) {
         paint.setTypeface(wordmarkTypeface);
-        paint.setTextSize(dp(size));
+        paint.setTextSize(sp(size));
         paint.setTextAlign(Paint.Align.LEFT);
         float[] widths = new float[word.length()];
         paint.getTextWidths(word, widths);
@@ -342,6 +334,7 @@ final class StartupAnimationView extends View {
     }
 
     private float dp(float value) { return value * getResources().getDisplayMetrics().density; }
+    private float sp(float value) { return value * getResources().getDisplayMetrics().scaledDensity; }
     private static float clamp(float value) { return Math.max(0f, Math.min(1f, value)); }
     private static float easeOut(float x) { float t = 1f - clamp(x); return 1f - t * t * t; }
     private static int withAlpha(int color, float alpha) {

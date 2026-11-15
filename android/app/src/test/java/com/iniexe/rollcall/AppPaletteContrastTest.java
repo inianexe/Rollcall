@@ -3,7 +3,7 @@ package com.iniexe.rollcall;
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
-/** Guards the functional readability of both Torch Genesis palettes. */
+/** Guards Signal's semantic color contrast in both supported token sets. */
 public class AppPaletteContrastTest {
     private static double luminance(int color) {
         double r = linear((color >>> 16 & 255) / 255.0);
@@ -26,25 +26,33 @@ public class AppPaletteContrastTest {
         assertTrue(name + " contrast is " + ratio(text, background), ratio(text, background) >= 4.5);
     }
 
-    @Test public void lightPaletteKeepsTextReadable() {
-        AppPalette p = AppPalette.get(false, 0);
-        check("Light primary text", p.ink, p.canvas);
-        check("Light secondary text", p.muted, p.canvas);
-        check("Light button", p.buttonText, p.button);
-        check("Light hero", p.heroText, p.hero);
-        check("Light orange label", p.highlight, p.canvas);
-        check("Light positive text", p.green, p.surface);
-        check("Light error text", p.red, p.surface);
+    @Test public void allThemesKeepTextReadableInBothPalettes() {
+        for (int i = 0; i < AppPalette.THEME_COUNT; i++) {
+            for (boolean dark : new boolean[]{false, true}) {
+                AppPalette p = AppPalette.get(dark, i);
+                String prefix = p.name + (dark ? " dark" : " light");
+                check(prefix + " primary", p.ink, p.canvas);
+                check(prefix + " secondary", p.muted, p.surface);
+                check(prefix + " button", p.buttonText, p.button);
+                check(prefix + " hero", p.heroText, p.hero);
+                check(prefix + " accent", p.highlight, p.canvas);
+                check(prefix + " positive", p.green, p.surface);
+                check(prefix + " error", p.red, p.surface);
+            }
+        }
     }
 
-    @Test public void darkPaletteKeepsTextReadable() {
-        AppPalette p = AppPalette.get(true, 0);
-        check("Dark primary text", p.ink, p.canvas);
-        check("Dark secondary text", p.muted, p.canvas);
-        check("Dark button", p.buttonText, p.button);
-        check("Dark hero", p.heroText, p.hero);
-        check("Dark orange label", p.highlight, p.canvas);
-        check("Dark positive text", p.green, p.surface);
-        check("Dark error text", p.red, p.surface);
+    @Test public void arbitraryCustomAccentsKeepButtonsAndTextReadable() {
+        int[] colors = {0xFF000000, 0xFFFFFFFF, 0xFFFF0000, 0xFF00FF00, 0xFF0000FF,
+                0xFFFFFF00, 0xFF00FFFF, 0xFFFF00FF, 0xFF777777, 0xFF123456, 0xFFEF6A2F};
+        for (int color : colors) for (int theme = 0; theme < AppPalette.THEME_COUNT; theme++)
+            for (boolean dark : new boolean[]{false, true}) {
+                AppPalette p = AppPalette.get(dark, theme, color);
+                assertTrue("button text " + Integer.toHexString(color), ratio(p.buttonText, p.button) >= 4.5);
+                assertTrue("highlight " + Integer.toHexString(color), ratio(p.highlight, p.canvas) >= 4.5);
+                assertTrue("body text " + Integer.toHexString(color), ratio(p.ink, p.canvas) >= 4.5);
+                assertTrue("secondary text " + Integer.toHexString(color), ratio(p.muted, p.surface) >= 4.5);
+                assertTrue("chosen accent preserved", p.customAccent == color);
+            }
     }
 }

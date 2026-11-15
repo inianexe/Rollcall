@@ -3,6 +3,12 @@
   "name": "rollcall-campus-companion",
   "pages_build_output_dir": ".",
   "compatibility_date": "2026-11-12",
+  "kv_namespaces": [
+    {
+      "binding": "RELEASE_STAGING",
+      "id": "c55a3e4fe0c24ea2b1789624ff49102e"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

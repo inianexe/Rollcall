@@ -74,6 +74,11 @@ public class ReactBitsNativeTest {
             scenario.onActivity(activity -> {
                 findText(activity.dashboard, "ATTEND").performClick();
                 assertNotNull(findText(activity.dashboard, "YOUR ATTENDANCE / PROJECTED"));
+                android.widget.SeekBar classCount = find(activity.dashboard, android.widget.SeekBar.class);
+                assertNotNull(classCount);
+                assertEquals(19, classCount.getMax());
+                assertTrue(classCount.getMinimumHeight() > 0);
+                assertEquals(1, countViewsOfType(activity.dashboard, android.widget.SeekBar.class));
             });
 
             tab(scenario, "Marks and academics");
@@ -81,6 +86,7 @@ public class ReactBitsNativeTest {
             scenario.onActivity(activity -> {
                 OptionWheelView wheel = find(activity.dashboard, OptionWheelView.class);
                 assertNotNull(wheel);
+                assertNull(findText(activity.dashboard, "Semester GPA trend"));
                 assertNotNull(findText(activity.dashboard, "Internal assessments"));
                 assertNotNull(findText(activity.dashboard, "No internal marks synced"));
                 wheel.select(1);
@@ -250,6 +256,17 @@ public class ReactBitsNativeTest {
             }
         }
         return null;
+    }
+
+    private static int countViewsOfType(View root, Class<? extends View> type) {
+        int count = type.isInstance(root) ? 1 : 0;
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                count += countViewsOfType(group.getChildAt(i), type);
+            }
+        }
+        return count;
     }
 
     private static JellyRadioView findRadio(View root, String firstLabel) {

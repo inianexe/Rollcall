@@ -29,13 +29,13 @@ final class ReleaseUpdateNotifier {
     interface CheckCallback { void onResult(Release release, String error); }
 
     static final class Release {
-        final String tag, title, notes, releaseUrl, apkName, downloadUrl, digest;
+        final String tag, title, notes, releaseUrl, apkName, downloadUrl, digest, policy;
         final long versionCode;
         Release(String tag, String title, String notes, String releaseUrl,
-                String apkName, String downloadUrl, String digest, long versionCode) {
+                String apkName, String downloadUrl, String digest, long versionCode, String policy) {
             this.tag = tag; this.title = title; this.notes = notes; this.releaseUrl = releaseUrl;
             this.apkName = apkName; this.downloadUrl = downloadUrl; this.digest = digest;
-            this.versionCode = versionCode;
+            this.versionCode = versionCode; this.policy = policy;
         }
     }
 
@@ -44,14 +44,15 @@ final class ReleaseUpdateNotifier {
     static void check(Context context) {
         Context app = context.getApplicationContext();
         android.content.SharedPreferences prefs = app.getSharedPreferences("release_updates", Context.MODE_PRIVATE);
-        boolean snoozed = prefs.getInt("snooze_count", 0) > 0;
         long now = System.currentTimeMillis();
-        if (!snoozed && now - prefs.getLong("last_check", 0) < CHECK_INTERVAL) return;
+        if (now - prefs.getLong("last_check", 0) < CHECK_INTERVAL) return;
         EXECUTOR.execute(() -> {
             try {
                 Release release = fetchLatest(app);
                 prefs.edit().putLong("last_check", now).apply();
-                if (release != null && isNewer(release, app)) {
+                boolean deferred = release != null && release.tag.equals(prefs.getString("snoozed_tag", ""))
+                        && now < prefs.getLong("snoozed_until", 0);
+                if (release != null && !deferred && isNewer(release, app)) {
                     new Handler(Looper.getMainLooper()).post(() -> openUpdate(app, release));
                 }
             } catch (Exception ignored) {
@@ -90,6 +91,7 @@ final class ReleaseUpdateNotifier {
         intent.putExtra(UpdateActivity.EXTRA_APK_NAME, release.apkName);
         intent.putExtra(UpdateActivity.EXTRA_DOWNLOAD_URL, release.downloadUrl);
         intent.putExtra(UpdateActivity.EXTRA_DIGEST, release.digest);
+        intent.putExtra(UpdateActivity.EXTRA_POLICY, release.policy);
         return intent;
     }
 
@@ -120,7 +122,8 @@ final class ReleaseUpdateNotifier {
                 Matcher versionNameMatch = Pattern.compile("(?m)^<!-- rollcall-version-name: ([A-Za-z0-9._-]{1,80}) -->\\s*$").matcher(body);
                 long versionCode = code.find() ? Long.parseLong(code.group(1)) : -1;
                 String versionName = versionNameMatch.find() ? versionNameMatch.group(1) : tag;
-                String notes = body.replaceAll("(?m)^<!-- rollcall-version-(?:code|name): .* -->\\s*$", "").trim();
+                String policy = parsePolicy(body);
+                String notes = body.replaceAll("(?m)^<!-- rollcall-(?:version-(?:code|name)|update-policy): .* -->\\s*$", "").trim();
                 JSONArray assets = release.optJSONArray("assets");
                 if (assets == null) continue;
                 for (int i = 0; i < assets.length(); i++) {
@@ -129,13 +132,19 @@ final class ReleaseUpdateNotifier {
                     String name = asset.optString("name", ""), download = asset.optString("browser_download_url", "");
                     if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".apk") || !isGithubDownload(download)) continue;
                     return new Release(versionName, release.optString("name", "Rollcall update"),
-                            notes, url, name, download, asset.optString("digest", ""), versionCode);
+                            notes, url, name, download, asset.optString("digest", ""), versionCode, policy);
                 }
             }
             return null;
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    static String parsePolicy(String body) {
+        Matcher match = Pattern.compile("(?m)^<!-- rollcall-update-policy: (optional|recommended|required) -->\\s*$")
+                .matcher(body == null ? "" : body);
+        return match.find() ? match.group(1) : "optional";
     }
 
     private static String versionName(Context context) throws PackageManager.NameNotFoundException {

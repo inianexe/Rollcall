@@ -1,70 +1,168 @@
 package com.iniexe.rollcall;
 
 final class AppPalette {
-    final String name;
-    final boolean dark;
-    final int canvas, ink, muted, surface, border, soft, green, red, amber, track;
-    final int button, buttonText, highlight, hero, heroText, heroMuted, focusSurface, focusBorder;
+    static final int SIGNAL = 0;
+    static final int CUPERTINO = 1;
+    static final int GRAPHITE = 2;
+    static final int ATELIER = 3;
+    static final int THEME_COUNT = 4;
+    static final int SIGNAL_COURSE_ATTEND_FILL = 0xFFFF4400;
+    static final int SIGNAL_SYNC_SUCCESS = 0xFF9BE4A1;
 
-    private AppPalette(String name, boolean dark, int canvas, int ink, int muted, int surface, int border, int soft,
-                       int green, int red, int amber, int track, int button, int buttonText,
-                       int highlight, int hero, int heroText, int heroMuted, int focusSurface, int focusBorder) {
-        this.name = name;
+    final String name;
+    final int themeIndex;
+    final boolean dark;
+    final int canvas, ink, muted, surface, raisedSurface, border, soft, green, red, amber, track;
+    final int button, buttonText, highlight, hero, heroText, heroMuted, focusSurface, focusBorder;
+    final int syncSuccess;
+    final int cardRadius, featureRadius, controlRadius, navRadius;
+    final int customAccent;
+
+    private AppPalette(boolean dark, int requestedTheme, int customAccent) {
+        themeIndex = normalizeIndex(requestedTheme);
         this.dark = dark;
-        this.canvas = canvas; this.ink = ink; this.muted = muted; this.surface = surface;
-        this.border = border; this.soft = soft; this.green = green; this.red = red; this.amber = amber;
-        this.track = track; this.button = button; this.buttonText = buttonText;
-        this.highlight = highlight; this.hero = hero; this.heroText = heroText;
-        this.heroMuted = heroMuted; this.focusSurface = focusSurface; this.focusBorder = focusBorder;
+        name = nameFor(themeIndex);
+
+        int darkCanvas, darkSurface, darkRaised, darkInk, darkMuted, darkAccent, darkAccentText;
+        int lightCanvas, lightSurface, lightRaised, lightInk, lightMuted, lightAccent, lightAccentText;
+        switch (themeIndex) {
+            case CUPERTINO:
+                darkCanvas = 0xFF000000; darkSurface = 0xFF1C1C1E; darkRaised = 0xFF2C2C2E;
+                darkInk = 0xFFF5F5F7; darkMuted = 0xFFB8B8BE; darkAccent = 0xFF8DB6FF; darkAccentText = 0xFF111827;
+                lightCanvas = 0xFFF2F2F7; lightSurface = 0xFFFFFFFF; lightRaised = 0xFFE5E5EA;
+                lightInk = 0xFF1C1C1E; lightMuted = 0xFF52525B; lightAccent = 0xFF2458D3; lightAccentText = 0xFFFFFFFF;
+                cardRadius = 24; featureRadius = 28; controlRadius = 12; navRadius = 32;
+                break;
+            case GRAPHITE:
+                darkCanvas = 0xFF0B0F14; darkSurface = 0xFF171C22; darkRaised = 0xFF232A33;
+                darkInk = 0xFFF0F3F6; darkMuted = 0xFFB3BBC4; darkAccent = 0xFF9EBCCE; darkAccentText = 0xFF11171D;
+                lightCanvas = 0xFFF4F5F6; lightSurface = 0xFFFFFFFF; lightRaised = 0xFFE9EBED;
+                lightInk = 0xFF1E2226; lightMuted = 0xFF5C646C; lightAccent = 0xFF405E72; lightAccentText = 0xFFFFFFFF;
+                cardRadius = 16; featureRadius = 20; controlRadius = 8; navRadius = 32;
+                break;
+            case ATELIER:
+                darkCanvas = 0xFF161310; darkSurface = 0xFF25211D; darkRaised = 0xFF302B25;
+                darkInk = 0xFFF2ECE4; darkMuted = 0xFFC8B9A7; darkAccent = 0xFFE2BC92; darkAccentText = 0xFF29241E;
+                lightCanvas = 0xFFF8F5EF; lightSurface = 0xFFFFFEFA; lightRaised = 0xFFEFE9DF;
+                lightInk = 0xFF29241E; lightMuted = 0xFF675E52; lightAccent = 0xFF805C3C; lightAccentText = 0xFFFFFFFF;
+                cardRadius = 22; featureRadius = 26; controlRadius = 10; navRadius = 32;
+                break;
+            case SIGNAL:
+            default:
+                darkCanvas = 0xFF000000; darkSurface = 0xFF1C1C1E; darkRaised = 0xFF2C2C2E;
+                darkInk = 0xFFF5F5F7; darkMuted = 0xFFAEAEB2; darkAccent = 0xFFCCFF00; darkAccentText = 0xFF111827;
+                lightCanvas = 0xFFF2F2F7; lightSurface = 0xFFFFFFFF; lightRaised = 0xFFF0F0F2;
+                lightInk = 0xFF1C1C1E; lightMuted = 0xFF636366; lightAccent = 0xFF2458E5; lightAccentText = 0xFFFFFFFF;
+                cardRadius = 16; featureRadius = 20; controlRadius = 8; navRadius = 32;
+                break;
+        }
+
+        this.customAccent = customAccent == 0 ? 0 : 0xFF000000 | (customAccent & 0x00FFFFFF);
+        int baseCanvas = dark ? darkCanvas : lightCanvas;
+        int baseSurface = dark ? darkSurface : lightSurface;
+        int baseRaised = dark ? darkRaised : lightRaised;
+        int accent = this.customAccent == 0 ? (dark ? darkAccent : lightAccent) : this.customAccent;
+        canvas = this.customAccent == 0 ? baseCanvas : blend(baseCanvas, accent, dark ? .035f : .025f);
+        surface = this.customAccent == 0 ? baseSurface : blend(baseSurface, accent, dark ? .045f : .025f);
+        raisedSurface = this.customAccent == 0 ? baseRaised : blend(baseRaised, accent, dark ? .07f : .045f);
+        ink = dark ? darkInk : lightInk;
+        muted = dark ? darkMuted : lightMuted;
+        button = this.customAccent == 0 ? accent : accessibleAccent(accent);
+        buttonText = this.customAccent == 0 ? (dark ? darkAccentText : lightAccentText) : bestText(button);
+        int baseBorder = dark ? (themeIndex == GRAPHITE ? 0xFF333B45 : 0xFF38383A) : 0xFFD1D1D6;
+        border = this.customAccent == 0 ? baseBorder : blend(baseBorder, button, .24f);
+        soft = raisedSurface;
+        green = dark ? 0xFF54D68B : 0xFF167C4A;
+        syncSuccess = dark && themeIndex == SIGNAL ? SIGNAL_SYNC_SUCCESS : green;
+        amber = dark ? 0xFFFDBA4D : 0xFF975400;
+        red = dark ? 0xFFFF777B : 0xFFB42318;
+        track = dark ? 0xFF636366 : 0xFF8E8E93;
+        highlight = this.customAccent == 0 ? button : accessibleTextAccent(accent, canvas, dark);
+        hero = button;
+        heroText = buttonText;
+        heroMuted = muted;
+        focusSurface = raisedSurface;
+        focusBorder = this.customAccent == 0 ? (dark ? 0xFF77777D : 0xFF303630)
+                : blend(dark ? 0xFF77777D : 0xFF303630, button, .32f);
     }
 
-    static int normalizeIndex(int index) { return index >= 0 && index < 5 ? index : 0; }
-
-    static AppPalette get(boolean dark, int index) {
+    static String nameFor(int index) {
         switch (normalizeIndex(index)) {
-            case 1: return create("Cobalt Studio", dark, 0xFF3157D5, 0xFF90A9FF, 0xFFFFFFFF, 0xFF101827, 0xFF8A4B00, 0xFFFFC27A, 0xFF0D1430, 0xFFEAF0FF, 0xFFFFFFFF);
-            case 2: return create("Copper Night", dark, 0xFFB7653D, 0xFFE6A07A, 0xFF000000, 0xFF000000, 0xFF873E21, 0xFFE6A07A, 0xFF281812, 0xFFFFE6D9, 0xFF000000);
-            case 3: return create("Forest Circuit", dark, 0xFF287A57, 0xFF78D4A4, 0xFFFFFFFF, 0xFF10251C, 0xFF176146, 0xFF78D4A4, 0xFF10251C, 0xFFE4F4E9, 0xFFFFFFFF);
-            case 4: return create("Paper Circuit", dark, 0xFF2563EB, 0xFF2563EB, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFB94A1A, 0xFFFFA77F, 0xFF27251F, 0xFFF5F0E4, 0xFFFFFFFF);
-            default: return create("Signal", dark, 0xFFCCFF00, 0xFFCCFF00, 0xFF111827, 0xFF111827, 0xFFB42F08, 0xFFFF663D, 0xFF121212, 0xFFC8C8FF, 0xFF111827);
+            case CUPERTINO: return "Cupertino";
+            case GRAPHITE: return "Graphite";
+            case ATELIER: return "Atelier";
+            case SIGNAL:
+            default: return "Signal";
         }
     }
 
-    private static AppPalette create(String name, boolean dark, int lightAccent, int darkAccent,
-                                     int lightActionText, int darkActionText, int lightHighlight, int darkHighlight,
-                                     int hero, int focus, int lightHeroText) {
-        int canvas = dark ? 0xFF151719 : 0xFFF5F6F3;
-        int ink = dark ? 0xFFF2F4F0 : 0xFF171A18;
-        int muted = dark ? 0xFFB0B8B2 : 0xFF606963;
-        int surface = dark ? 0xFF222628 : 0xFFFFFFFF;
-        int border = dark ? 0xFF4A5350 : 0xFFD6DDD8;
-        int soft = dark ? 0xFF2C3431 : 0xFFEDF1EE;
-        int green = dark ? 0xFF8FE0B0 : 0xFF176146;
-        int red = dark ? 0xFFFF9686 : 0xFFAA2921;
-        int amber = dark ? 0xFFFFC675 : 0xFF744500;
-        int track = dark ? 0xFF58605B : 0xFFA1AAA4;
-        int heroText = dark ? (name.equals("Signal") ? 0xFF111827 : 0xFFF4F5EF) : lightHeroText;
-        int heroMuted = dark ? 0xFFD1D7C8 : 0xFF343A26;
-        int focusBorder = dark ? 0xFF111111 : 0xFF303630;
-        int highlight = dark ? darkHighlight : lightHighlight;
-        int accent = dark ? darkAccent : lightAccent;
-        int buttonText = dark ? darkActionText : lightActionText;
-        return new AppPalette(name, dark, canvas, ink, muted, surface, border, soft, green, red, amber, track,
-                accent, buttonText, highlight,
-                dark && !name.equals("Signal") ? hero : accent, heroText, heroMuted,
-                dark ? blend(focus, surface, .12f) : focus, focusBorder);
+    static String fontNameFor(int index) {
+        switch (normalizeIndex(index)) {
+            case CUPERTINO: return "Manrope";
+            case GRAPHITE: return "IBM Plex Sans";
+            case ATELIER: return "Instrument Sans · Newsreader";
+            case SIGNAL:
+            default: return "JetBrains Mono";
+        }
     }
 
-    private static int blend(int color, int base, float amount) {
-        int r = Math.round(ColorPart.r(color) * (1f - amount) + ColorPart.r(base) * amount);
-        int g = Math.round(ColorPart.g(color) * (1f - amount) + ColorPart.g(base) * amount);
-        int b = Math.round(ColorPart.b(color) * (1f - amount) + ColorPart.b(base) * amount);
-        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    static int normalizeIndex(int index) {
+        return index >= SIGNAL && index < THEME_COUNT ? index : SIGNAL;
     }
 
-    private static final class ColorPart {
-        static int r(int color) { return (color >> 16) & 255; }
-        static int g(int color) { return (color >> 8) & 255; }
-        static int b(int color) { return color & 255; }
+    static AppPalette get(boolean dark, int index) { return new AppPalette(dark, index, 0); }
+
+    static AppPalette get(boolean dark, int index, int customAccent) {
+        return new AppPalette(dark, index, customAccent);
+    }
+
+    static AppPalette get(int index) { return new AppPalette(true, index, 0); }
+
+    private static int accessibleAccent(int color) {
+        int text = bestText(color);
+        if (contrastRatio(text, color) >= 4.5) return color;
+        int target = text == 0xFFFFFFFF ? 0xFF000000 : 0xFFFFFFFF;
+        for (int step = 1; step <= 100; step++) {
+            int adjusted = blend(color, target, step / 100f);
+            if (contrastRatio(bestText(adjusted), adjusted) >= 4.5) return adjusted;
+        }
+        return color;
+    }
+
+    private static int accessibleTextAccent(int color, int background, boolean dark) {
+        if (contrastRatio(color, background) >= 4.5) return color;
+        int target = dark ? 0xFFFFFFFF : 0xFF000000;
+        for (int step = 1; step <= 100; step++) {
+            int adjusted = blend(color, target, step / 100f);
+            if (contrastRatio(adjusted, background) >= 4.5) return adjusted;
+        }
+        return target;
+    }
+
+    private static int bestText(int color) {
+        return contrastRatio(0xFFFFFFFF, color) >= contrastRatio(0xFF111214, color)
+                ? 0xFFFFFFFF : 0xFF111214;
+    }
+
+    private static double contrastRatio(int foreground, int background) {
+        double a = luminance(foreground), b = luminance(background);
+        return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+    }
+
+    private static double luminance(int color) {
+        return .2126 * linear((color >>> 16 & 255) / 255.0)
+                + .7152 * linear((color >>> 8 & 255) / 255.0)
+                + .0722 * linear((color & 255) / 255.0);
+    }
+
+    private static double linear(double channel) {
+        return channel <= .04045 ? channel / 12.92 : Math.pow((channel + .055) / 1.055, 2.4);
+    }
+
+    private static int blend(int from, int to, float amount) {
+        int r = Math.round(((from >>> 16) & 255) * (1 - amount) + ((to >>> 16) & 255) * amount);
+        int g = Math.round(((from >>> 8) & 255) * (1 - amount) + ((to >>> 8) & 255) * amount);
+        int b = Math.round((from & 255) * (1 - amount) + (to & 255) * amount);
+        return 0xFF000000 | r << 16 | g << 8 | b;
     }
 }

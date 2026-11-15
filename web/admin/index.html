@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#10120d">
+  <meta name="description" content="Private Rollcall operations console for service announcements and access history.">
+  <title>Command Center · Rollcall</title>
+  <link rel="stylesheet" href="./admin.css?v=9">
+  <script src="../firebase-config.js?v=3"></script>
+  <script src="https://accounts.google.com/gsi/client" defer></script>
+  <script type="module" src="./admin.js?v=9"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Rollcall Command Center home"><span class="brand-mark">R</span><span>rollcall<span class="brand-dot">.</span><small>COMMAND CENTER</small></span></a>
+      <div class="secure-label"><span aria-hidden="true"></span><span class="secure-copy">Restricted owner access</span></div>
+    </header>
+
+    <section id="sign-in-panel" class="panel sign-in-panel">
+      <p class="eyebrow">PRIVATE OPERATIONS</p>
+      <h1>Keep Rollcall<br><em>in good hands.</em></h1>
+      <p class="intro">Sign in with the Google account authorized for this console. Access is verified by Rollcall’s server.</p>
+      <div id="sign-in" class="google-sign-in" aria-label="Continue with Google"></div>
+      <a class="phone-sign-in" href="/?admin=1">Or approve sign-in with your trusted Rollcall phone →</a>
+      <p id="sign-in-status" class="status" role="status" aria-live="polite">Student accounts do not have access to Command Center.</p>
+    </section>
+
+    <section id="console-panel" hidden>
+      <div class="welcome">
+        <div><p class="eyebrow">COMMAND CENTER / OVERVIEW</p><h1>Good to have you,<br><em>operator.</em></h1><p class="welcome-copy">Service announcements and access activity, in one place.</p></div>
+        <button id="sign-out" class="quiet" type="button">Sign out</button>
+      </div>
+      <div class="status-grid">
+        <article class="panel status-card">
+          <span class="card-index">01 / ACCESS</span>
+          <div class="status-title"><span class="check">✓</span><h2>Owner verified</h2></div>
+          <p id="admin-email" class="detail"></p>
+          <small>Server-side verified owner allowlist</small>
+        </article>
+        <article class="panel status-card">
+          <span class="card-index">02 / FIREBASE ACCOUNTS</span>
+          <div class="status-title"><h2 id="firebase-user-count" class="metric">—</h2></div>
+          <p class="detail">All Firebase identities, including admins. Admins are shown separately below.</p>
+          <small id="firebase-user-count-status">Live count refreshes automatically.</small>
+        </article>
+        <article class="panel status-card">
+          <span class="card-index">03 / TRUSTED INSTALLATIONS</span>
+          <div class="status-title"><h2 id="installation-count" class="metric">—</h2></div>
+          <p class="detail">Trusted installations in Rollcall D1.</p>
+          <small>A device-link count; not a user or delivery count.</small>
+        </article>
+      </div>
+      <section class="account-grid" aria-label="Account directory">
+        <article class="panel account-panel">
+          <div class="activity-heading"><div><p class="eyebrow">FIREBASE AUTHENTICATION</p><h2>Student accounts</h2><p class="section-copy">Newest verified Rollcall identities. Admin accounts are listed separately.</p></div><span id="account-count" class="count">— ACCOUNTS</span></div>
+          <ol id="user-account-list" class="account-list"></ol>
+          <p id="empty-user-accounts" class="empty" hidden>No student accounts are available.</p>
+          <p id="account-directory-status" class="directory-status" role="status" aria-live="polite">Loading Firebase account activity…</p>
+        </article>
+        <article class="panel account-panel admin-account-panel">
+          <div class="activity-heading"><div><p class="eyebrow">RESTRICTED ACCESS</p><h2>Command Center admins</h2><p class="section-copy">Server-allowlisted identities, kept outside the student account list.</p></div></div>
+          <ol id="admin-account-list" class="account-list"></ol>
+          <p id="empty-admin-accounts" class="empty" hidden>No admin identities are configured.</p>
+        </article>
+      </section>
+      <section id="release-factory" class="panel release-factory" aria-labelledby="release-factory-title">
+        <div class="activity-heading"><div><p class="eyebrow">DEVOS / RELEASE FACTORY</p><h2 id="release-factory-title">New Android release</h2><p class="section-copy">Stage a signed APK privately. Validation runs without signing credentials; publication requires a separate email approval code.</p></div><span class="count">STABLE / ALL INSTALLATIONS</span></div>
+        <form id="release-form">
+          <label>Signed APK <input name="apk" type="file" accept=".apk,application/vnd.android.package-archive" required><small class="field-hint">Maximum 20 MiB. APKs are staged privately and removed after publication or cancellation.</small></label>
+          <label>Release notes <textarea name="notes" maxlength="5000" rows="4" required placeholder="What changed for students?"></textarea></label>
+          <label>Update policy <select name="policy"><option value="optional">Optional</option><option value="recommended">Recommended</option><option value="required">Required for compatibility</option></select><small class="field-hint">Required explains compatibility; it does not block access to saved academic data.</small></label>
+          <label class="release-confirm"><input name="confirmAll" type="checkbox" required> I understand a public stable GitHub release is discoverable by existing Rollcall installations.</label>
+          <div class="release-upload-actions"><button id="upload-release" class="primary save-button" type="submit">Stage APK <span aria-hidden="true">↑</span></button><button id="cancel-upload" class="quiet" type="button" hidden>Cancel upload</button></div>
+          <progress id="release-progress" max="100" value="0" hidden></progress>
+          <p id="release-factory-status" class="form-status" role="status" aria-live="polite"></p>
+        </form>
+        <div class="activity-heading release-drafts-heading"><div><h3>Staged releases</h3><p class="section-copy">Validate, review the detected APK identity, then approve publication.</p></div><button id="refresh-release-drafts" class="quiet" type="button">Refresh</button></div>
+        <ol id="release-draft-list" class="release-draft-list"></ol><p id="empty-release-drafts" class="empty" hidden>No staged APKs yet.</p>
+      </section>
+      <section class="panel release-operations" aria-labelledby="release-operations-title">
+        <div class="activity-heading"><div><p class="eyebrow">DEVOS / RELEASE OPERATIONS</p><h2 id="release-operations-title">Releases &amp; builds</h2><p class="section-copy">Live status from GitHub. A green build is not a published or installed app update.</p></div><button id="refresh-release-operations" class="quiet" type="button">Refresh</button></div>
+        <div class="release-grid"><article><h3>Published releases</h3><ol id="release-list" class="release-list"></ol><p id="empty-releases" class="empty" hidden>No GitHub releases are published.</p></article><article><h3>Recent workflow runs</h3><ol id="workflow-list" class="workflow-list"></ol><p id="empty-workflows" class="empty" hidden>No GitHub workflow runs were found.</p></article></div>
+        <p id="release-operations-status" class="directory-status" role="status" aria-live="polite">Loading GitHub release status…</p>
+        <p class="release-setup-note">A GitHub workflow validates queued APKs and publishes approved releases. Workflow schedules can be delayed; refresh staged releases to see the latest result.</p>
+      </section>
+      <dialog id="release-approval-dialog" class="release-approval-dialog" aria-labelledby="release-approval-title">
+        <form id="release-approval-form" method="dialog">
+          <p class="eyebrow">FINAL APPROVAL</p><h2 id="release-approval-title">Publish Android release</h2>
+          <p id="release-approval-details"></p>
+          <label>Six-digit email code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+          <label>Type the exact release tag<input name="tag" autocomplete="off" required></label>
+          <div class="release-upload-actions"><button id="confirm-release-publish" class="primary save-button" type="submit">Approve &amp; publish</button><button id="close-release-approval" class="quiet" type="button">Cancel</button></div>
+        </form>
+      </dialog>
+      <section class="panel composer">
+        <div class="activity-heading"><div><p class="eyebrow">ANNOUNCEMENTS / COMPOSE</p><h2>Write an announcement</h2><p class="section-copy">Save a draft first. Review it below before publishing to students.</p></div><span class="count">IN-APP INBOX</span></div>
+        <form id="campaign-form">
+          <div class="form-row"><label>Public title<input name="title" maxlength="100" required placeholder="e.g. MyCamu sync restored"></label>
+            <label>Type<select name="category"><option value="announcement">Announcement</option><option value="feature">New feature</option><option value="maintenance">Maintenance</option><option value="outage">Service disruption</option><option value="resolved">Resolved incident</option><option value="update">App update</option><option value="operational">Important notice</option></select></label></div>
+          <label>Message<textarea name="body" maxlength="1200" rows="4" required placeholder="Write a clear, useful message for students."></textarea><small class="field-hint">Plain text, up to 1,200 characters.</small></label>
+          <div class="form-row"><label>Priority<select name="priority"><option value="normal">Normal</option><option value="important">Important</option><option value="critical">Critical</option></select></label>
+            <label>Expires<input name="expiresAt" type="datetime-local"></label></div>
+          <fieldset><legend>Delivery</legend><label class="check-option"><input type="checkbox" name="inbox" checked disabled> Persistent in-app updates menu</label><label class="check-option"><input type="checkbox" name="popup"> Show a one-time pop-up in the app</label><label class="check-option"><input type="checkbox" name="push"> Push to notification-enabled devices</label><small class="field-hint">Updates always remain available from the app’s three-dot menu. Pop-ups are optional.</small></fieldset>
+          <div class="form-row"><label>Action label <span class="optional">optional</span><input name="actionLabel" maxlength="40" placeholder="Open schedule"></label>
+            <label>Rollcall destination <span class="optional">optional</span><input name="actionPath" maxlength="160" placeholder="/#week"></label></div>
+          <p id="campaign-status" class="form-status" role="status" aria-live="polite"></p>
+          <div class="form-actions"><button id="save-campaign" class="primary save-button" type="submit">Save draft <span aria-hidden="true">＋</span></button></div>
+        </form>
+      </section>
+      <section class="panel campaigns">
+        <div class="activity-heading"><div><p class="eyebrow">CAMPAIGNS</p><h2>Announcements</h2></div><button id="refresh-campaigns" class="quiet" type="button">Refresh</button></div>
+        <div id="campaign-list" class="campaign-list"></div>
+        <p id="empty-campaigns" class="empty" hidden>No announcements yet. Save a draft to start.</p>
+      </section>
+      <section class="panel activity">
+        <div class="activity-heading"><div><p class="eyebrow">RECENT ACTIVITY</p><h2>Access history</h2></div><span id="activity-count" class="count">0 EVENTS</span></div>
+        <ol id="activity-list" class="activity-list"></ol>
+        <p id="empty-activity" class="empty" hidden>No Command Center sessions have been recorded.</p>
+      </section>
+      <p class="scope-note"><strong>Delivery truth:</strong> FCM acceptance means the push provider accepted the request, not that it reached a phone. Published messages remain retrievable from D1 until expiry; revoked messages stop appearing in future inbox syncs.</p>
+    </section>
+    <p id="error" class="error" role="alert" hidden></p>
+    <footer><span>ROLLCALL / INTERNAL OPERATIONS</span><span>Keep student data private.</span></footer>
+  </main>
+</body>
+</html>

@@ -6,3 +6,4 @@ window.ROLLCALL_FIREBASE_CONFIG = {
   projectId: "rollcall-ab5d1",
   appId: "1:761627592440:web:845138b1911d92beb21d0d"
 };
+window.ROLLCALL_GOOGLE_CLIENT_ID = "761627592440-nop4ff174kntvva9ctecddpk4pmiu4cu.apps.googleusercontent.com";
