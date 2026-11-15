@@ -21,6 +21,7 @@ Declare third-party libraries in `android/app/build.gradle`. Run `./gradlew :app
 - `web/app.js` owns the browser dashboard and local browser data; `web/cloud-auth.js` owns Firebase sign-in and the read-only cloud session UI.
 - `web/functions/_api.js` owns Pages API routes; ordered SQL migrations live in `web/migrations/`; API tests live in `web/functions/_api.test.mjs`.
 - `docs/architecture/API_CONTRACT.md` is the shared Android–Web wire contract. Update it when request, response, authentication, or migration behavior changes.
+- `docs/architecture/AUTHENTICATION.md` and `docs/security/ACCOUNT_SECURITY.md` define Firebase identity, UID ownership, trusted-device, and deletion boundaries. Keep provider linking on the existing UID and stop on credential conflicts; never infer merge consent from matching email addresses.
 
 Preserve application identity, release signing behavior, data formats, provider WebView sessions, and update verification unless the task explicitly changes them. Do not install on a USB-connected device or publish a release as part of ordinary verification.
 

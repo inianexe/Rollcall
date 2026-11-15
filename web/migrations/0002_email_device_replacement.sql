@@ -13,5 +13,3 @@ CREATE TABLE IF NOT EXISTS device_replacement_email_sends (
 );
 CREATE INDEX IF NOT EXISTS device_replacement_email_sends_uid_created
   ON device_replacement_email_sends(uid, created_at);
-
-DROP TABLE IF EXISTS recovery_codes;

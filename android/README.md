@@ -15,7 +15,7 @@ Rollcall is a Java Android app that reads MyCamu attendance through its authenti
 - `app/src/androidTest/` contains navigation and visual-capture instrumentation tests. CI assembles these tests but does not execute them; run them only on an isolated QA install, never over a production install.
 - `TORCH_GENESIS_DESIGN.md` is the canonical design reference. The HTML prototype is a reference only, never the Android runtime.
 
-The project uses a single Android `:app` module. Its configured identity is `com.iniexe.rollcall`, compile/target SDK 35, min SDK 23, versionCode 25 and versionName 1.0.24.
+The project uses a single Android `:app` module. Its configured identity is `com.iniexe.rollcall`, compile/target SDK 35, min SDK 23, versionCode 26 and versionName 1.0.25.
 
 ## Build and test
 

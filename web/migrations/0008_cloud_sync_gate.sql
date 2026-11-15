@@ -1,0 +1,1 @@
+ALTER TABLE trusted_devices ADD COLUMN sync_enabled INTEGER NOT NULL DEFAULT 1;
