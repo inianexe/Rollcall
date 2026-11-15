@@ -34,7 +34,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Run JVM tests and build debug APK
         working-directory: android
         run: |
