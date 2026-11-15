@@ -1,0 +1,164 @@
+name: DevOS Release Factory
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devos-release-factory
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.claim.outputs.stage }}
+      id: ${{ steps.claim.outputs.id }}
+      task: ${{ steps.claim.outputs.task }}
+    steps:
+      - id: claim
+        env:
+          RELEASE_FACTORY_PULL_KEY: ${{ secrets.RELEASE_FACTORY_PULL_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_FACTORY_PULL_KEY"
+          curl --fail --silent --show-error --retry 2 \
+            -H "x-rollcall-release-key: $RELEASE_FACTORY_PULL_KEY" \
+            https://rollcall-campus-companion.pages.dev/api/release-worker/next > "$RUNNER_TEMP/task-response.json"
+          jq -e '.task == null or (.task.id | type == "string")' "$RUNNER_TEMP/task-response.json" >/dev/null
+          stage="$(jq -r '.task.stage // ""' "$RUNNER_TEMP/task-response.json")"
+          id="$(jq -r '.task.id // ""' "$RUNNER_TEMP/task-response.json")"
+          if [ -n "$stage" ]; then
+            [[ "$id" =~ ^[0-9a-f-]{36}$ ]]
+            [[ "$stage" == validate || "$stage" == publish ]]
+          fi
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "task=$(jq -c '.task' "$RUNNER_TEMP/task-response.json" | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: plan
+    if: needs.plan.outputs.stage == 'validate'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'build-tools;35.0.0'
+      - name: Validate untrusted APK without signing or repository write credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_FACTORY_PULL_KEY: ${{ secrets.RELEASE_FACTORY_PULL_KEY }}
+          RELEASE_ID: ${{ needs.plan.outputs.id }}
+          TASK_B64: ${{ needs.plan.outputs.task }}
+        run: |
+          set -euo pipefail
+          task="$(printf '%s' "$TASK_B64" | base64 -d)"
+          expected_sha="$(jq -r '.sha256' <<< "$task")"
+          expected_size="$(jq -r '.sizeBytes' <<< "$task")"
+          [[ "$expected_sha" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$expected_size" =~ ^[0-9]+$ ]] && test "$expected_size" -le 20971520
+          report_failure() {
+            jq -n '{ok:false,error:"CI validation failed. Inspect the DevOS Release Factory run."}' |
+              curl --fail --silent --show-error --retry 2 -X POST \
+                -H "x-rollcall-release-key: $RELEASE_FACTORY_PULL_KEY" -H 'content-type: application/json' \
+                --data-binary @- "https://rollcall-campus-companion.pages.dev/api/release-worker/$RELEASE_ID/validated" || true
+          }
+          trap report_failure ERR
+          curl --fail --silent --show-error --retry 2 \
+            -H "x-rollcall-release-key: $RELEASE_FACTORY_PULL_KEY" \
+            "https://rollcall-campus-companion.pages.dev/api/release-worker/artifact/$RELEASE_ID" \
+            -o "$RUNNER_TEMP/candidate.apk"
+          test "$(stat -c %s "$RUNNER_TEMP/candidate.apk")" -eq "$expected_size"
+          test "$(sha256sum "$RUNNER_TEMP/candidate.apk" | cut -d' ' -f1)" = "$expected_sha"
+          unzip -t "$RUNNER_TEMP/candidate.apk" >/dev/null
+          badging="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$RUNNER_TEMP/candidate.apk")"
+          package_name="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$badging")"
+          version_code="$(sed -n "s/^package:.*versionCode='\([^']*\)'.*/\1/p" <<< "$badging")"
+          version_name="$(sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p" <<< "$badging")"
+          min_sdk="$(sed -n "s/^sdkVersion:'\([^']*\)'.*/\1/p" <<< "$badging")"
+          target_sdk="$(sed -n "s/^targetSdkVersion:'\([^']*\)'.*/\1/p" <<< "$badging")"
+          signer="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/candidate.apk" 2>/dev/null |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          test "$package_name" = com.iniexe.rollcall
+          [[ "$version_code" =~ ^[0-9]+$ ]] && test "$version_code" -gt 31
+          [[ "$version_name" =~ ^[A-Za-z0-9._-]{1,80}$ ]]
+          [[ "$min_sdk" =~ ^[0-9]+$ ]] && test "$min_sdk" -le 23
+          [[ "$target_sdk" =~ ^[0-9]+$ ]] && test "$target_sdk" -ge 23 && test "$target_sdk" -le 36
+          test "$signer" = 19117b6b5320c6adb907834880f031d00040e0a3114a9a8d3633539349bf1bc6
+          grep -q "launchable-activity: name='com.iniexe.rollcall.MainActivity'" <<< "$badging"
+          if gh release view "v$version_name" --repo inianexe/Rollcall >/dev/null 2>&1; then
+            echo "::error::The release tag already exists."
+            exit 1
+          fi
+          max_published_code="$(gh api 'repos/inianexe/Rollcall/releases?per_page=100' --paginate --jq '.[].body' |
+            sed -nE 's/^<!-- rollcall-version-code: ([0-9]+) -->.*/\1/p' | sort -n | tail -1)"
+          if [ -n "$max_published_code" ]; then test "$version_code" -gt "$max_published_code"; fi
+          jq -n --arg packageName "$package_name" --arg sha256 "$expected_sha" \
+            --arg signerSha256 "$signer" --arg versionName "$version_name" \
+            --argjson versionCode "$version_code" --argjson minSdk "$min_sdk" \
+            --argjson targetSdk "$target_sdk" \
+            '{ok:true,packageName:$packageName,sha256:$sha256,signerSha256:$signerSha256,versionName:$versionName,versionCode:$versionCode,minSdk:$minSdk,targetSdk:$targetSdk}' |
+            curl --fail --silent --show-error --retry 2 -X POST \
+              -H "x-rollcall-release-key: $RELEASE_FACTORY_PULL_KEY" -H 'content-type: application/json' \
+              --data-binary @- "https://rollcall-campus-companion.pages.dev/api/release-worker/$RELEASE_ID/validated"
+          trap - ERR
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.stage == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the already validated immutable APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_FACTORY_PULL_KEY: ${{ secrets.RELEASE_FACTORY_PULL_KEY }}
+          RELEASE_ID: ${{ needs.plan.outputs.id }}
+          TASK_B64: ${{ needs.plan.outputs.task }}
+        run: |
+          set -euo pipefail
+          task="$(printf '%s' "$TASK_B64" | base64 -d)"
+          sha="$(jq -r '.sha256' <<< "$task")"
+          size="$(jq -r '.sizeBytes' <<< "$task")"
+          version_name="$(jq -r '.versionName' <<< "$task")"
+          version_code="$(jq -r '.versionCode' <<< "$task")"
+          [[ "$sha" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$size" =~ ^[0-9]+$ ]] && test "$size" -le 20971520
+          [[ "$version_name" =~ ^[A-Za-z0-9._-]{1,80}$ ]]
+          [[ "$version_code" =~ ^[0-9]+$ ]] && test "$version_code" -gt 31
+          tag="v$version_name"
+          apk="$RUNNER_TEMP/Rollcall-$version_name.apk"
+          curl --fail --silent --show-error --retry 2 \
+            -H "x-rollcall-release-key: $RELEASE_FACTORY_PULL_KEY" \
+            "https://rollcall-campus-companion.pages.dev/api/release-worker/artifact/$RELEASE_ID" -o "$apk"
+          test "$(stat -c %s "$apk")" -eq "$size"
+          test "$(sha256sum "$apk" | cut -d' ' -f1)" = "$sha"
+          if ! gh release view "$tag" --repo inianexe/Rollcall >/dev/null 2>&1; then
+            printf '%s  %s\n' "$sha" "Rollcall-$version_name.apk" > "$apk.sha256"
+            {
+              printf '<!-- rollcall-version-code: %s -->\n' "$version_code"
+              printf '<!-- rollcall-version-name: %s -->\n' "$version_name"
+              printf '<!-- rollcall-update-policy: %s -->\n\n' "$(jq -r '.policy' <<< "$task")"
+              printf '# Rollcall %s\n\n' "$version_name"
+              jq -r '.notes' <<< "$task"
+            } > "$RUNNER_TEMP/release-notes.md"
+            gh release create "$tag" "$apk" "$apk.sha256" \
+              --repo inianexe/Rollcall --target main --title "Rollcall $version_name" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" --latest
+          fi
+          gh api "repos/inianexe/Rollcall/releases/tags/$tag" \
+            --jq ".assets[] | select(.name == \"Rollcall-$version_name.apk\") | [.size,.digest] | @tsv" |
+            grep -Fx "$size"$'\t'"sha256:$sha"
+          jq -n --arg tag "$tag" --arg sha256 "$sha" \
+            --arg url "https://github.com/inianexe/Rollcall/releases/tag/$tag" \
+            '{ok:true,tag:$tag,sha256:$sha256,url:$url}' |
+            curl --fail --silent --show-error --retry 2 -X POST \
+              -H "x-rollcall-release-key: $RELEASE_FACTORY_PULL_KEY" -H 'content-type: application/json' \
+              --data-binary @- "https://rollcall-campus-companion.pages.dev/api/release-worker/$RELEASE_ID/published"
