@@ -828,9 +828,9 @@ final class DashboardView extends FrameLayout {
         overviewScheduleBlock = column();
         overviewScheduleBlock.addView(overviewSectionHeader("Next up", "Week", () -> showPage(2)));
         overviewScheduleFreshness = text("", 10, muted, Typeface.NORMAL);
-        overviewScheduleBlock.addView(overviewScheduleFreshness, topLp(-1, -2, 1));
+        overviewScheduleBlock.addView(overviewScheduleFreshness, topLp(-1, -2, 3));
         overviewScheduleRows = column();
-        overviewScheduleBlock.addView(overviewScheduleRows, lp(-1, -2));
+        overviewScheduleBlock.addView(overviewScheduleRows, topLp(-1, -2, 8));
         overviewScheduleBlock.setVisibility(GONE);
         addTop(body, overviewScheduleBlock, 12);
 
