@@ -49,11 +49,11 @@ final class AppPalette {
                 break;
             case SIGNAL:
             default:
-                darkCanvas = 0xFF000000; darkSurface = 0xFF1C1C1E; darkRaised = 0xFF2C2C2E;
-                darkInk = 0xFFF5F5F7; darkMuted = 0xFFAEAEB2; darkAccent = 0xFFCCFF00; darkAccentText = 0xFF111827;
+                darkCanvas = 0xFF0B0C0A; darkSurface = 0xFF151714; darkRaised = 0xFF1D201B;
+                darkInk = 0xFFF2F3EC; darkMuted = 0xFFA8AD9E; darkAccent = 0xFFD4FF35; darkAccentText = 0xFF15180F;
                 lightCanvas = 0xFFF2F2F7; lightSurface = 0xFFFFFFFF; lightRaised = 0xFFF0F0F2;
                 lightInk = 0xFF1C1C1E; lightMuted = 0xFF636366; lightAccent = 0xFF2458E5; lightAccentText = 0xFFFFFFFF;
-                cardRadius = 16; featureRadius = 20; controlRadius = 8; navRadius = 32;
+                cardRadius = 18; featureRadius = 22; controlRadius = 11; navRadius = 28;
                 break;
         }
 
@@ -62,15 +62,17 @@ final class AppPalette {
         int baseSurface = dark ? darkSurface : lightSurface;
         int baseRaised = dark ? darkRaised : lightRaised;
         int accent = this.customAccent == 0 ? (dark ? darkAccent : lightAccent) : this.customAccent;
-        canvas = this.customAccent == 0 ? baseCanvas : blend(baseCanvas, accent, dark ? .035f : .025f);
-        surface = this.customAccent == 0 ? baseSurface : blend(baseSurface, accent, dark ? .045f : .025f);
-        raisedSurface = this.customAccent == 0 ? baseRaised : blend(baseRaised, accent, dark ? .07f : .045f);
+        boolean neutralSignal = dark && themeIndex == SIGNAL;
+        canvas = this.customAccent == 0 || neutralSignal ? baseCanvas : blend(baseCanvas, accent, dark ? .035f : .025f);
+        surface = this.customAccent == 0 || neutralSignal ? baseSurface : blend(baseSurface, accent, dark ? .045f : .025f);
+        raisedSurface = this.customAccent == 0 || neutralSignal ? baseRaised : blend(baseRaised, accent, dark ? .07f : .045f);
         ink = dark ? darkInk : lightInk;
         muted = dark ? darkMuted : lightMuted;
         button = this.customAccent == 0 ? accent : accessibleAccent(accent);
         buttonText = this.customAccent == 0 ? (dark ? darkAccentText : lightAccentText) : bestText(button);
-        int baseBorder = dark ? (themeIndex == GRAPHITE ? 0xFF333B45 : 0xFF38383A) : 0xFFD1D1D6;
-        border = this.customAccent == 0 ? baseBorder : blend(baseBorder, button, .24f);
+        int baseBorder = dark ? (themeIndex == GRAPHITE ? 0xFF333B45
+                : themeIndex == SIGNAL ? 0xFF30352B : 0xFF38383A) : 0xFFD1D1D6;
+        border = this.customAccent == 0 || neutralSignal ? baseBorder : blend(baseBorder, button, .24f);
         soft = raisedSurface;
         green = dark ? 0xFF54D68B : 0xFF167C4A;
         syncSuccess = dark && themeIndex == SIGNAL ? SIGNAL_SYNC_SUCCESS : green;
@@ -82,8 +84,8 @@ final class AppPalette {
         heroText = buttonText;
         heroMuted = muted;
         focusSurface = raisedSurface;
-        focusBorder = this.customAccent == 0 ? (dark ? 0xFF77777D : 0xFF303630)
-                : blend(dark ? 0xFF77777D : 0xFF303630, button, .32f);
+        int baseFocusBorder = dark ? (themeIndex == SIGNAL ? 0xFF687455 : 0xFF77777D) : 0xFF303630;
+        focusBorder = this.customAccent == 0 ? baseFocusBorder : blend(baseFocusBorder, button, .32f);
     }
 
     static String nameFor(int index) {
@@ -102,7 +104,7 @@ final class AppPalette {
             case GRAPHITE: return "IBM Plex Sans";
             case ATELIER: return "Instrument Sans · Newsreader";
             case SIGNAL:
-            default: return "JetBrains Mono";
+            default: return "Inter";
         }
     }
 

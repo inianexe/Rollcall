@@ -3335,8 +3335,8 @@ public class MainActivity extends Activity {
     private LinearLayout cardContainer() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(RollcallSpacing.SPACE_4), dp(RollcallSpacing.SPACE_4),
-                dp(RollcallSpacing.SPACE_4), dp(RollcallSpacing.SPACE_4));
+        card.setPadding(dp(RollcallSpacing.SPACE_5), dp(RollcallSpacing.SPACE_5),
+                dp(RollcallSpacing.SPACE_5), dp(RollcallSpacing.SPACE_5));
         card.setBackground(background(SURFACE, BORDER, palette.cardRadius));
         return card;
     }
@@ -3348,6 +3348,7 @@ public class MainActivity extends Activity {
         view.setTextColor(color);
         view.setTypeface(style == Typeface.BOLD ? boldAppTypeface() : appTypeface());
         view.setFontFeatureSettings("tnum");
+        view.setIncludeFontPadding(false);
         return view;
     }
 

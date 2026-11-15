@@ -34,9 +34,9 @@ final class ThemeTypography {
             }
             case AppPalette.SIGNAL:
             default: {
-                Typeface body = asset(context, "fonts/JetBrainsMono-Regular.ttf", Typeface.create("monospace", Typeface.NORMAL));
-                Typeface bold = asset(context, "fonts/JetBrainsMono-Bold.ttf", Typeface.create(body, Typeface.BOLD));
-                return new ThemeTypography(body, bold, bold);
+                Typeface body = asset(context, "fonts/InterVariable.ttf", Typeface.create("sans-serif", Typeface.NORMAL));
+                Typeface bold = weight(body, 700);
+                return new ThemeTypography(body, bold, weight(body, 650));
             }
         }
     }

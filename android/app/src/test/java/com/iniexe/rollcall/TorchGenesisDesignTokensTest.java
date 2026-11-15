@@ -9,12 +9,14 @@ public class TorchGenesisDesignTokensTest {
     @Test public void signalRemainsTheDefaultBrandPalette() {
         AppPalette palette = AppPalette.get(true, 0);
         assertEquals("Signal", palette.name);
-        assertEquals(0xFF000000, palette.canvas);
-        assertEquals(0xFFCCFF00, palette.hero);
-        assertEquals(0xFFCCFF00, palette.button);
-        assertEquals(0xFFCCFF00, palette.highlight);
-        assertEquals(0xFF1C1C1E, palette.surface);
-        assertEquals(0xFF2C2C2E, palette.raisedSurface);
+        assertEquals(0xFF0B0C0A, palette.canvas);
+        assertEquals(0xFFD4FF35, palette.hero);
+        assertEquals(0xFFD4FF35, palette.button);
+        assertEquals(0xFFD4FF35, palette.highlight);
+        assertEquals(0xFF151714, palette.surface);
+        assertEquals(0xFF1D201B, palette.raisedSurface);
+        assertEquals(0xFF30352B, palette.border);
+        assertEquals("Inter", AppPalette.fontNameFor(AppPalette.SIGNAL));
         assertEquals(AppPalette.SIGNAL_SYNC_SUCCESS, palette.syncSuccess);
         assertEquals(0xFFFF4400, AppPalette.SIGNAL_COURSE_ATTEND_FILL);
     }
@@ -44,9 +46,9 @@ public class TorchGenesisDesignTokensTest {
         AppPalette cupertino = AppPalette.get(true, AppPalette.CUPERTINO);
         AppPalette graphite = AppPalette.get(true, AppPalette.GRAPHITE);
         AppPalette atelier = AppPalette.get(true, AppPalette.ATELIER);
-        assertEquals(16, signal.cardRadius);
-        assertEquals(20, signal.featureRadius);
-        assertEquals(8, signal.controlRadius);
+        assertEquals(18, signal.cardRadius);
+        assertEquals(22, signal.featureRadius);
+        assertEquals(11, signal.controlRadius);
         assertEquals(24, cupertino.cardRadius);
         assertEquals(28, cupertino.featureRadius);
         assertEquals(12, cupertino.controlRadius);
@@ -56,7 +58,7 @@ public class TorchGenesisDesignTokensTest {
         assertEquals(22, atelier.cardRadius);
         assertEquals(26, atelier.featureRadius);
         assertEquals(10, atelier.controlRadius);
-        assertEquals(32, signal.navRadius);
+        assertEquals(28, signal.navRadius);
         assertEquals(32, cupertino.navRadius);
         assertEquals(32, graphite.navRadius);
         assertEquals(32, atelier.navRadius);

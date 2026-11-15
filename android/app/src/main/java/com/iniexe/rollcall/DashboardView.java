@@ -642,12 +642,11 @@ final class DashboardView extends FrameLayout {
         homeHeader.addView(topBar(true), lp(-1, dp(48)));
         body.addView(homeHeader, topLp(-1, -2, 0));
         LinearLayout heroCard = column();
-        heroCard.setPadding(dp(22), dp(22), dp(22), dp(18));
-        heroCard.setBackground(new BroadcastBackgroundDrawable());
-        heroCard.setElevation(dp(2));
+        heroCard.setPadding(dp(18), dp(18), dp(18), dp(16));
+        heroCard.setBackground(shape(surface, palette.cardRadius, border));
         LinearLayout transmission = row();
         transmission.setGravity(Gravity.CENTER_VERTICAL);
-        TextView transmissionLabel = label("ACADEMIC TRANSMISSION / 01", 10, muted, Typeface.BOLD);
+        TextView transmissionLabel = label("YOUR ACADEMIC WEEK", 10, palette.highlight, Typeface.BOLD);
         transmission.addView(transmissionLabel, new LinearLayout.LayoutParams(0, -2, 1));
         homeDateView = text("THU / 12 NOV", 9, ink, Typeface.BOLD);
         homeDateView.setGravity(Gravity.CENTER);
@@ -660,7 +659,7 @@ final class DashboardView extends FrameLayout {
         identityRow.setGravity(Gravity.CENTER_VERTICAL);
         identityRow.setClipChildren(false);
         LinearLayout identity = column();
-        welcomeView = text("Good afternoon,", 11, muted, Typeface.NORMAL);
+        welcomeView = text("Good afternoon,", 13, muted, Typeface.NORMAL);
         identity.addView(welcomeView);
         headlineView = new ShuffleTextView(getContext());
         headlineView.setText("YOU GOT THIS.");
@@ -671,16 +670,16 @@ final class DashboardView extends FrameLayout {
         headlineView.setMaxLines(4);
         headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         identity.addView(headlineView, topLp(-1, -2, 4));
-        homeEncouragementView = text("One class at a time. Your academic week, decoded.", 10, muted, Typeface.NORMAL);
+        homeEncouragementView = text("One class at a time. Your academic week, decoded.", 12, muted, Typeface.NORMAL);
         homeEncouragementView.setMaxLines(3);
         identity.addView(homeEncouragementView, topLp(-1, -2, 3));
         identityRow.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
-        identityRow.addView(homeWeekTicket(), lp(dp(112), dp(140)));
-        heroCard.addView(identityRow, topLp(-1, -2, 14));
+        identityRow.addView(homeWeekTicket(), lp(dp(82), dp(94)));
+        heroCard.addView(identityRow, topLp(-1, -2, 16));
 
         LinearLayout syncLine = row();
         syncLine.setGravity(Gravity.CENTER_VERTICAL);
-        statusView = text("", 10, muted, Typeface.NORMAL);
+        statusView = text("", 12, muted, Typeface.NORMAL);
         syncLine.addView(statusView, new LinearLayout.LayoutParams(0, -2, 1));
         dashboardSyncButton = new FrameLayout(getContext());
         dashboardSyncButton.setClickable(true);
@@ -695,19 +694,18 @@ final class DashboardView extends FrameLayout {
         dashboardSyncButton.setContentDescription("Refresh attendance from MyCamu");
         dashboardSyncButton.setOnClickListener(v -> actions.onSync());
         syncLine.addView(dashboardSyncButton, lp(dp(48), dp(48)));
-        heroCard.addView(syncLine, topLp(-1, -2, 8));
-        addTop(body, animated(heroCard, "home-hero"), 10);
+        heroCard.addView(syncLine, topLp(-1, -2, 12));
+        addTop(body, animated(heroCard, "home-hero"), 8);
 
         courseLists[0] = column();
         LinearLayout summary = column();
-        summary.setPadding(dp(16), dp(16), dp(16), dp(16));
+        summary.setPadding(dp(16), dp(14), dp(16), dp(14));
         summary.setBackground(industrialSurface(surface, 20, border));
-        summary.setElevation(dp(2));
         LinearLayout summaryHeader = row();
         summaryHeader.addView(label("NEXT CLASS", 11, lime, Typeface.BOLD),
                 new LinearLayout.LayoutParams(0, -2, 1));
         overviewGoal = text("75% target  ↗", 11, lime, Typeface.BOLD);
-        overviewGoal.setMinHeight(dp(48));
+        overviewGoal.setMinHeight(dp(44));
         overviewGoal.setGravity(Gravity.CENTER_VERTICAL);
         overviewGoal.setOnClickListener(v -> actions.onTarget());
         summaryHeader.addView(overviewGoal);
@@ -764,7 +762,7 @@ final class DashboardView extends FrameLayout {
         summary.addView(onTrackView, topLp(-1, -2, 6));
         decisionAction = text("Plan this course  →", 13, labBadgeForeground, Typeface.BOLD);
         decisionAction.setGravity(Gravity.CENTER);
-        decisionAction.setMinHeight(dp(56));
+        decisionAction.setMinHeight(dp(48));
         decisionAction.setBackground(shape(labBadgeBackground, 12, 0));
         decisionAction.setOnClickListener(v -> {
             if (state.sessionExpired) actions.onPortal();
@@ -785,7 +783,6 @@ final class DashboardView extends FrameLayout {
         overviewExamBlock = column();
         overviewExamBlock.setPadding(dp(16), dp(14), dp(16), dp(14));
         overviewExamBlock.setBackground(industrialSurface(surface, 16, border));
-        overviewExamBlock.setElevation(dp(2));
         overviewExamBlock.addView(label("● UPCOMING EXAM", 10, amber, Typeface.BOLD));
         overviewExamTitle = text("", 17, ink, Typeface.BOLD);
         overviewExamTitle.setMaxLines(4);
@@ -826,7 +823,7 @@ final class DashboardView extends FrameLayout {
         overviewExamBlock.addView(overviewExamFreshness, topLp(-1, -2, 7));
         overviewExamBlock.setVisibility(GONE);
         overviewExamSection.addView(overviewExamBlock, topLp(-1, -2, 8));
-        addTop(body, overviewExamSection, 14);
+        addTop(body, overviewExamSection, 12);
 
         overviewScheduleBlock = column();
         overviewScheduleBlock.addView(overviewSectionHeader("Next up", "Week", () -> showPage(2)));
@@ -835,10 +832,10 @@ final class DashboardView extends FrameLayout {
         overviewScheduleRows = column();
         overviewScheduleBlock.addView(overviewScheduleRows, lp(-1, -2));
         overviewScheduleBlock.setVisibility(GONE);
-        addTop(body, overviewScheduleBlock, 18);
+        addTop(body, overviewScheduleBlock, 12);
 
-        addTop(body, overviewSectionHeader("Next class", "What if?", () -> showPage(3)), 24);
-        addTop(body, summary, 8);
+        addTop(body, overviewSectionHeader("Next class", "What if?", () -> showPage(3)), 12);
+        addTop(body, summary, 4);
 
         overviewWeekBlock = column();
         overviewWeekBlock.addView(overviewSectionHeader("This week", "Full week", () -> showPage(2)));
@@ -849,7 +846,7 @@ final class DashboardView extends FrameLayout {
         overviewWeekPulse.setOnClickListener(v -> showPage(2));
         overviewWeekBlock.addView(overviewWeekPulse, topLp(-1, weekPulseHeight(), 2));
         overviewWeekBlock.setVisibility(GONE);
-        addTop(body, overviewWeekBlock, 18);
+        addTop(body, overviewWeekBlock, 12);
 
         overviewAttendanceBlock = column();
         overviewAttendanceBlock.setPadding(dp(12), dp(9), dp(12), dp(9));
@@ -871,15 +868,15 @@ final class DashboardView extends FrameLayout {
         overviewAttendanceBlock.setVisibility(GONE);
         overviewAttendanceBlock.setOnClickListener(v -> { showingHistory = true; showPage(2); pageScrolls[2].scrollTo(0, 0); });
         overviewAttendanceBlock.setContentDescription("Latest class attendance. Open attendance history");
-        addTop(body, overviewAttendanceBlock, 10);
+        addTop(body, overviewAttendanceBlock, 8);
 
         TextView dataSources = text("Data sources & sync  →", 13, linkInk, Typeface.BOLD);
         dataSources.setMinHeight(dp(48)); dataSources.setGravity(Gravity.CENTER_VERTICAL);
         dataSources.setOnClickListener(v -> openSignalPath());
-        addTop(body, dataSources, 12);
+        addTop(body, dataSources, 8);
 
         overviewCourseHeader = overviewSectionHeader("Needs attention", "All courses", () -> showPage(1));
-        addTop(body, overviewCourseHeader, 24);
+        addTop(body, overviewCourseHeader, 12);
         body.addView(courseLists[0], lp(-1, -2));
         overviewEmptyView = text("", 12, green, Typeface.BOLD);
         addTop(body, overviewEmptyView, 6);
@@ -889,46 +886,18 @@ final class DashboardView extends FrameLayout {
 
     private FrameLayout homeWeekTicket() {
         FrameLayout ticket = new FrameLayout(getContext());
-        ticket.setClipChildren(false);
-        ticket.setClipToPadding(false);
-        View backing = new View(getContext());
-        backing.setBackground(shape(palette.focusSurface, 7, palette.focusBorder));
-        backing.setRotation(9f);
-        FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(82), dp(102), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        backParams.rightMargin = dp(2);
-        ticket.addView(backing, backParams);
         LinearLayout face = column();
         face.setGravity(Gravity.CENTER_HORIZONTAL);
-        face.setPadding(dp(8), dp(9), dp(8), dp(8));
-        face.setBackground(shape(palette.surface, 7, palette.focusBorder));
-        face.setRotation(-4f);
-        homeTicketLabelView = text("TODAY", 8, palette.ink, Typeface.BOLD);
-        homeWeekNumberView = text("—", 38, palette.ink, Typeface.BOLD);
-        homeWeekNumberView.setIncludeFontPadding(false);
-        TextView ticketRule = text("────────", 8, palette.muted, Typeface.NORMAL);
-        homeWeekMonthView = text("—", 8, palette.ink, Typeface.BOLD);
+        face.setGravity(Gravity.CENTER);
+        face.setPadding(dp(7), dp(7), dp(7), dp(7));
+        face.setBackground(shape(raisedSurface, palette.controlRadius, border));
+        homeTicketLabelView = label("TODAY", 9, muted, Typeface.BOLD);
+        homeWeekNumberView = text("—", 29, ink, Typeface.BOLD);
+        homeWeekMonthView = text("—", 9, muted, Typeface.BOLD);
         face.addView(homeTicketLabelView);
-        face.addView(homeWeekNumberView, topLp(-1, -2, 4));
-        face.addView(ticketRule, topLp(-1, -2, 1));
+        face.addView(homeWeekNumberView, topLp(-1, -2, 2));
         face.addView(homeWeekMonthView, topLp(-1, -2, 2));
-        FrameLayout.LayoutParams faceParams = new FrameLayout.LayoutParams(dp(78), dp(100), Gravity.CENTER_VERTICAL | Gravity.RIGHT);
-        faceParams.rightMargin = dp(10);
-        ticket.addView(face, faceParams);
-        // Printed ticket binder rings from the source design, drawn with native shapes.
-        for (int index = 0; index < 2; index++) {
-            View ring = new View(getContext());
-            GradientDrawable metal = new GradientDrawable();
-            metal.setColor(Color.TRANSPARENT);
-            metal.setCornerRadius(dp(11));
-            metal.setStroke(dp(4), palette.border);
-            ring.setBackground(metal);
-            ring.setRotation(-5f);
-            FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(
-                    dp(15), dp(24), Gravity.TOP | Gravity.RIGHT);
-            ringParams.topMargin = dp(10);
-            ringParams.rightMargin = dp(index == 0 ? 68 : 28);
-            ticket.addView(ring, ringParams);
-        }
+        ticket.addView(face, new FrameLayout.LayoutParams(-1, -1));
         homeTicketView = ticket;
         ticket.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         ticket.setFocusable(true);
@@ -1375,7 +1344,7 @@ final class DashboardView extends FrameLayout {
         boolean examsChecked = state.examScheduleCheckedAt > 0;
         boolean allSourcesChecked = timetableChecked && examsChecked;
         LinearLayout empty = column();
-        empty.setPadding(dp(16), dp(14), dp(16), dp(14));
+        empty.setPadding(dp(16), dp(12), dp(16), dp(12));
         empty.setBackground(industrialSurface(surface, 16, border));
         String title;
         String detail;
@@ -2046,7 +2015,7 @@ final class DashboardView extends FrameLayout {
         if (cyberpunk) scroll.setBackground(new ScanlineDrawable());
         else scroll.setBackgroundColor(canvas);
         LinearLayout body = column();
-        body.setPadding(dp(20), 0, dp(20), dp(16));
+        body.setPadding(dp(18), 0, dp(18), dp(16));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         pageScrolls[index] = scroll;
         pageBodies[index] = body;
@@ -3220,7 +3189,8 @@ final class DashboardView extends FrameLayout {
 
     private LinearLayout card() {
         LinearLayout card = column();
-        card.setPadding(dp(RollcallSpacing.SPACE_4), dp(14), dp(RollcallSpacing.SPACE_4), dp(14));
+        card.setPadding(dp(RollcallSpacing.SPACE_5), dp(RollcallSpacing.SPACE_5),
+                dp(RollcallSpacing.SPACE_5), dp(RollcallSpacing.SPACE_5));
         card.setBackground(industrialSurface(surface, palette.cardRadius, border));
         return card;
     }
@@ -3237,13 +3207,14 @@ final class DashboardView extends FrameLayout {
         view.setTextColor(color);
         view.setTypeface(style == Typeface.BOLD ? uiBoldTypeface : uiTypeface);
         view.setFontFeatureSettings("tnum");
+        view.setIncludeFontPadding(false);
         return view;
     }
 
     private TextView label(String value, float size, int color, int style) {
         TextView view = text(value, size, color, style);
         view.setTypeface(cyberpunk ? displayTypeface : uiBoldTypeface);
-        view.setLetterSpacing(.055f);
+        view.setLetterSpacing(palette.themeIndex == AppPalette.SIGNAL ? .09f : .055f);
         return view;
     }
 
@@ -3259,7 +3230,7 @@ final class DashboardView extends FrameLayout {
         button.setPadding(0, 0, 0, 0);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
-        button.setBackground(shape(background, 14, 0));
+        button.setBackground(shape(background, palette.controlRadius, 0));
         setTactileFeedback(button);
         return button;
     }
@@ -3441,51 +3412,6 @@ final class DashboardView extends FrameLayout {
         }
         @Override public void setAlpha(int alpha) { invalidateSelf(); }
         @Override public void setColorFilter(android.graphics.ColorFilter filter) { invalidateSelf(); }
-        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
-    }
-
-    /** Minimal registration marks keep the neutral brand surface from becoming flat. */
-    private final class BroadcastBackgroundDrawable extends Drawable {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF rectangle = new RectF();
-        private final android.graphics.DashPathEffect registration =
-                new android.graphics.DashPathEffect(new float[]{dp(7), dp(8)}, 0f);
-
-        @Override public void draw(Canvas canvas) {
-            Rect bounds = getBounds();
-            rectangle.set(bounds);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(surface);
-            canvas.drawRoundRect(rectangle, dp(18), dp(18), paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(dp(1));
-            paint.setColor(border);
-            canvas.drawRoundRect(rectangle, dp(18), dp(18), paint);
-
-            canvas.save();
-            Path clip = new Path();
-            clip.addRoundRect(rectangle, dp(18), dp(18), Path.Direction.CW);
-            canvas.clipPath(clip);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(dp(1));
-            paint.setColor(Color.argb(36, Color.red(palette.highlight),
-                    Color.green(palette.highlight), Color.blue(palette.highlight)));
-            paint.setPathEffect(registration);
-            canvas.drawCircle(bounds.right + dp(15), bounds.top - dp(35), dp(115), paint);
-            paint.setPathEffect(null);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setTypeface(uiBoldTypeface);
-            paint.setTextSize(sp(8));
-            paint.setColor(heroMuted);
-            paint.setTextAlign(Paint.Align.RIGHT);
-            canvas.drawText("ROLLCALL / 001", bounds.right - dp(19),
-                    bounds.bottom - dp(10), paint);
-            canvas.restore();
-        }
-        @Override public void setAlpha(int a) { paint.setAlpha(a); invalidateSelf(); }
-        @Override public void setColorFilter(android.graphics.ColorFilter f) {
-            paint.setColorFilter(f); invalidateSelf();
-        }
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
