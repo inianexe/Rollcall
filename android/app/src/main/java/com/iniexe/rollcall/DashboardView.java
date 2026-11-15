@@ -3496,7 +3496,7 @@ final class DashboardView extends FrameLayout {
         CourseGroupRow(CourseGroup group) {
             this.group = group;
             root = card();
-            root.setPadding(dp(17), dp(17), dp(17), dp(17));
+            root.setPadding(dp(17), dp(15), dp(17), dp(15));
             subjects.add(group.lecture);
             subjects.addAll(group.labs);
 
@@ -3523,7 +3523,7 @@ final class DashboardView extends FrameLayout {
             root.addView(header);
             View tape = new View(getContext());
             tape.setBackground(shape(statusColor, 0, 0));
-            LinearLayout.LayoutParams tapeParams = topLp(dp(48), dp(6), 7);
+            LinearLayout.LayoutParams tapeParams = topLp(dp(48), dp(5), 5);
             tapeParams.gravity = Gravity.RIGHT;
             root.addView(tape, tapeParams);
 
@@ -3534,10 +3534,10 @@ final class DashboardView extends FrameLayout {
                 String kind = isLabCourse(subject.code) ? "LAB" : "THEORY";
                 if (isLabCourse(group.lecture.code) && subject == group.lecture) kind = "LAB";
                 LinearLayout metric = metric(subject, kind);
-                LinearLayout.LayoutParams metricParams = topLp(-1, -2, i == 0 ? 0 : 10);
+                LinearLayout.LayoutParams metricParams = topLp(-1, -2, i == 0 ? 0 : 8);
                 meters.addView(metric, metricParams);
             }
-            root.addView(meters, topLp(-1, -2, 4));
+            root.addView(meters, topLp(-1, -2, 2));
             for (Course subject : subjects) {
                 if (!subject.expanded) continue;
                 TextView guidance = text(subject.guidance, 10, muted, Typeface.NORMAL);
@@ -3563,13 +3563,13 @@ final class DashboardView extends FrameLayout {
 
         private LinearLayout metric(Course subject, String kind) {
             LinearLayout box = column();
-            box.setPadding(dp(2), dp(10), dp(2), dp(10));
+            box.setPadding(dp(2), dp(6), dp(2), dp(6));
             box.setFocusable(true);
             String identity = kind + (subject.code.isEmpty() ? "" : " / " + subject.code);
             box.addView(label(identity, 10, muted, Typeface.BOLD));
             int statusColor = courseThemeColor(subject);
             TextView percent = text(subject.percentLabel, 15, statusColor, Typeface.BOLD);
-            box.addView(percent, topLp(-1, -2, 4));
+            box.addView(percent, topLp(-1, -2, 2));
 
             final String canMiss;
             final String mustAttend;
@@ -3596,14 +3596,14 @@ final class DashboardView extends FrameLayout {
             LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1f);
             second.leftMargin = dp(8);
             stats.addView(attendanceMetricTile("MUST ATTEND", mustAttend, false, subject.below), second);
-            box.addView(stats, topLp(-1, -2, 9));
+            box.addView(stats, topLp(-1, -2, 7));
             AttendanceProgressBar meter = new AttendanceProgressBar(getContext(), subject.code,
                     subject.percent, statusColor);
             meter.setContentDescription("Attendance " + subject.percentLabel);
-            box.addView(meter, topLp(-1, dp(7), 12));
+            box.addView(meter, topLp(-1, dp(7), 9));
             String detail = subject.countsKnown ? subject.attended + " / " + subject.total + " classes"
                     : "Attendance counts unavailable";
-            box.addView(text(detail, 11, muted, Typeface.NORMAL), topLp(-1, -2, 6));
+            box.addView(text(detail, 11, muted, Typeface.NORMAL), topLp(-1, -2, 4));
             box.setContentDescription(kind + " " + courseHeading(subject) + ". "
                     + subject.percentLabel + ". Can miss " + canMiss
                     + ". Must attend " + ("N/A".equals(mustAttend) ? "not recoverable at 100% target" : mustAttend)
@@ -3615,7 +3615,7 @@ final class DashboardView extends FrameLayout {
         private LinearLayout attendanceMetricTile(String title, String value, boolean positive, boolean warning) {
             LinearLayout tile = column();
             tile.setGravity(Gravity.CENTER);
-            tile.setPadding(dp(8), dp(13), dp(8), dp(13));
+            tile.setPadding(dp(8), dp(10), dp(8), dp(10));
             boolean strongSignalFill = palette.themeIndex == AppPalette.SIGNAL && (positive || warning);
             int statusColor = positive ? green : warning ? amber : ink;
             int background = positive ? (strongSignalFill ? hero : statusTint(statusColor))
@@ -3627,10 +3627,10 @@ final class DashboardView extends FrameLayout {
             TextView labelText = text(title, 10, foreground, Typeface.BOLD);
             labelText.setGravity(Gravity.CENTER);
             tile.addView(labelText);
-            TextView number = text(value, 35, foreground, Typeface.BOLD);
+            TextView number = text(value, 31, foreground, Typeface.BOLD);
             number.setGravity(Gravity.CENTER);
             number.setIncludeFontPadding(false);
-            tile.addView(number, topLp(-1, -2, 6));
+            tile.addView(number, topLp(-1, -2, 4));
             return tile;
         }
 
