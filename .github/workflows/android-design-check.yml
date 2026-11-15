@@ -41,7 +41,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --no-daemon --stacktrace
       - name: Upload JVM test reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: rollcall-jvm-test-reports
